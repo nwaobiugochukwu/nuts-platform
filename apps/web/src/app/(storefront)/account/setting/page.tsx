@@ -56,7 +56,7 @@ type ProfileForm = z.infer<typeof profileSchema>;
 const passwordSchema = z
   .object({
     currentPassword: z.string().min(6, "Current password is required"),
-    newPassword: z.string().min(12, "New password must be at least 12 characters"),
+    newPassword: z.string().min(8, "New password must be at least 8 characters"),
     confirmPassword: z.string().min(8, "Confirm your new password"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -567,7 +567,7 @@ export default function AccountSettingPage() {
                     name="newPassword"
                     label="New Password"
                     type="password"
-                    placeholder="Minimum 12 characters"
+                    placeholder="Minimum 8 characters"
                   />
                   <FormInput
                     name="confirmPassword"

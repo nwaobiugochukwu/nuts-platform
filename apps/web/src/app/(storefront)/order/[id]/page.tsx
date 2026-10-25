@@ -18,6 +18,7 @@ ArrowLeft,
 Clock,
 CreditCard,
 Edit2,
+Loader2,
 MapPin,
 Package,
 Receipt,
@@ -25,7 +26,7 @@ Star
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export default function OrderDetailPage() {
@@ -38,7 +39,9 @@ export default function OrderDetailPage() {
   const [isEditShippingOpen, setIsEditShippingOpen] = useState(false);
   const [shippingAddressText, setShippingAddressText] = useState("");
   const [isInitializingPayment, setIsInitializingPayment] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const hasVerifiedRef = useRef(false);
 
   // 1. Fetch Order
   const { data: order, isLoading } = useQuery({
@@ -56,11 +59,37 @@ export default function OrderDetailPage() {
 
   // Background self-healing check: automatically verify payment if order is PENDING
   useEffect(() => {
-    if (!order || order.status !== "PENDING") return;
+    if (!order || order.status !== "PENDING") {
+      hasVerifiedRef.current = false;
+      return;
+    }
+
+    if (hasVerifiedRef.current) return;
+    hasVerifiedRef.current = true;
 
     let cancelled = false;
     const verifyPendingPayment = async () => {
       try {
+        setIsVerifyingPayment(true);
+
+        // Check if there is a callback reference in the URL query string
+        const urlParams =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search)
+            : null;
+        const callbackRef =
+          urlParams?.get("reference")?.trim() ||
+          urlParams?.get("trxref")?.trim() ||
+          null;
+
+        if (callbackRef) {
+          const verifyRes = await paymentService.verify(callbackRef);
+          if (!cancelled && verifyRes.data?.status === "SUCCESS") {
+            qc.invalidateQueries({ queryKey: queryKey.order.detail(id) });
+            return;
+          }
+        }
+
         const { data: payment } = await paymentService.getByOrderId(id);
         if (cancelled || !payment?.transactionReference) return;
 
@@ -75,6 +104,10 @@ export default function OrderDetailPage() {
         }
       } catch {
         // Silent recovery — background polling and webhook will settle state
+      } finally {
+        if (!cancelled) {
+          setIsVerifyingPayment(false);
+        }
       }
     };
 
@@ -151,7 +184,7 @@ export default function OrderDetailPage() {
       if (authUrl) {
         const checkoutUrl = safePaystackCheckoutUrl(authUrl);
         if (!checkoutUrl) throw new Error("Invalid Paystack checkout URL");
-        toast.success("Redirecting to Paystack...");
+        toast.success("Redirecting to secure payment...");
         window.location.assign(checkoutUrl);
       } else {
         toast.success("Payment initiated successfully");
@@ -238,27 +271,51 @@ export default function OrderDetailPage() {
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={cancelMutation.isPending || isVerifyingPayment}
                 onClick={() => setIsCancelOpen(true)}
-                className="flex-1 sm:flex-none rounded-xl text-xs h-9 font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/40 dark:hover:bg-rose-950/20 cursor-pointer"
+                className="flex-1 sm:flex-none rounded-xl text-xs h-9 font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/40 dark:hover:bg-rose-950/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Cancel Order
               </Button>
               <Button
                 type="button"
                 size="sm"
-                disabled={isInitializingPayment}
+                disabled={isInitializingPayment || isVerifyingPayment}
                 onClick={handleInitiatePayment}
-                className="flex-1 sm:flex-none rounded-xl text-xs h-9 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 sm:flex-none rounded-xl text-xs h-9 font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <CreditCard className="h-3.5 w-3.5" />
-                <span>{isInitializingPayment ? "Connecting..." : "Proceed to Payment"}</span>
+                {isVerifyingPayment ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Confirming...</span>
+                  </>
+                ) : isInitializingPayment ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Proceed to Payment</span>
+                  </>
+                )}
               </Button>
             </div>
           )}
         </div>
 
-        {/* Pending Order Stock Reservation Banner */}
-        {isPending && timeLeftMs !== null && (
+        {/* Pending Order Verification / Stock Reservation Banner */}
+        {isPending && isVerifyingPayment ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sky-900 dark:text-sky-200 shadow-xs">
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-sky-600 dark:text-sky-400" />
+            <div className="text-xs sm:text-sm font-medium">
+              <span>
+                <strong>Confirming your payment...</strong> Please wait while we check your transaction status.
+              </span>
+            </div>
+          </div>
+        ) : isPending && timeLeftMs !== null ? (
           <div className="flex items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-amber-900 dark:text-amber-200 shadow-xs">
             <Clock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="text-xs sm:text-sm font-medium">
@@ -277,7 +334,7 @@ export default function OrderDetailPage() {
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Order Header Card */}
         <div className="rounded-2xl sm:rounded-3xl border border-border bg-card p-4 sm:p-6 lg:p-8 shadow-xs">
@@ -502,12 +559,26 @@ export default function OrderDetailPage() {
               </div>
               <Button
                 type="button"
-                disabled={isInitializingPayment}
+                disabled={isInitializingPayment || isVerifyingPayment}
                 onClick={handleInitiatePayment}
-                className="h-10 rounded-xl px-5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                className="h-10 rounded-xl px-5 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <CreditCard className="h-3.5 w-3.5" />
-                <span>{isInitializingPayment ? "Connecting..." : "Proceed to Payment"}</span>
+                {isVerifyingPayment ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Confirming...</span>
+                  </>
+                ) : isInitializingPayment ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Proceed to Payment</span>
+                  </>
+                )}
               </Button>
             </div>
           </div>

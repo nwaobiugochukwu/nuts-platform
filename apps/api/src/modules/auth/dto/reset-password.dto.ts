@@ -38,8 +38,8 @@ export class ResetPasswordDto {
     example: 'NewStrongPassword123!',
   })
   @IsString()
-  @MinLength(12, {
-    message: 'Password must be at least 12 characters',
+  @MinLength(8, {
+    message: 'Password must be at least 8 characters',
   })
   @MaxLength(128)
   @MaxPasswordBytes()
