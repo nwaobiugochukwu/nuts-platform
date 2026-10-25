@@ -23,12 +23,12 @@ export class ChangePasswordDto {
   @ApiProperty({
     description: 'New password for the user',
     example: 'NewP@ssw0rd!',
-    minLength: 12,
+    minLength: 8,
   })
   @IsString()
   @IsNotEmpty({ message: 'New password must not be empty' })
-  @MinLength(12, {
-    message: 'New password must be at least 12 characters long',
+  @MinLength(8, {
+    message: 'New password must be at least 8 characters long',
   })
   @MaxPasswordBytes()
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/, {

@@ -39,7 +39,7 @@ const registerSchema = z
     email: z.string().email("Invalid email address"),
     password: z
       .string()
-      .min(12, "Password must be at least 12 characters")
+      .min(8, "Password must be at least 8 characters")
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).*$/,
         "Password must contain uppercase, lowercase, number and special character (@$!%*?&#)",
@@ -381,7 +381,7 @@ export default function RegisterPage() {
                       name="password"
                       label="Password"
                       type="password"
-                      placeholder="Min 12 characters"
+                      placeholder="Min 8 characters"
                       autoComplete="new-password"
                     />
                     <FormInput
@@ -394,7 +394,7 @@ export default function RegisterPage() {
                   </div>
 
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Must include at least 12 characters, uppercase, lowercase, number, and symbol (@$!%*?&#).
+                    Must include at least 8 characters, uppercase, lowercase, number, and symbol (@$!%*?&#).
                   </p>
 
                   {/* Referral Code (Optional) */}

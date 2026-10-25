@@ -24,7 +24,7 @@ const vendorRegisterSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z
     .string()
-    .min(12, "Password must be at least 12 characters")
+    .min(8, "Password must be at least 8 characters")
     .regex(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).*$/,
       "Password must contain uppercase, lowercase, number and special character (@$!%*?&#)"
@@ -198,7 +198,7 @@ export default function VendorRegisterPage() {
               name="password"
               label="Password"
               type="password"
-              placeholder="Min 12 characters (A-Z, a-z, 0-9, @$!)"
+              placeholder="Min 8 characters (A-Z, a-z, 0-9, @$!)"
               autoComplete="new-password"
             />
 
