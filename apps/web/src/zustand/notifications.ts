@@ -115,6 +115,29 @@ function showIncomingNotification(notification: AppNotification): void {
   const auth = useAuthStore.getState();
   const userId = auth.user?.id ?? "me";
 
+  // Real-time synchronization: Invalidate order queries when order or payment notifications arrive
+  try {
+    const qc = getQueryClient();
+    const orderEvents: AppNotification["type"][] = [
+      "ORDER_PLACED",
+      "ORDER_CONFIRMED",
+      "ORDER_SHIPPED",
+      "ORDER_DELIVERED",
+      "ORDER_CANCELLED",
+      "PAYMENT_RECEIVED",
+      "PAYMENT_FAILED",
+    ];
+    if (orderEvents.includes(notification.type)) {
+      void qc.invalidateQueries({ queryKey: queryKey.order.all });
+      const rawOrderId = notification.metadata?.orderId;
+      if (typeof rawOrderId === "string" && rawOrderId) {
+        void qc.invalidateQueries({ queryKey: queryKey.order.detail(rawOrderId) });
+      }
+    }
+  } catch {
+    // If query client cache is unavailable, ignore
+  }
+
   let inAppEnabled = true;
   let pushEnabled = true;
 

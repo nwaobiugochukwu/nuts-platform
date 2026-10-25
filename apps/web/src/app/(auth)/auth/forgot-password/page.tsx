@@ -28,7 +28,7 @@ const resetPasswordSchema = z
     otpCode: z.string().min(6, "OTP code must be 6 digits").max(6, "OTP code must be 6 digits"),
     newPassword: z
       .string()
-      .min(12, "Password must be at least 12 characters")
+      .min(8, "Password must be at least 8 characters")
       .regex(
         /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).*$/,
         "Password must contain uppercase, lowercase, number and special character (@$!%*?&#)"
@@ -250,7 +250,7 @@ export default function ForgotPasswordPage() {
                   name="newPassword"
                   label="New Password"
                   type="password"
-                  placeholder="Min 12 characters (A-Z, a-z, 0-9, @$!)"
+                  placeholder="Min 8 characters (A-Z, a-z, 0-9, @$!)"
                   autoComplete="new-password"
                   required
                 />
