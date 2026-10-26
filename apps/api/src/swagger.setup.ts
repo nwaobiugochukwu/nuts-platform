@@ -100,205 +100,27 @@ export function setupSwagger(
   const baseUrl = config.get<string>('BASE_URL');
 
   const swaggerBuilder = new DocumentBuilder()
-    .setTitle('Nuts API — E-Commerce Platform')
+    .setTitle('NUTS Platform — Developer API Portal')
     .setDescription(
-      `## Overview
+      `REST API documentation and interactive test portal for the **NUTS Multi-Vendor Marketplace Platform**.
 
-REST API specification and developer portal for the **NUTS Multi-Vendor Marketplace Platform**.
-
-Architected with **NestJS 11**, **TypeScript 5.8**, **PostgreSQL 16**, **Prisma 7**, **Redis Alpine**, and **RabbitMQ** adhering strictly to Domain-Driven Design (DDD) principles.
-
-The platform enforces strict zero-trust role isolation across three autonomous security boundaries:
-1. **Customer Storefront Domain** (Shoppers, Cart, Direct Checkout, Customer Orders, Customer Wallet, Reviews)
-2. **Vendor Merchant Domain** (Storefront Management, Products & Variants, Merchant Orders, Vendor Wallet, Analytics)
-3. **Platform Administration Domain** (Platform Governance, Merchant Approvals, Global Orders, Category Taxonomy, System Cache)
+Architected with **NestJS 11**, **TypeScript 5.8**, **PostgreSQL 16**, **Prisma 7**, **Redis Alpine**, and **RabbitMQ** following Domain-Driven Design (DDD) principles.
 
 ---
 
-## Authentication & Authorization Model
-
-All protected operations enforce a **zero-trust capability-driven security model**. Authentication identities are strictly partitioned across database tables and logical boundaries; role spoofing and cross-domain access are physically prevented by database isolation and backend \`RolesGuard\` validation.
-
-### Security Principals & Server-Driven Capabilities
-
-Every authenticated identity returns a capability manifest from \`GET /api/v1/auth/me\` that dictates valid client actions:
-
-| Principal | Role | Domain Scope & Permissions | Capability Flags |
-| :--- | :--- | :--- | :--- |
-| **Customer** | \`user\` | Storefront shopping, wishlist, cart, checkout, customer orders & wallet. | \`canPurchase: true\`, \`canSell: false\`, \`canAdminister: false\` |
-| **Vendor** | \`vendor\` | Store catalog, product variants, inventory, store orders, merchant wallet, analytics. | \`canPurchase: false\`, \`canSell: true\`, \`canAdminister: false\` |
-| **Admin** | \`admin\` | Platform governance, vendor approvals, user management, category taxonomy, system cache. | \`canPurchase: false\`, \`canSell: false\`, \`canAdminister: true\` |
-
-> **Zero-Trust Cross-Domain Boundary:** A valid access token for a \`vendor\` or \`admin\` will receive an immediate \`403 Forbidden\` on customer shopping endpoints (\`/cart\`, \`/checkout\`, \`/orders/my-orders\`, \`/users/wallet\`). Merchant and administrative accounts cannot make storefront purchases, maintain customer carts, or access customer wallets.
+### Quick Authentication Guide
+- **Web Clients:** Automatically receive and manage \`accessToken\` and \`refreshToken\` in \`HttpOnly\`, \`Secure\`, \`SameSite=Lax\` cookies.
+- **Swagger / Mobile Testing:** Obtain an access token via \`POST /api/v1/auth/login\` (Customer), \`POST /api/v1/vendors/auth/login\` (Vendor), or \`POST /api/v1/admin/auth/login\` (Admin).
+- Click the green **Authorize** button at the top right, paste your token in the \`Bearer <token>\` field, and click **Authorize**.
 
 ---
 
-## Session & Token Management
+### Role Access & Capability Boundaries
+- **Customer (\`user\`):** Storefront catalog, cart, checkout, customer orders, wallet, and wishlist.
+- **Vendor (\`vendor\`):** Merchant catalog, product variants, inventory, store orders, and vendor wallet.
+- **Admin (\`admin\`):** Platform governance, merchant approvals, user management, and category taxonomy.
 
-The platform employs a **Dual-Token Ephemeral Session Architecture** adhering to OWASP ASVS:
-
-- **Protocol Token Type (\`tokenType\`):** Always \`'Bearer'\`, indicating the standard HTTP Authorization header scheme (\`Authorization: Bearer <accessToken>\`).
-- **Access Token (\`accessToken\`):** Short-lived JWT (15-minute lifespan). Stateless bearer credential carrying identity claims (\`sub\`, \`email\`, \`role\`, \`tokenVersion\`, \`sessionId\`). Returned in JSON login/refresh responses for client in-memory storage, and set as an \`accessToken\` HttpOnly cookie.
-- **Refresh Token (\`refreshToken\`):** Long-lived rotating cryptographic token (7-day lifespan). Bound to a single client device session stored in Redis/DB with automatic reuse detection and replay mitigation. Delivered **strictly via the \`refreshToken\` HttpOnly cookie** and never exposed in JSON responses.
-- **One-Time Passcode (\`otp\`):** Ephemeral 6-digit numeric code (10-minute TTL) stored in Redis for registration email verification, sensitive account modifications, and password resets.
-- **Session Identifier (\`sessionId\` / \`refreshTokenId\`):** Cryptographic UUID tracking each active device session, enabling per-device logout and multi-session revocation (\`POST /api/v1/auth/logout-all\`).
-
-### Supported Authentication Transports
-
-#### Transport 1: HttpOnly Cookies (Standard for Web Clients)
-- Automatically issued upon successful authentication as \`Secure\`, \`HttpOnly\`, \`SameSite=Lax\` cookies:
-  - \`accessToken\` — Primary authentication bearer credential.
-  - \`refreshToken\` — Rotating session refresh credential scoped to session endpoints (\`path: '/'\`).
-
-#### Transport 2: Authorization Header (Mobile Clients & Swagger UI Testing)
-- Provide the JWT bearer token in the standard header:
-  \`Authorization: Bearer <accessToken>\`
-- Click the **"Authorize"** button in Swagger UI to test protected endpoints interactively.
-
----
-
-## Security Architecture & Attack Defenses
-
-NUTS Platform implements comprehensive defense-in-depth against top web vulnerabilities:
-
-#### 1. Cross-Site Scripting (XSS) Immunity
-- Client access tokens reside strictly in JavaScript memory closures (never in \`localStorage\` or \`sessionStorage\`).
-- Refresh tokens are delivered via \`HttpOnly\`, \`Secure\`, \`SameSite=Lax\` cookies, physically inaccessible to browser JavaScript.
-- Dynamic Content Security Policy (CSP) with cryptographic Web Crypto nonces blocks inline script execution.
-
-#### 2. Cross-Site Request Forgery (CSRF) Mitigation
-- Double-Submit Cookie pattern with custom \`x-csrf-token\` headers on state-changing requests (\`POST\`, \`PUT\`, \`PATCH\`, \`DELETE\`).
-- Validated against cryptographically signed HMAC nonces. Server-to-server payment webhooks (\`/payments/webhook\`) bypass CSRF checks at line 1 of middleware, validated instead by timing-safe HMAC-SHA512 request signature verification.
-
-#### 3. Brute Force & Credential Stuffing Defense
-- Redis-backed sliding-window rate limiters (\`@StrictThrottle\`, \`@RefreshTokenThrottle\`, \`@OtpThrottle\`) returning \`429 Too Many Requests\` with \`Retry-After\`.
-- Account lockout with exponential delay backoff on consecutive failed attempts.
-- Constant-time password validation using \`bcrypt.compare\` (cost factor 12) with fake-hash comparison (\`UNKNOWN_ACCOUNT_PASSWORD_HASH\`) against non-existent accounts, eliminating username enumeration via timing attacks.
-
-#### 4. Token Hijacking & Session Replay Defenses
-- RFC 6819 single-use refresh token rotation with compare-and-swap (CAS) semantics.
-- 15-second Redis grace period window (\`auth:grace:{refreshId}\`) permitting legitimate in-flight network retries and multi-tab single-flight refresh without false-positive session revocation.
-- Immediate cluster-wide invalidation via cached security stamps (\`auth:stamp:{role}:{userId}\`) upon password change, account suspension, or logout.
-
-#### 5. Injection & Mass Assignment Prevention
-- PostgreSQL interactions executed via Prisma ORM with parameterized queries, eliminating SQL injection.
-- Strict NestJS validation pipes (\`whitelist: true\`, \`forbidNonWhitelisted: true\`) rejecting extraneous payload attributes.
-- Compile-time safe selects (\`auth.selects.ts\`) physically excluding sensitive fields (e.g. \`password\`) from API outputs.
-
-#### 6. Broken Object Level Authorization (BOLA / IDOR)
-- Multi-tenant tenant/vendor isolation enforced in service queries (\`where: { id, vendorId }\`, \`where: { id, userId }\`).
-- Administrative and vendor backoffices physically decoupled from storefront purchase flows.
-
-#### 7. Financial Fraud & Double-Spending
-- \`DECIMAL(10, 2)\` fixed-point arithmetic using \`Prisma.Decimal\`, preventing IEEE-754 precision drift.
-- Conditional atomic SQL wallet debits (\`WHERE balance >= :amount\`).
-- Two-phase escrow crediting 85% merchant earnings to \`pendingBalance\` upon payment confirmation, unlocking to available \`balance\` strictly upon order delivery (\`DELIVERED\`).
-
----
-
-## Concurrency & Race Condition Controls
-
-- **Candidate Cart Selection & Pessimistic Row Locking (\`FOR UPDATE\`):**
-  - Checkout executes inside an atomic transaction with row-level locks on all user carts.
-  - Multi-cart evaluation in-memory selects the active cart with items (\`cartItems.length > 0\`), pruning empty orphan carts and evicting Redis cache (\`user:cart:v3:\${userId}\`).
-
-- **Inventory Matrix & Deadlock Prevention:**
-  - Stock decrements execute atomically across \`products\` and \`product_variants\`: \`UPDATE ... SET stock = stock - :qty WHERE stock >= :qty\`.
-  - Batch items are sorted lexicographically by ID (\`variantId ?? productId\`) prior to row acquisition, eliminating circular deadlock cycles (\`SQLSTATE 40P01\`).
-  - Stock shortfalls aggregate into an HTTP \`409 Conflict\` (\`INSUFFICIENT_STOCK\`) listing all affected items and available stock counts.
-  - Architectural decision: No distributed Redis lock is placed around checkout inventory; PostgreSQL's atomic conditional update provides ACID guarantees without the failure modes of distributed lock expiration or network partitions.
-
-- **Signed Asynchronous Payment Settlement:**
-  - Paystack HMAC-SHA512 signed webhooks authoritatively settle \`PENDING\` orders to \`PROCESSING\` even if client redirect fails or network latency disrupts callback queries.
-  - Metadata fallback resolves payments by \`orderId\` when reference strings differ.
-
-- **Automated Unpaid Order Sweeper (\`UnpaidOrdersCron\`):**
-  - Distributed cron running every minute under an atomic token-validated Redis lock (\`cron:lock:unpaid-orders\`). Sweeps orders in \`PENDING\` state older than the configured TTL (\`UNPAID_ORDER_TTL_MINUTES\`, default 15 minutes), restoring inventory stock and setting status to \`CANCELLED\`.
-
----
-
-## Domain API Endpoints
-
-### 1. Customer Authentication & Identity (\`/api/v1/auth\`, \`/api/v1/account\`)
-
-- \`POST /api/v1/auth/request-otp\` — Send registration / verification OTP
-- \`POST /api/v1/auth/register\` — Register customer account (requires verified email OTP)
-- \`POST /api/v1/auth/login\` — Customer credentials login (issues session cookies)
-- \`POST /api/v1/auth/refresh\` — Rotate customer refresh session and tokens
-- \`POST /api/v1/auth/logout\` — Revoke current device session and clear cookies
-- \`POST /api/v1/auth/logout-all\` — Invalidate all active sessions across all devices and clear cookies
-- \`GET  /api/v1/auth/me\` — Retrieve authenticated identity and capability flags (\`canPurchase\`, \`canSell\`, \`canAdminister\`)
-- \`POST /api/v1/auth/forgot-password\` & \`POST /api/v1/auth/reset-password\`
-- \`GET  /api/v1/account\` (or \`/api/v1/users\`) — Retrieve customer profile
-- \`PATCH /api/v1/account\` — Update customer profile details
-- \`PATCH /api/v1/account/deactivate\` — Self-deactivate account
-- \`POST /api/v1/account/reactivate\` — Publicly restore deactivated account within 60-day grace period
-
-### 2. Vendor / Merchant Operations (\`/api/v1/vendors\`, \`/api/v1/vendors/auth\`)
-
-- \`POST /api/v1/vendors/auth/request-otp\` — Request vendor registration email OTP
-- \`POST /api/v1/vendors/register\` — Register vendor store and wallet (requires verified email OTP)
-- \`POST /api/v1/vendors/login\` — Vendor merchant login (issues session cookies)
-- \`POST /api/v1/vendors/refresh\` — Rotate vendor refresh session and tokens
-- \`POST /api/v1/vendors/logout\` — Revoke vendor session and clear cookies
-- \`GET  /api/v1/vendors/me\` — Retrieve authenticated vendor identity, storeName, and storeSlug
-- \`GET  /api/v1/vendors/account\` — Retrieve full vendor business profile
-- \`PATCH /api/v1/vendors/account\` — Update vendor store settings and branding
-- \`GET  /api/v1/vendors/products\` & \`POST /api/v1/vendors/products\` — Manage merchant catalog
-- \`GET  /api/v1/vendors/orders\` — Manage merchant orders and status transitions
-- \`GET  /api/v1/vendors/wallet\` — Inspect merchant wallet and escrow balances
-- \`PATCH /api/v1/vendors/discounts/:id/reactivate\` — Reactivate vendor promotional discount code
-
-### 3. Administrator Operations (\`/api/v1/admin\`)
-
-- \`POST /api/v1/admin/auth/login\` — Administrator login (enforces strict \`ADMIN\` role verification)
-- \`POST /api/v1/admin/auth/refresh\` — Rotate administrator session and tokens
-- \`POST /api/v1/admin/auth/logout\` — Revoke administrator session and clear cookies
-- \`GET  /api/v1/admin/auth/me\` — Retrieve authenticated administrator profile
-- \`GET  /api/v1/admin/users\` — Search, inspect, suspend, and reactivate platform users
-- \`GET  /api/v1/admin/vendors\` & \`PATCH /api/v1/admin/vendors/:id/approve\` — Vendor partner approvals
-- \`GET  /api/v1/admin/search/status\` — Operational health diagnostics for search indexing and Redis cache
-- \`PATCH /api/v1/admin/discounts/:id/reactivate\` — Reactivate platform-wide discount campaign
-
-### 4. Shopping Cart & Checkout Orchestration (\`/api/v1/cart\`, \`/api/v1/orders/checkout\`)
-
-- \`GET    /api/v1/cart\` — Retrieve authenticated customer's active cart with products and variants
-- \`GET    /api/v1/cart/discount-preview\` — Preview cart totals with applied discount code
-- \`POST   /api/v1/cart/items/:productId\` — Add product or variant to cart with specified quantity
-- \`PATCH  /api/v1/cart/items/:productId\` — Update cart item quantity atomically (quantity 0 removes item)
-- \`DELETE /api/v1/cart/items/:productId\` — Remove specific product or variant from cart
-- \`DELETE /api/v1/cart\` — Clear all items from current active cart
-- \`POST   /api/v1/orders/checkout\` — Execute order checkout under pessimistic row locks (\`FOR UPDATE\`), selecting non-empty candidate carts, pruning empty orphan carts, and invalidating Redis cart cache (\`user:cart:v3:\${userId}\`)
-
-### 5. Payments, Settlement & Webhooks (\`/api/v1/payments\`)
-
-- \`POST /api/v1/payments/initialize\` — Initialize Paystack checkout session for an order (returns Paystack checkout authorization URL; 3DS & bank verification handled securely on gateway)
-- \`GET  /api/v1/payments/order/:orderId\` — Retrieve payment record and transaction status for an order
-- \`GET  /api/v1/payments/callback\` — Verify transaction callback reference with Paystack and advance order
-- \`POST /api/v1/payments/webhook\` — Cryptographically signed Paystack HMAC-SHA512 webhook handler for asynchronous order settlement
-- \`POST /api/v1/payments/:id/refund\` — Process full or partial payment refund (Admin/Vendor authorized)
-
-### 6. Real-Time Notifications & Streaming (\`/api/v1/notifications\`)
-
-- \`GET   /api/v1/notifications\` — List paginated notifications (role-scoped, supports unreadOnly filter)
-- \`GET   /api/v1/notifications/unread-count\` — Retrieve live unread notification count
-- \`PATCH /api/v1/notifications/:id/read\` — Mark a single notification as read
-- \`PATCH /api/v1/notifications/read-all\` — Mark all user notifications as read
-- \`GET   /api/v1/notifications/sse/stream\` — Real-Time Server-Sent Events (SSE) notification stream (cluster Redis Pub/Sub, connection caps, 15s session-revocation heartbeats)
-
----
-
-## Unified Response Envelope
-
-All endpoints respond with the standard RFC-compliant envelope:
-\`\`\`json
-{
-  "success": true,
-  "message": "Operation completed successfully",
-  "data": { ... },
-  "timestamp": "2026-10-15T13:30:00.000Z"
-}
-\`\`\``,
+All requests return a standard RFC envelope: \`{ success: boolean, message: string, data: any, timestamp: string }\`.`,
     )
     .setVersion('1.0.0');
 

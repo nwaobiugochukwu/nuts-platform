@@ -88,7 +88,7 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
-   * Sends the account welcome email.
+   * Sends the account welcome email for shoppers.
    */
   async sendWelcomeEmail(to: string, name: string): Promise<void> {
     await this.sendEmail({
@@ -97,7 +97,41 @@ export class EmailService implements OnModuleInit {
       html: this.buildWelcomeHtml(name),
     });
 
-    this.logger.log('Welcome email sent successfully');
+    this.logger.log('Customer welcome email sent successfully');
+  }
+
+  /**
+   * Sends vendor registration receipt informing them their store is under review.
+   */
+  async sendVendorApplicationReceivedEmail(
+    to: string,
+    storeName: string,
+    merchantName?: string,
+  ): Promise<void> {
+    await this.sendEmail({
+      to,
+      subject: 'NUTS Merchant Application Received — Pending Approval',
+      html: this.buildVendorApplicationReceivedHtml(storeName, merchantName),
+    });
+
+    this.logger.log(`Vendor application received email sent to ${to}`);
+  }
+
+  /**
+   * Sends vendor approval notification when store is activated by admin.
+   */
+  async sendVendorApprovedEmail(
+    to: string,
+    storeName: string,
+    merchantName?: string,
+  ): Promise<void> {
+    await this.sendEmail({
+      to,
+      subject: '🎉 Congratulations! Your NUTS Merchant Store is Approved',
+      html: this.buildVendorApprovedHtml(storeName, merchantName),
+    });
+
+    this.logger.log(`Vendor approval email sent to ${to}`);
   }
 
   /**
@@ -428,7 +462,7 @@ export class EmailService implements OnModuleInit {
         <p>Hello ${safeName},</p>
 
         <p>
-          Thanks for joining NUTS. Your account is ready,
+          Thanks for joining NUTS. Your customer account is ready,
           and you can now explore our curated collection of products.
         </p>
 
@@ -440,7 +474,86 @@ export class EmailService implements OnModuleInit {
         </div>
 
         <p>
-          We’re excited to help you shop smarter.
+          We’re excited to have you with us. Happy shopping!
+        </p>
+      </div>
+    `);
+  }
+
+  private buildVendorApplicationReceivedHtml(
+    storeName: string,
+    merchantName?: string,
+  ): string {
+    const safeStore = this.escapeHtml(storeName || 'Merchant Store');
+    const safeName = this.escapeHtml(merchantName || 'Merchant Partner');
+
+    return this.wrapHtml(`
+      <div class="email-header">
+        <p class="eyebrow">Merchant Onboarding</p>
+        <h1>Application Received</h1>
+      </div>
+
+      <div class="email-body">
+        <p>Hello ${safeName},</p>
+
+        <p>
+          Thank you for applying to sell on the NUTS Marketplace! We have received your registration for <strong>${safeStore}</strong>.
+        </p>
+
+        <div class="hero-card" style="background:#fefce8;border-left:4px solid #eab308;">
+          <p><strong>Application Status: Pending Review</strong></p>
+          <p>
+            Our administration team reviews all vendor applications to ensure platform quality and security. This typically takes 1 business day.
+          </p>
+        </div>
+
+        <p>
+          <strong>What happens next?</strong>
+        </p>
+        <p>
+          Once your store is approved by our team, you will receive an approval email with access to publish products, configure inventory, and start selling.
+        </p>
+
+        <p>
+          If you have any questions or business documents to submit, reply directly to this email or reach us at <a href="mailto:support@nuts.com" style="color:#7c3aed;text-decoration:none;">support@nuts.com</a>.
+        </p>
+      </div>
+    `);
+  }
+
+  private buildVendorApprovedHtml(
+    storeName: string,
+    merchantName?: string,
+  ): string {
+    const safeStore = this.escapeHtml(storeName || 'Merchant Store');
+    const safeName = this.escapeHtml(merchantName || 'Merchant Partner');
+
+    return this.wrapHtml(`
+      <div class="email-header">
+        <p class="eyebrow" style="color:#059669;">Store Approved</p>
+        <h1>Your Store is Live!</h1>
+      </div>
+
+      <div class="email-body">
+        <p>Hello ${safeName},</p>
+
+        <p>
+          Great news! Your merchant store <strong>${safeStore}</strong> has been reviewed and officially approved by the NUTS administration team.
+        </p>
+
+        <div class="hero-card" style="background:#ecfdf5;border-left:4px solid #059669;">
+          <p><strong style="color:#065f46;">Your Merchant Portal is Ready</strong></p>
+          <p style="color:#047857;">
+            You can now log in, upload your products, configure variant stock, and begin receiving orders from customers across the platform.
+          </p>
+        </div>
+
+        <p style="text-align:center;margin:30px 0;">
+          <a href="https://nuts-platform.onrender.com/auth/vendor/login" style="display:inline-block;background:#7c3aed;color:#ffffff;padding:14px 28px;border-radius:8px;font-weight:600;text-decoration:none;">Go to Vendor Portal</a>
+        </p>
+
+        <p>
+          Welcome to the NUTS merchant community! Let's build something great together.
         </p>
       </div>
     `);

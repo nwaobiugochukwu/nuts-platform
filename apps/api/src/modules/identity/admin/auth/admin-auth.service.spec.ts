@@ -256,7 +256,10 @@ describe('AdminVendorsService', () => {
     email: 'shop@nuts.dev',
     storeName: 'Nuts Store',
     storeSlug: 'nuts-store',
+    firstName: 'Ugo',
   };
+
+  let mockEmailService: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -273,8 +276,16 @@ describe('AdminVendorsService', () => {
       del: jest.fn().mockResolvedValue(undefined),
       delByPattern: jest.fn().mockResolvedValue(undefined),
     };
+    mockEmailService = {
+      sendVendorApprovedEmail: jest.fn().mockResolvedValue(undefined),
+    };
 
-    service = new AdminVendorsService(mockPrisma, mockAudit, mockCache);
+    service = new AdminVendorsService(
+      mockPrisma,
+      mockAudit,
+      mockCache,
+      mockEmailService,
+    );
   });
 
   describe('findAll()', () => {

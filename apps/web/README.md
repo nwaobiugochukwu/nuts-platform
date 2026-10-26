@@ -48,7 +48,7 @@ apps/web/src/app/
   - **Step 1:** Profile data, password complexity enforcement (`/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#]).*$/`), and live referral pre-check against `/api/v1/account/referral/validate`.
   - **Step 2:** Strict 6-digit numeric OTP email verification with resend cooldown timer.
   - **Step 3:** Immediate initial delivery address capture (`fullName`, `phone`, `street`, `city`, `state`, `country`).
-- **Merchant Onboarding (`VendorRegisterPage` at `/auth/vendor/register`):** Store name and merchant credentials with immediate 6-digit OTP email confirmation.
+- **Merchant Onboarding (`VendorRegisterPage` at `/auth/vendor/register`):** 4-step progressive onboarding wizard: Step 1 (Store credentials & password complexity), Step 2 (Strict 6-digit OTP email verification with live cooldown timer), Step 3 (Store description & business contact details), Step 4 (Status & pending administrative review screen with approval pipeline explanation).
 - **Password Recovery (`ForgotPasswordPage` at `/auth/forgot-password`):** Rate-limited OTP dispatch followed by OTP validation and 12+ character replacement password setting with immediate revocation of existing browser sessions.
 
 ### 2. Catalog & Discovery Surfaces
