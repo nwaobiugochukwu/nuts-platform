@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { VendorProfileDto } from '@api/modules/identity/vendors/dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '@api/modules/identity/vendors/dto/vendor-status-response.dto';
 import { CacheService } from '@api/modules/infrastructure/cache/cache.service';
+import { EmailService } from '@api/modules/infrastructure/mail/email.service';
 import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
 import {
   AuditLogService,
@@ -50,6 +51,7 @@ const statusSelect = {
   email: true,
   storeName: true,
   storeSlug: true,
+  firstName: true,
 } as const;
 
 type StatusField = 'isActive' | 'isApproved' | 'isVerified';
@@ -79,6 +81,7 @@ export class AdminVendorsService {
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
     private readonly cacheService: CacheService,
+    private readonly emailService: EmailService,
   ) {}
 
   async findAll(query: QueryAdminVendorsDto): Promise<{
@@ -330,6 +333,21 @@ export class AdminVendorsService {
         userAgent,
       }),
     ]);
+
+    if (action === 'APPROVE_VENDOR' && value === true) {
+      void this.emailService
+        .sendVendorApprovedEmail(
+          vendor.email,
+          vendor.storeName,
+          vendor.firstName || undefined,
+        )
+        .catch((err) => {
+          this.logger.error(
+            `Failed to send vendor approval email to ${vendor.email}`,
+            err,
+          );
+        });
+    }
 
     return {
       id: vendor.id,
