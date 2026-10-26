@@ -83,7 +83,7 @@ export function PublicOnlyLayout({
   if (targetPageRole !== "user" || !showNavigation) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-3 py-6 sm:px-6 sm:py-12">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-lg">
           {roleNoticeBanner}
           {children}
         </div>

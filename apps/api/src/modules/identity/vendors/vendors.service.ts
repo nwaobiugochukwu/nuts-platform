@@ -232,9 +232,16 @@ export class VendorsService {
       });
 
     void this.emailService
-      .sendWelcomeEmail(vendor.email, vendor.firstName ?? '')
+      .sendVendorApplicationReceivedEmail(
+        vendor.email,
+        vendor.storeName,
+        vendor.firstName || undefined,
+      )
       .catch((error) => {
-        this.logger.error('Failed to send vendor welcome email', error);
+        this.logger.error(
+          'Failed to send vendor application received email',
+          error,
+        );
       });
 
     /*
