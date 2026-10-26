@@ -161,6 +161,35 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                             Variant: {item.variant.options.map((option) => option.value).join(" / ") || "Standard"}
                           </p>
                         )}
+                        {(() => {
+                          const inStock = item.product?.inStockQuantity ?? 999;
+                          const isOutOfStock = inStock <= 0;
+                          const isQuantityExceeded = item.quantity > inStock;
+                          const isLowStock = !isOutOfStock && !isQuantityExceeded && (item.product?.lowStockAlert || inStock <= 5);
+
+                          if (isOutOfStock) {
+                            return (
+                              <span className="mt-1 inline-block text-xs font-semibold text-destructive">
+                                Out of stock
+                              </span>
+                            );
+                          }
+                          if (isQuantityExceeded) {
+                            return (
+                              <span className="mt-1 inline-block text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                Only {inStock} available (requested {item.quantity})
+                              </span>
+                            );
+                          }
+                          if (isLowStock) {
+                            return (
+                              <span className="mt-1 inline-block text-xs font-medium text-amber-600 dark:text-amber-400">
+                                Only {inStock} left in stock
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                         <p className="mt-1 font-bold text-sm text-foreground">
                           {formatPrice(item.price)}
                         </p>
@@ -195,20 +224,27 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                         <span className="w-8 text-center text-xs font-semibold text-foreground">
                           {item.quantity}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateItem.mutate({
-                              productId: item.productId,
-                              delta: 1,
-                              variantId: item.variant?.id,
-                            })
-                          }
-                          disabled={isItemUpdating}
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-all disabled:opacity-50"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
+                        {(() => {
+                          const inStock = item.product?.inStockQuantity ?? 999;
+                          const isMaxStockReached = item.quantity >= inStock;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateItem.mutate({
+                                  productId: item.productId,
+                                  delta: 1,
+                                  variantId: item.variant?.id,
+                                })
+                              }
+                              disabled={isItemUpdating || isMaxStockReached}
+                              title={isMaxStockReached ? `Maximum available stock reached (${inStock})` : undefined}
+                              className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-background transition-all disabled:opacity-50"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          );
+                        })()}
                       </div>
 
                       {/* Line Item Total */}
@@ -332,18 +368,42 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
               </div>
 
               {/* Proceed to Checkout CTA */}
-              <Button
-                asChild
-                className="mt-6 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-base font-semibold transition-all shadow-sm"
-              >
-                <Link
-                  href={effectiveDiscount ? `/checkout?code=${encodeURIComponent(effectiveDiscount.code)}` : "/checkout"}
-                  className="flex items-center justify-center gap-2"
-                >
-                  <span>Proceed to Checkout</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              {(() => {
+                const hasStockConflict = items.some(
+                  (item) => (item.product?.inStockQuantity ?? 999) < item.quantity
+                );
+
+                if (hasStockConflict) {
+                  return (
+                    <div className="mt-6 space-y-2">
+                      <Button
+                        disabled
+                        className="w-full rounded-full py-6 text-base font-semibold opacity-60 cursor-not-allowed"
+                      >
+                        Adjust Quantities to Checkout
+                      </Button>
+                      <p className="text-center text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        Some items exceed available inventory. Please adjust quantities before proceeding.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <Button
+                    asChild
+                    className="mt-6 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-base font-semibold transition-all shadow-sm"
+                  >
+                    <Link
+                      href={effectiveDiscount ? `/checkout?code=${encodeURIComponent(effectiveDiscount.code)}` : "/checkout"}
+                      className="flex items-center justify-center gap-2"
+                    >
+                      <span>Proceed to Checkout</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                );
+              })()}
             </aside>
           </div>
         )}

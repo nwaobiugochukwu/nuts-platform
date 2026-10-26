@@ -13,6 +13,7 @@ import { CacheService } from '@api/modules/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import { UsersService } from '@api/modules/users/users.service';
+import { InsufficientStockException } from '@api/modules/shared/errors/insufficient-stock.exception';
 
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 
@@ -248,6 +249,7 @@ export class CartService {
         },
         select: {
           id: true,
+          name: true,
           price: true,
           stock: true,
           hasVariants: true,
@@ -269,6 +271,7 @@ export class CartService {
             select: {
               id: true,
               stock: true,
+              options: true,
             },
           })
         : null;
@@ -308,9 +311,16 @@ export class CartService {
       const newQuantity = (existingItem?.quantity ?? 0) + quantity;
 
       if (newQuantity > availableStock) {
-        throw new BadRequestException(
-          `Insufficient stock. Available: ${availableStock}, requested: ${newQuantity}`,
-        );
+        throw new InsufficientStockException([
+          {
+            productId,
+            variantId: normalizedVariantId,
+            name: product.name,
+            variantLabel: variant ? this.variantLabel(variant.options) : null,
+            requested: newQuantity,
+            available: Math.max(0, availableStock),
+          },
+        ]);
       }
 
       /*
@@ -414,6 +424,7 @@ export class CartService {
           variant: {
             select: {
               stock: true,
+              options: true,
               isActive: true,
               isDeleted: true,
             },
@@ -421,6 +432,7 @@ export class CartService {
 
           product: {
             select: {
+              name: true,
               stock: true,
               isActive: true,
               isDeleted: true,
@@ -444,12 +456,14 @@ export class CartService {
             variant: {
               select: {
                 stock: true,
+                options: true,
                 isActive: true,
                 isDeleted: true,
               },
             },
             product: {
               select: {
+                name: true,
                 stock: true,
                 isActive: true,
                 isDeleted: true,
@@ -504,9 +518,18 @@ export class CartService {
       const availableStock = cartItem.variant?.stock ?? cartItem.product.stock;
 
       if (newQuantity > availableStock) {
-        throw new BadRequestException(
-          `Insufficient stock. Available: ${availableStock}`,
-        );
+        throw new InsufficientStockException([
+          {
+            productId,
+            variantId: normalizedVariantId,
+            name: cartItem.product.name,
+            variantLabel: cartItem.variant
+              ? this.variantLabel(cartItem.variant.options)
+              : null,
+            requested: newQuantity,
+            available: Math.max(0, availableStock),
+          },
+        ]);
       }
 
       /*
@@ -950,6 +973,12 @@ export class CartService {
     }
 
     return [];
+  }
+
+  private variantLabel(options: unknown): string | null {
+    const list = this.transformOptions(options);
+    if (!list.length) return null;
+    return list.map((o) => `${o.name}: ${o.value}`).join(', ');
   }
 
   // ---------------------------------------------------------------------------

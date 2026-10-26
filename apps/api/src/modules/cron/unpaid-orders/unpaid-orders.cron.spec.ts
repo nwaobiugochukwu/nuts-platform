@@ -25,7 +25,7 @@ describe('UnpaidOrdersCron', () => {
 
     mockRedis = {
       set: jest.fn().mockResolvedValue('OK'),
-      del: jest.fn().mockResolvedValue(1),
+      eval: jest.fn().mockResolvedValue(1),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -51,7 +51,7 @@ describe('UnpaidOrdersCron', () => {
 
     expect(mockRedis.set).toHaveBeenCalledWith(
       'cron:lock:unpaid-orders',
-      '1',
+      expect.any(String),
       'PX',
       UNPAID_ORDER_EXPIRATION.LOCK_TTL_MS,
       'NX',
@@ -60,7 +60,7 @@ describe('UnpaidOrdersCron', () => {
     expect(mockOrdersService.cancelExpiredPendingOrder).not.toHaveBeenCalled();
   });
 
-  it('should find expired orders exceeding 30-minute window and auto-cancel them', async () => {
+  it('should find expired orders exceeding configured window and auto-cancel them', async () => {
     const expiredOrders = [
       {
         id: 'ord-exp-1',
@@ -92,15 +92,24 @@ describe('UnpaidOrdersCron', () => {
     );
     expect(mockOrdersService.cancelExpiredPendingOrder).toHaveBeenCalledWith(
       'ord-exp-1',
-      expect.stringContaining('Payment window expired after 30 minutes'),
+      expect.stringContaining(
+        `Payment window expired after ${UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES} minutes`,
+      ),
     );
     expect(mockOrdersService.cancelExpiredPendingOrder).toHaveBeenCalledWith(
       'ord-exp-2',
-      expect.stringContaining('Payment window expired after 30 minutes'),
+      expect.stringContaining(
+        `Payment window expired after ${UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES} minutes`,
+      ),
     );
 
-    // Distributed lock released at conclusion
-    expect(mockRedis.del).toHaveBeenCalledWith('cron:lock:unpaid-orders');
+    // Distributed lock released at conclusion with compare-and-delete
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1]) == ARGV[1]'),
+      1,
+      'cron:lock:unpaid-orders',
+      expect.any(String),
+    );
   });
 
   it('should exit cleanly and release lock when no expired orders are discovered', async () => {
@@ -109,7 +118,12 @@ describe('UnpaidOrdersCron', () => {
     await cron.handleExpiredUnpaidOrders();
 
     expect(mockOrdersService.cancelExpiredPendingOrder).not.toHaveBeenCalled();
-    expect(mockRedis.del).toHaveBeenCalledWith('cron:lock:unpaid-orders');
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1]) == ARGV[1]'),
+      1,
+      'cron:lock:unpaid-orders',
+      expect.any(String),
+    );
   });
 
   it('should guarantee distributed lock release in finally block even if query throws', async () => {
@@ -119,6 +133,11 @@ describe('UnpaidOrdersCron', () => {
 
     await cron.handleExpiredUnpaidOrders();
 
-    expect(mockRedis.del).toHaveBeenCalledWith('cron:lock:unpaid-orders');
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("get", KEYS[1]) == ARGV[1]'),
+      1,
+      'cron:lock:unpaid-orders',
+      expect.any(String),
+    );
   });
 });

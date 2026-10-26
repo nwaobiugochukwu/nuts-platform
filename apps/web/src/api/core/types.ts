@@ -35,6 +35,7 @@ export interface ApiErrorDetail {
 export interface ApiErrorInfo {
   code?: ApiErrorCode;
   details?: ApiErrorDetail[] | unknown;
+  meta?: Record<string, unknown>;
 }
 
 export interface ApiSuccessEnvelope<T> {

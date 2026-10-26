@@ -1,4 +1,9 @@
-import { BadRequestException, HttpStatus } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  HttpStatus,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { GlobalExceptionFilter } from './global-exception.filter';
@@ -120,6 +125,43 @@ describe('GlobalExceptionFilter', () => {
         success: false,
         message: 'Internal server error',
         error: { code: 'INTERNAL_ERROR' },
+      }),
+    );
+  });
+
+  it('passes through domain error code and meta for 4xx responses', () => {
+    const exception = new ConflictException({
+      code: 'INSUFFICIENT_STOCK',
+      message: 'Some items are unavailable',
+      meta: { items: [{ productId: 'p-1', requested: 2, available: 1 }] },
+    });
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.CONFLICT);
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Some items are unavailable',
+        error: {
+          code: 'INSUFFICIENT_STOCK',
+          meta: { items: [{ productId: 'p-1', requested: 2, available: 1 }] },
+        },
+      }),
+    );
+  });
+
+  it('ignores malformed domain codes and never exposes meta on 5xx', () => {
+    const exception = new InternalServerErrorException({
+      code: 'not a code',
+      message: 'boom',
+      meta: { secret: 'x' },
+    });
+
+    filter.catch(exception, mockArgumentsHost);
+
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: { code: 'SERVER_ERROR' },
       }),
     );
   });

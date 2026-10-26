@@ -34,6 +34,11 @@ import { createPaginationMeta } from '@api/modules/shared/utils/pagination-meta.
 import { getPagination } from '@api/modules/shared/utils/pagination.util';
 
 import { CHECKOUT_IDEMPOTENCY_TTL_HOURS } from '@api/modules/shared/constants/checkout.constants';
+import { UNPAID_ORDER_EXPIRATION } from '@api/modules/shared/constants';
+import {
+  InsufficientStockException,
+  type StockShortfallItem,
+} from '@api/modules/shared/errors/insufficient-stock.exception';
 
 import {
   assertValidOrderTransition,
@@ -1657,10 +1662,41 @@ export class OrdersService {
           return aKey.localeCompare(bKey);
         });
 
+        const shortfalls: StockShortfallItem[] = [];
+
         for (const item of itemsToDeduct) {
           const variantLabel = item.variant
             ? this.variantLabel(item.variant.options)
             : null;
+
+          const toShortfall = (available: number): StockShortfallItem => ({
+            productId: item.productId,
+            variantId: item.variantId ?? null,
+            name: item.product.name,
+            variantLabel,
+            requested: item.quantity,
+            available,
+          });
+
+          /**
+           * Once any line has failed, this transaction is guaranteed to roll
+           * back. Stop acquiring row locks (which would only increase
+           * contention for other shoppers) and fall back to non-blocking MVCC
+           * reads so the customer gets every unavailable line in one response.
+           */
+          if (shortfalls.length > 0) {
+            const available = await this.readLiveStock(
+              tx,
+              item.productId,
+              item.variantId,
+            );
+
+            if (available < item.quantity) {
+              shortfalls.push(toShortfall(available));
+            }
+
+            continue;
+          }
 
           if (item.variantId) {
             const rows = await tx.$queryRaw<
@@ -1690,11 +1726,12 @@ export class OrdersService {
             );
 
             if (rows.length !== 1) {
-              throw new BadRequestException(
-                variantLabel
-                  ? `Insufficient stock for "${item.product.name}" (${variantLabel}).`
-                  : `Insufficient stock for "${item.product.name}".`,
+              shortfalls.push(
+                toShortfall(
+                  await this.readLiveStock(tx, item.productId, item.variantId),
+                ),
               );
+              continue;
             }
 
             stockHistoryRows.push({
@@ -1731,9 +1768,10 @@ export class OrdersService {
             );
 
             if (rows.length !== 1) {
-              throw new BadRequestException(
-                `Insufficient stock for "${item.product.name}".`,
+              shortfalls.push(
+                toShortfall(await this.readLiveStock(tx, item.productId, null)),
               );
+              continue;
             }
 
             stockHistoryRows.push({
@@ -1744,6 +1782,26 @@ export class OrdersService {
               description: 'Stock deducted during checkout',
             });
           }
+        }
+
+        if (shortfalls.length > 0) {
+          this.logger.warn(
+            {
+              event: 'checkout.insufficient_stock',
+              userId,
+              cartId: cart.id,
+              items: shortfalls.map((s) => ({
+                productId: s.productId,
+                variantId: s.variantId,
+                requested: s.requested,
+                available: s.available,
+              })),
+            },
+            'Checkout rejected: insufficient stock',
+          );
+
+          // Rolls back every stock decrement already applied in this tx.
+          throw new InsufficientStockException(shortfalls);
         }
 
         if (stockHistoryRows.length) {
@@ -2194,6 +2252,35 @@ export class OrdersService {
     return `ORD-${datePart}-${this.generateOrderId()}`;
   }
 
+  /**
+   * Reads currently sellable stock for a line without taking a row lock.
+   *
+   * Used only to build an accurate INSUFFICIENT_STOCK response after the
+   * authoritative conditional UPDATE has already failed. Inactive/deleted
+   * inventory is reported as 0 because it cannot be purchased.
+   */
+  private async readLiveStock(
+    tx: TransactionClient,
+    productId: string,
+    variantId: string | null,
+  ): Promise<number> {
+    const row = variantId
+      ? await tx.productVariant.findUnique({
+          where: { id: variantId },
+          select: { stock: true, isActive: true, isDeleted: true },
+        })
+      : await tx.product.findUnique({
+          where: { id: productId },
+          select: { stock: true, isActive: true, isDeleted: true },
+        });
+
+    if (!row || !row.isActive || row.isDeleted) {
+      return 0;
+    }
+
+    return Math.max(0, row.stock);
+  }
+
   private variantLabel(options: Prisma.JsonValue): string | null {
     if (Array.isArray(options)) {
       return options
@@ -2287,6 +2374,14 @@ export class OrdersService {
 
       createdAt: order.createdAt,
 
+      paymentExpiresAt:
+        order.status === OrderStatus.PENDING
+          ? new Date(
+              new Date(order.createdAt).getTime() +
+                UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES * 60 * 1000,
+            )
+          : null,
+
       items: order.orderItems.map((item) => ({
         productId: item.productId,
         variantId: item.variantId ?? null,
@@ -2350,6 +2445,14 @@ export class OrdersService {
       shippingAddress: order.shippingAddress ?? null,
 
       createdAt: order.createdAt,
+
+      paymentExpiresAt:
+        order.status === OrderStatus.PENDING
+          ? new Date(
+              new Date(order.createdAt).getTime() +
+                UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES * 60 * 1000,
+            )
+          : null,
     };
   }
 

@@ -18,7 +18,7 @@ export class AdminRegisterDto {
   @ApiProperty({ description: 'Admin password' })
   @IsString()
   @IsNotEmpty()
-  @MinLength(12)
+  @MinLength(8)
   @MaxLength(128)
   @MaxPasswordBytes()
   @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/)

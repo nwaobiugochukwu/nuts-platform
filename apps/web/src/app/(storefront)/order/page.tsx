@@ -21,6 +21,10 @@ export default function OrderPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKey.order.list({ page, limit: 10 }),
     queryFn: async () => await orderService.list({ page, limit: 10 }),
+    refetchInterval: (query) => {
+      const orderList = query.state.data?.data;
+      return orderList?.some((o) => o.status === "PENDING") ? 4000 : false;
+    },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });

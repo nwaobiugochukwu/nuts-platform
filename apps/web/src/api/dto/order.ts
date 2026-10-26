@@ -69,6 +69,7 @@ export interface OrderResponseDto {
   items: OrderItemResponseDto[];
   shippingAddress?: CheckoutShippingAddressDto | null;
   shippingAddressId?: string | null;
+  paymentExpiresAt?: string | Date | null;
   createdAt: Date;
 }
 

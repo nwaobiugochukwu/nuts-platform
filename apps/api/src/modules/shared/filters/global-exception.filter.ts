@@ -12,8 +12,14 @@ interface HttpExceptionBody {
   message?: string | string[];
   error?: string;
   retryAfter?: number;
+  /** Optional domain error code (UPPER_SNAKE_CASE), e.g. INSUFFICIENT_STOCK. */
+  code?: string;
+  /** Optional structured, client-safe payload. Only exposed for 4xx responses. */
+  meta?: Record<string, unknown>;
   [key: string]: unknown;
 }
+
+const DOMAIN_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,63}$/;
 
 interface RequestWithActor extends Request {
   user?: { id?: string; sub?: string; role?: string };
@@ -37,6 +43,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let errors: string[] | null = null;
     let errorCode = 'INTERNAL_ERROR';
     let retryAfter: number | undefined;
+    let meta: Record<string, unknown> | undefined;
 
     // HTTP exceptions
     if (exception instanceof HttpException) {
@@ -77,6 +84,29 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         [HttpStatus.SERVICE_UNAVAILABLE]: 'SERVICE_UNAVAILABLE',
       };
       errorCode = errorCodeMap[status] ?? 'HTTP_ERROR';
+
+      /**
+       * Domain error codes let clients branch on business conditions
+       * (e.g. INSUFFICIENT_STOCK) without parsing human-readable messages.
+       * `meta` is restricted to 4xx so internal details never leak on 5xx.
+       */
+      if (typeof res === 'object' && res !== null) {
+        if (
+          typeof res.code === 'string' &&
+          DOMAIN_ERROR_CODE_PATTERN.test(res.code)
+        ) {
+          errorCode = res.code;
+        }
+
+        if (
+          status < 500 &&
+          typeof res.meta === 'object' &&
+          res.meta !== null &&
+          !Array.isArray(res.meta)
+        ) {
+          meta = res.meta;
+        }
+      }
     }
 
     // Prisma exceptions
@@ -126,6 +156,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         ...(errors && !(status >= 500 && isProduction)
           ? { details: errors }
           : {}),
+        ...(meta ? { meta } : {}),
         ...(typeof retryAfter === 'number' ? { retryAfter } : {}),
       },
       ...(typeof retryAfter === 'number' ? { retryAfter } : {}),

@@ -15,7 +15,7 @@ import { z } from "zod";
 
 const setupSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(12, "Password must be at least 12 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   setupSecret: z.string().min(1, "Setup secret is required"),
 });
 
@@ -70,7 +70,7 @@ export default function AdminSetupPage() {
               name="password"
               label="Password"
               type="password"
-              placeholder="Min 12 characters"
+              placeholder="Min 8 characters"
             />
             <FormInput
               name="setupSecret"

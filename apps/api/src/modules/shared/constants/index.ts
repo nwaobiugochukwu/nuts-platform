@@ -28,11 +28,16 @@ export const VENDOR_SUMMARY = {
 } as const;
 
 export const UNPAID_ORDER_EXPIRATION = {
-  PENDING_TTL_MINUTES: 30,
+  get PENDING_TTL_MINUTES(): number {
+    const envVal = Number(process.env.UNPAID_ORDER_TTL_MINUTES);
+    return Number.isFinite(envVal) && envVal >= 5 && envVal <= 120
+      ? Math.floor(envVal)
+      : 15;
+  },
   BATCH_SIZE: 100,
-  CRON_SCHEDULE: '*/5 * * * *', // every 5 minutes
-  LOCK_TTL_MS: 4 * 60 * 1000, // 4 minutes
-} as const;
+  CRON_SCHEDULE: '* * * * *', // every minute
+  LOCK_TTL_MS: 55 * 1000, // 55 seconds (must be < 60s cron interval)
+};
 
 export const SECURITY = {
   MAX_LOGIN_ATTEMPTS: 5,

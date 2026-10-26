@@ -86,7 +86,7 @@ function OrderSuccessContent() {
       )}
       {paymentState === "failed" && (
         <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
-          We could not verify the payment. Your order status will update when Paystack confirms it; please check your orders before trying again.
+          We could not verify the payment yet. Your order status will update automatically once payment confirmation is received; please check your orders before trying again.
         </p>
       )}
 

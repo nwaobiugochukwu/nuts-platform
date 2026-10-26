@@ -25,6 +25,7 @@ import { useAuthStore } from "@/zustand/auth";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import { Heart,Minus,Plus,ShoppingBag,Trash2,X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
+import { extractStockConflict } from "@/lib/stock-conflict";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -66,6 +67,26 @@ function CartLine({ item }: { item: CartItemResponseDto; cartAddedFrom?: unknown
             {item.variant.options.map((option) => option.value).join(" · ")}
           </p>
         ) : null}
+        {(() => {
+          const inStock = item.product.inStockQuantity ?? 999;
+          const isOutOfStock = inStock <= 0;
+          const isLowStock = !isOutOfStock && (item.product.lowStockAlert || inStock <= 5);
+          if (isOutOfStock) {
+            return (
+              <span className="mt-0.5 inline-block text-[11px] font-semibold text-destructive">
+                Out of stock
+              </span>
+            );
+          }
+          if (isLowStock) {
+            return (
+              <span className="mt-0.5 inline-block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                Only {inStock} left
+              </span>
+            );
+          }
+          return null;
+        })()}
         <p className="mt-1 text-sm font-bold">{formatPrice(item.price)}</p>
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center rounded-lg border border-border bg-background">
@@ -78,14 +99,21 @@ function CartLine({ item }: { item: CartItemResponseDto; cartAddedFrom?: unknown
               <Minus className="h-3 w-3" />
             </button>
             <span className="w-7 text-center text-xs font-bold">{item.quantity}</span>
-            <button
-              aria-label="Increase quantity"
-              disabled={pending}
-              onClick={() => updateItem.mutate({ productId: item.productId, delta: 1, variantId: item.variant?.id })}
-              className="grid h-7 w-7 place-items-center hover:bg-secondary disabled:opacity-40"
-            >
-              <Plus className="h-3 w-3" />
-            </button>
+            {(() => {
+              const inStock = item.product.inStockQuantity ?? 999;
+              const isMaxStockReached = item.quantity >= inStock;
+              return (
+                <button
+                  aria-label="Increase quantity"
+                  disabled={pending || isMaxStockReached}
+                  title={isMaxStockReached ? `Maximum available stock reached (${inStock})` : undefined}
+                  onClick={() => updateItem.mutate({ productId: item.productId, delta: 1, variantId: item.variant?.id })}
+                  className="grid h-7 w-7 place-items-center hover:bg-secondary disabled:opacity-40"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              );
+            })()}
           </div>
           <button
             aria-label="Remove from cart"
@@ -202,7 +230,18 @@ function CheckoutPanel({ total, discountCode, discountPreview }: { total: number
           router.push(`/order-success?orderId=${encodeURIComponent(order.id)}`);
         });
       } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to start secure payment"); }
-    }, onError: (error) => toast.error(error instanceof Error ? error.message : "Unable to start checkout"),
+    },
+    onError: (error) => {
+      const conflict = extractStockConflict(error);
+      if (conflict) {
+        queryClient.invalidateQueries({ queryKey: queryKey.cart });
+        toast.error(conflict.message);
+        useShoppingDrawerStore.getState().close();
+        router.push("/cart");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Unable to start checkout");
+      }
+    },
   });
   if (isLoading) return <div className="p-5"><div className="h-28 animate-pulse rounded-xl bg-muted" /></div>;
   const setField = (field: keyof Address, value: string) => setAlternative((current) => ({ ...current, [field]: value }));

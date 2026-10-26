@@ -94,6 +94,10 @@ describe('VendorsService', () => {
 
     mockEmail = {
       sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+      sendVendorApplicationReceivedEmail: jest
+        .fn()
+        .mockResolvedValue(undefined),
+      sendVendorApprovedEmail: jest.fn().mockResolvedValue(undefined),
     };
 
     mockAudit = {

@@ -83,4 +83,11 @@ export class CheckoutResponseDto {
 
   @ApiProperty({ description: 'Timestamp when the order was created' })
   createdAt!: Date;
+
+  @ApiPropertyOptional({
+    description:
+      'Timestamp when pending payment window expires, after which items are released',
+    nullable: true,
+  })
+  paymentExpiresAt?: Date | null;
 }

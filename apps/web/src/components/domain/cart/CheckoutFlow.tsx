@@ -7,7 +7,9 @@ import { orderService, type CheckoutPayload } from "@/api/order";
 import { paymentService } from "@/api/payment";
 import { Button } from "@/component/ui/button";
 import { clearClientCart } from "@/lib/cart-cleanup";
+import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
+import { extractStockConflict } from "@/lib/stock-conflict";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -62,7 +64,14 @@ export function CheckoutFlow({ onOrderCreated, user }: CheckoutFlowProps) {
 
       router.push(`/order/${encodeURIComponent(orderId)}`);
     } catch (err: unknown) {
-      toast.error(getApiErrorMessage(err, "Checkout failed"));
+      const conflict = extractStockConflict(err);
+      if (conflict) {
+        queryClient.invalidateQueries({ queryKey: queryKey.cart });
+        toast.error(conflict.message);
+        router.push("/cart");
+      } else {
+        toast.error(getApiErrorMessage(err, "Checkout failed"));
+      }
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { InsufficientStockException } from '@api/modules/shared/errors/insufficient-stock.exception';
 import { CacheService } from '@api/modules/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
@@ -118,7 +119,7 @@ describe('CartService', () => {
       mockPrisma.cartItem.findFirst.mockResolvedValue(null);
 
       await expect(service.addToCart('u-1', 'p-1', 5)).rejects.toThrow(
-        BadRequestException,
+        InsufficientStockException,
       );
     });
 

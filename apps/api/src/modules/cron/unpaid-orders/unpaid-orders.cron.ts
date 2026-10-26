@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
@@ -6,6 +7,14 @@ import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service
 import { REDIS_CLIENT } from '@api/modules/infrastructure/redis/redis.constants';
 import { OrdersService } from '@api/modules/checkout/orders/orders.service';
 import { UNPAID_ORDER_EXPIRATION } from '@api/modules/shared/constants';
+
+const RELEASE_LOCK_LUA = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
 
 @Injectable()
 export class UnpaidOrdersCron {
@@ -25,11 +34,13 @@ export class UnpaidOrdersCron {
   async handleExpiredUnpaidOrders(): Promise<void> {
     const startedAt = Date.now();
     const now = new Date();
+    const lockToken = randomUUID();
 
-    // Distributed lock prevents concurrent cron execution across clustered API instances
+    // Distributed lock with unique token prevents concurrent cron execution
+    // and ensures instances only delete their own lock upon completion.
     const lockAcquired = await this.redis.set(
       this.lockKey,
-      '1',
+      lockToken,
       'PX',
       UNPAID_ORDER_EXPIRATION.LOCK_TTL_MS,
       'NX',
@@ -111,7 +122,9 @@ export class UnpaidOrdersCron {
         `Error during unpaid orders expiration sweep: ${message}`,
       );
     } finally {
-      await this.redis.del(this.lockKey).catch(() => null);
+      await this.redis
+        .eval(RELEASE_LOCK_LUA, 1, this.lockKey, lockToken)
+        .catch(() => null);
     }
   }
 }
