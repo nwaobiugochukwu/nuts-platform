@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
 import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
@@ -12,13 +13,26 @@ export class NotificationRetentionCron {
   private readonly UNREAD_RETENTION_DAYS = 180;
   private readonly BATCH_SIZE = 1000;
   private readonly LOCK_KEY = 'lock:cron:notification-retention';
-  private readonly LOCK_TTL_SECONDS = 300; // 5-minute mutex safety lock
+  private readonly LOCK_TTL_SECONDS = 300;
+  private readonly lockToken = randomUUID();
 
   constructor(
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
+  private async renewLock(): Promise<void> {
+    const renewed = await this.redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+      1,
+      this.LOCK_KEY,
+      this.lockToken,
+      this.LOCK_TTL_SECONDS,
+    );
+    if (Number(renewed) !== 1) {
+      throw new Error('Notification retention lock ownership was lost.');
+    }
+  }
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: 'notification-retention-cleanup',
     timeZone: 'Africa/Lagos',
@@ -28,7 +42,7 @@ export class NotificationRetentionCron {
     try {
       const acquired = await this.redis.set(
         this.LOCK_KEY,
-        '1',
+        this.lockToken,
         'EX',
         this.LOCK_TTL_SECONDS,
         'NX',
@@ -40,9 +54,10 @@ export class NotificationRetentionCron {
         return;
       }
     } catch (lockErr) {
-      this.logger.warn(
-        `Failed acquiring Redis retention lock: ${getErrorMessage(lockErr)}. Proceeding with execution.`,
+      this.logger.error(
+        `Failed acquiring Redis retention lock: ${getErrorMessage(lockErr)}. Skipping cleanup.`,
       );
+      return;
     }
 
     const startTime = Date.now();
@@ -60,6 +75,7 @@ export class NotificationRetentionCron {
       // 1. Delete read notifications older than 90 days in bounded batches
       let deletedReadInPass = 0;
       do {
+        await this.renewLock();
         const expiredRead = await this.prisma.notification.findMany({
           where: {
             isRead: true,
@@ -86,6 +102,7 @@ export class NotificationRetentionCron {
       // 2. Delete unread notifications older than 180 days in bounded batches
       let deletedUnreadInPass = 0;
       do {
+        await this.renewLock();
         const expiredUnread = await this.prisma.notification.findMany({
           where: {
             isRead: false,
@@ -119,7 +136,12 @@ export class NotificationRetentionCron {
       );
     } finally {
       try {
-        await this.redis.del(this.LOCK_KEY);
+        await this.redis.eval(
+          `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`,
+          1,
+          this.LOCK_KEY,
+          this.lockToken,
+        );
       } catch {
         // Ignore
       }

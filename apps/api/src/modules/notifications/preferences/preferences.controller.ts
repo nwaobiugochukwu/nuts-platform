@@ -20,7 +20,7 @@ import { UpdateNotificationPreferencesDto } from './dto/update-preferences.dto';
 
 @ApiTags('NOTIFICATIONS - PREFERENCES')
 @ApiBearerAuth('JWT-auth')
-@Controller(['notifications/preferences', 'notification/preferences'])
+@Controller('notifications/preferences')
 export class NotificationPreferencesController {
   constructor(
     private readonly preferencesService: NotificationPreferencesService,

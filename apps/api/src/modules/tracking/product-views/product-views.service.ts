@@ -16,6 +16,9 @@ interface BufferedView {
 export class ProductViewsService {
   private readonly logger = new Logger(ProductViewsService.name);
   private readonly viewBufferKey = 'tracking:product_views:buffer';
+  private readonly viewProcessingKey = 'tracking:product_views:processing';
+  private readonly flushLockKey = 'tracking:product_views:flush_lock';
+  private readonly flushLockTtlSeconds = 300;
   private flushTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -61,35 +64,92 @@ export class ProductViewsService {
       return;
     }
 
+    const lockToken = randomUUID();
+    let lockAcquired = false;
+
     try {
+      lockAcquired = Boolean(
+        await this.redis.set(
+          this.flushLockKey,
+          lockToken,
+          'EX',
+          this.flushLockTtlSeconds,
+          'NX',
+        ),
+      );
+      if (!lockAcquired) return;
+
+      // Restore rows left in the processing list by a previous crashed flush.
+      await this.redis.eval(
+        `
+          local items = redis.call('LRANGE', KEYS[2], 0, -1)
+          for i = #items, 1, -1 do
+            redis.call('LPUSH', KEYS[1], items[i])
+          end
+          redis.call('DEL', KEYS[2])
+          return #items
+        `,
+        2,
+        this.viewBufferKey,
+        this.viewProcessingKey,
+      );
+
       const batchSize = TRACKING.PRODUCT_VIEW_BATCH_SIZE;
+      const maxBatchesPerFlush = 10;
       let processed = 0;
 
-      while (true) {
-        const raw = await this.redis.lpop(this.viewBufferKey, batchSize);
-        if (!raw || raw.length === 0) break;
+      for (
+        let batchNumber = 0;
+        batchNumber < maxBatchesPerFlush;
+        batchNumber++
+      ) {
+        const renewed = await this.redis.eval(
+          "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+          1,
+          this.flushLockKey,
+          lockToken,
+          this.flushLockTtlSeconds,
+        );
+        if (Number(renewed) !== 1) {
+          throw new Error('Product-view flush lock ownership was lost.');
+        }
 
-        const views: BufferedView[] = raw
-          .map((item) => {
-            try {
-              return JSON.parse(item) as BufferedView;
-            } catch {
-              return null;
-            }
-          })
-          .filter((v): v is BufferedView => v !== null);
+        const raw = (await this.redis.eval(
+          `
+            local items = {}
+            for i = 1, tonumber(ARGV[1]) do
+              local item = redis.call('LPOP', KEYS[1])
+              if not item then break end
+              redis.call('RPUSH', KEYS[2], item)
+              table.insert(items, item)
+            end
+            return items
+          `,
+          2,
+          this.viewBufferKey,
+          this.viewProcessingKey,
+          batchSize,
+        )) as string[];
+        if (raw.length === 0) break;
 
-        if (views.length > 0) {
-          for (const view of views) {
-            await this.rabbitmq.publish(RABBITMQ_QUEUES.ANALYTICS, {
-              type: 'product_view',
-              productId: view.productId,
-              userId: view.userId,
-              sessionId: view.sessionId,
-              timestamp: view.timestamp,
-            });
+        for (const item of raw) {
+          let view: BufferedView;
+          try {
+            view = JSON.parse(item) as BufferedView;
+          } catch {
+            await this.redis.lrem(this.viewProcessingKey, 1, item);
+            continue;
           }
-          processed += views.length;
+
+          await this.rabbitmq.publish(RABBITMQ_QUEUES.ANALYTICS, {
+            type: 'product_view',
+            productId: view.productId,
+            userId: view.userId,
+            sessionId: view.sessionId,
+            timestamp: view.timestamp,
+          });
+          await this.redis.lrem(this.viewProcessingKey, 1, item);
+          processed++;
         }
       }
 
@@ -103,6 +163,21 @@ export class ProductViewsService {
       this.logger.warn(
         `Failed to flush product views: ${err instanceof Error ? err.message : String(err)}`,
       );
+    } finally {
+      if (lockAcquired) {
+        await this.redis
+          .eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+            1,
+            this.flushLockKey,
+            lockToken,
+          )
+          .catch((err: unknown) => {
+            this.logger.warn(
+              `Failed to release product-view flush lock: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          });
+      }
     }
   }
 

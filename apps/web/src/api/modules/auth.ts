@@ -28,7 +28,7 @@ export const authService = {
     return publicApi.post<VerifyOtpResponseDto>("/auth/otp/verify", payload);
   },
   requestPasswordResetOtp(payload: { email: string }) {
-    return publicApi.post<{ message: string }>("/auth/forgot-password", payload);
+    return publicApi.post<{ message: string }>("/auth/forgot-password/otp/request", payload);
   },
   register(payload: RegisterPayload) {
     return publicApi.post<RegisterResponseDto>("/auth/register", payload);

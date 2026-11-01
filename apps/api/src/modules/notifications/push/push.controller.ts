@@ -22,7 +22,7 @@ import { SubscribePushDto } from './dto/subscribe-push.dto';
 import { UnsubscribePushDto } from './dto/unsubscribe-push.dto';
 
 @ApiTags('NOTIFICATIONS - PUSH')
-@Controller(['notifications/push', 'notification/push'])
+@Controller('notifications/push')
 export class PushSubscriptionsController {
   constructor(
     private readonly webPushService: WebPushService,

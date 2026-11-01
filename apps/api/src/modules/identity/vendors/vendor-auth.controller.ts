@@ -48,7 +48,7 @@ import { VendorResponseDto } from './dto/vendor-response.dto';
 import { VendorsService } from './vendors.service';
 
 @ApiTags('VENDORS - AUTH')
-@Controller(['vendors/auth', 'vendors'])
+@Controller('vendors/auth')
 export class VendorAuthController {
   constructor(
     private readonly vendorsService: VendorsService,
@@ -62,7 +62,7 @@ export class VendorAuthController {
 
   @Public()
   @StrictThrottle()
-  @Post(['otp/request', 'register/otp', 'request-otp'])
+  @Post('otp/request')
   @HttpCode(HttpStatus.OK)
   @Message('Verification code sent to your email')
   @ApiOperation({
@@ -270,11 +270,7 @@ export class VendorAuthController {
 
   @Public()
   @StrictThrottle()
-  @Post([
-    'forgot-password/otp/request',
-    'forgot-password/otp',
-    'password-reset/otp',
-  ])
+  @Post('forgot-password/otp/request')
   @HttpCode(HttpStatus.OK)
   @Message('Password reset code sent to your email')
   @ApiOperation({
@@ -293,7 +289,7 @@ export class VendorAuthController {
 
   @Public()
   @StrictThrottle()
-  @Post(['reset-password', 'forgot-password/reset'])
+  @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Message('Password reset successfully')
   @ApiOperation({

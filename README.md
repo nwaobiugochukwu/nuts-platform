@@ -236,7 +236,7 @@ Coordinates cart item modifications, real-time variant selections, candidate car
 ### Domain 4: Billing, Payments & Settlement Engine
 
 #### 1. Context & Mental Model
-Manages payment gateway interactions (Paystack), handles asynchronous order settlement, governs vendor escrow accounts, and cleans up abandoned inventory holds.
+Manages payment gateway interactions (Paystack), handles asynchronous order settlement, governs vendor escrow accounts, enforces non-repudiable financial audit logging, and cleans up abandoned inventory holds.
 
 #### 2. Problems Solved & Engineering Defenses
 - **Dropped Payment Redirects & Lost Purchases:**
@@ -251,9 +251,14 @@ Manages payment gateway interactions (Paystack), handles asynchronous order sett
 - **Premature Merchant Payouts & Marketplace Exposure:**
   - *The Failure Mode:* Vendors withdrawing sales revenue immediately upon checkout, leaving the platform liable for buyer refunds if goods are never shipped or delivered.
   - *How NUTS Solved It:* Implemented a two-phase escrow ledger: 85% of order funds are initially locked in `pendingBalance`. Funds only transfer to available `balance` when the buyer or carrier confirms delivery status as `DELIVERED`.
+- **Audit Trail Immutability for Critical Financial & Discount Transitions:**
+  - *The Failure Mode:* High-consequence financial mutations (payment confirmations, refunds) and promotional discount adjustments executing without tamper-evident audit records, creating accounting discrepancies, operational risk, or vendor disputes.
+  - *How NUTS Solved It:* Integrated transactional `AuditLog` generation directly within the database transactions for `PAYMENT_REFUNDED`, `PAYMENT_CONFIRMED`, and across `DiscountCodeService` mutations (`DISCOUNT_CODE_CREATED`, `DISCOUNT_CODE_UPDATED`, `DISCOUNT_CODE_DEACTIVATED`, `DISCOUNT_CODE_REACTIVATED`, `DISCOUNT_CODE_DELETED`). If the transaction fails, the audit record is rolled back; if committed, the financial trace is immutably persisted alongside order, user, and admin actor IDs.
 
 #### 3. Backend Mechanism (With Exact Timings & TTLs)
 - **Timing-Safe Webhook Verification:** Paystack webhooks are verified using a timing-safe `crypto.timingSafeEqual` check on the `x-paystack-signature` header against an HMAC-SHA512 digest of the raw request buffer.
+- **Paystack IP Whitelisting (`PaystackIpMiddleware`):** Verifies incoming webhooks against official Paystack CIDR blocks in production (`52.31.139.75`, `52.49.173.169`, `52.214.14.220`) with reverse-proxy `x-forwarded-for` client extraction.
+- **Canonical Payment Namespace:** Standardized onto `/payments` (`/payments/initialize`, `/payments/callback`, `/payments/webhook`, `/payments/order/:orderId`), deprecating ambiguous aliases.
 - **Asynchronous State Machine:**
   - Order created: Status set to `PENDING`.
   - Webhook received (`charge.success`): State transitions atomically `PENDING -> PROCESSING`.
@@ -293,29 +298,45 @@ Manages payment gateway interactions (Paystack), handles asynchronous order sett
 ### Domain 5: Real-Time Notifications, Outbox & Messaging
 
 #### 1. Context & Mental Model
-Maintains real-time browser updates via Server-Sent Events (SSE), routes domain messages through RabbitMQ queues, and dispatches transactional emails via Brevo.
+Maintains real-time browser updates via Server-Sent Events (SSE), routes domain messages through RabbitMQ queues, provides high-concurrency transactional outbox relay, and dispatches transactional emails via Brevo.
 
 #### 2. Problems Solved & Engineering Defenses
-- **The Dual-Write Problem (Lost Queue Messages):**
-  - *The Failure Mode:* Saving an entity to PostgreSQL and publishing a message to RabbitMQ in separate operations. If the server crashes or the network partitions after the database commit, the RabbitMQ message is lost forever while the database record remains, causing desynchronized downstream services.
-  - *How NUTS Solved It:* Implemented the **Transactional Outbox Pattern**. The business entity and the domain event are inserted into the database in the **same atomic SQL transaction**. A resilient background worker continuously polls the `outbox` table and publishes events to RabbitMQ with automatic retries and dead-letter queue routing (`nuts.dlx`).
+- **The Dual-Write Problem & Concurrent Multi-Instance Outbox Relay:**
+  - *The Failure Mode:* Saving an entity to PostgreSQL and publishing a message to RabbitMQ in separate operations risks message loss upon crashes. In a multi-replica deployment, multiple instances polling the same outbox table concurrently cause duplicate publishing races or message contention.
+  - *How NUTS Solved It:* Implemented the **Transactional Outbox Pattern** with PostgreSQL row-level locks using `SELECT ... FOR UPDATE SKIP LOCKED` inside an atomic transaction. Replicas concurrently claim distinct non-overlapping batches of up to 50 events and immediately transition them to `PROCESSING`. Includes automated recovery for stale claims older than 5 minutes (`staleBefore`) and batch rollback to `FAILED` with incremented `attempts` on critical broker exceptions.
+- **Outbox Table Bloat & High-Volume Data Retention:**
+  - *The Failure Mode:* In high-throughput commerce platforms, historical outbox events swell the `outbox_events` table into millions of rows, degrading query performance and consuming excessive storage.
+  - *How NUTS Solved It:* Engineered an automated daily retention cron (`prunePublishedEvents` at `0 0 3 * * *`, Africa/Lagos) that safely purges `PUBLISHED` events older than **90 days** in bounded batches of 1,000, backed by a composite index `@@index([status, processedAt])`.
 - **Dropped SSE Connections via Cloud Proxies:**
   - *The Failure Mode:* Cloud reverse proxies (Nginx, Render, Cloudflare) automatically terminate idle HTTP streaming connections after 30–60 seconds of inactivity, breaking real-time browser updates.
   - *How NUTS Solved It:* Engineered an active keepalive heartbeat (`: keepalive\n\n`) dispatched every **15 seconds** across all active SSE streams. This resets proxy idle timers while validating the user's Redis security stamp on each pulse to terminate compromised connections immediately.
+- **Unified Multi-Role Real-Time Streaming:**
+  - *The Failure Mode:* Maintaining separate SSE controller endpoints for Customers, Admins, and Vendors introduces route redundancy, fragmented client stores, and reverse-proxy route maintenance overhead.
+  - *How NUTS Solved It:* Consolidated SSE streaming into a single, unified canonical endpoint at `/notifications/sse/stream` supporting all authenticated roles (`user`, `vendor`, `admin`) with zero-trust capability filtering and unified client Zustand lifecycle management.
+- **Distributed Cron Mutex Safety & Lua Renewal Heartbeats:**
+  - *The Failure Mode:* Distributed cron cleanups (`NotificationRetentionCron`) or asynchronous buffer flushes (`ProductViewsService`) taking longer than a fixed lock TTL risk split-brain duplicate executions when another container claims the expired lock.
+  - *How NUTS Solved It:* Built a resilient distributed mutex pattern using Redis:
+    - Generates a cryptographically random UUID `lockToken`.
+    - Iterative batch sweeps execute atomic Lua scripts to renew the TTL (`renewLock()`) only while verifying ownership of the `lockToken`.
+    - Atomically releases the lock using Lua `eval` checking `KEYS[1] == ARGV[1]`.
+    - For `ProductViewsService`, implemented 2-phase buffer migration (`viewBufferKey` -> `viewProcessingKey` with automatic recovery of orphaned views on startup) before queue dispatch.
 - **Duplicate Notification Replay on Worker Restarts:**
   - *The Failure Mode:* Background workers crashing and reprocessing unacknowledged queue messages, sending duplicate emails or SMS messages to users.
   - *How NUTS Solved It:* Implemented consumer-level message deduplication using atomic Redis keys (`msg:processed:{eventId}`) with a **24-hour TTL**, guaranteeing at-most-once side-effect execution.
 
 #### 3. Backend Mechanism (With Exact Timings & TTLs)
-- **Transactional Outbox Pattern:**
-  - The business entity and the domain event are inserted into the database in the **same atomic SQL transaction**.
-  - Background workers poll the `outbox` table and publish to RabbitMQ with automatic retries and exponential backoff.
+- **High-Concurrency Transactional Outbox Pattern:**
+  - Business entities and `OutboxEvent` records are inserted in the **same atomic SQL transaction**.
+  - Background relay claims batches using `SELECT ... FOR UPDATE SKIP LOCKED` (batch size: **50 events**).
+  - Stale in-flight recovery: Automatically reclaims events in `PROCESSING` status older than **5 minutes** (`staleClaimMs = 300,000ms`).
+  - Max retry attempts: **5 attempts** before permanent failure flagging.
+  - Retention purge: Scheduled daily at `03:00` Africa/Lagos (`0 0 3 * * *`), deleting `PUBLISHED` events older than **90 days** in batches of 1,000.
+- **Publisher Confirms & RabbitMQ Topology:**
+  - Dedicated `ConfirmChannel` (`createConfirmChannel()`) with asynchronous broker acknowledgements (`ack`/`nack`).
+  - Queues: `q.nuts.emails`, `q.nuts.analytics`, `q.nuts.inventory` with Dead Letter Exchanges (`nuts.dlx`).
 - **SSE Connection Keepalive:**
   - Heartbeat comment (`: keepalive\n\n`) dispatched every **15 seconds** to keep reverse proxy connections open.
   - Active Redis session validation runs on every heartbeat; if the user's security stamp is revoked, the SSE connection terminates immediately.
-- **RabbitMQ Topology:**
-  - Queues: `q.nuts.emails`, `q.nuts.analytics`, `q.nuts.inventory`.
-  - Durable queues with Dead Letter Exchanges (DLX) for failed messages.
 
 #### 4. Client-Side Architecture & UX Flow
 - **Zustand Notification Store (`useNotificationStore`):** Manages live unread badge count, toast popups, and SSE stream lifecycle.
@@ -616,6 +637,19 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
       - **Asynchronous:** Brevo transactional email delivery, seller order notification emails, search reindexing, and real-time SSE event fanout via RabbitMQ and Redis Pub/Sub.
     - **Architecture & Interview Takeaway:** *Keep the HTTP request-response cycle as fast as possible. Any work that can tolerate eventual consistency (emails, analytics, push notifications) must be offloaded to asynchronous background queues.*
 
+22. **REST Route Canonization & Anti-Drift Architecture:**
+    - **Concept & Foundation:** Allowing controllers to bind multiple path aliases (`@Controller(['account', 'users'])`, `@Post(['otp/request', 'register/otp'])`) creates API drift, duplicates OpenAPI documentation, causes cache fragmentation across CDNs/proxies, and creates ambiguity in client SDK generation.
+    - **NUTS Production Implementation:**
+      - Replaced all multi-route controller arrays with single canonical REST endpoints:
+        - `/auth/otp/request`, `/auth/otp/verify`, `/auth/forgot-password/otp/request`, `/auth/reset-password`
+        - `/account`, `/account/otp/request`, `/account/wallet`, `/account/wallet/transactions`
+        - `/admin/categories`, `/admin/users/request-otp`, `/admin/users/:id/suspend`, `/admin/users/:id/unsuspend`
+        - `/vendors/auth`, `/vendors/analytics`, `/vendors/wallet`, `/vendors/discounts`, `/vendors/orders`, `/vendors/products`, `/vendors/products/variants`
+        - `/payments`, `/payments/callback`, `/payments/webhook`, `/payments/initialize`, `/payments/order/:orderId`
+        - `/notifications/mark-all-read`, `/notifications/clear-all`, `/notifications/preferences`, `/notifications/push`, `/notifications/sse/stream`
+      - Aligned frontend API service modules (`auth.ts`, `payment.ts`, `user.ts`, `notifications.ts`) to communicate strictly through these unified contracts.
+    - **Architecture & Interview Takeaway:** *One resource, one canonical URI. Deprecate and remove redundant route aliases to keep API surfaces clean, observable, and cache-friendly.*
+
 ---
 
 ### Part II: Database Systems, Query Optimization & Concurrency
@@ -811,13 +845,14 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
       - `EmailConsumerWorker` acts as the **Consumer**, processing Brevo transactional email dispatches in the background.
     - **Architecture & Interview Takeaway:** *Decoupling components through message brokers prevents slow third-party APIs (e.g. Brevo email latency) from degrading customer-facing HTTP response times.*
 
-41. **Message Acknowledgements (ACK / NACK) & At-Least-Once Delivery:**
-    - **Concept & Foundation:** Guarantees message delivery across unreliable networks. A consumer must explicitly acknowledge (`ACK`) message completion. If a worker crashes or errors, it issues a negative acknowledgement (`NACK`), prompting the broker to redeliver the message.
+41. **Message Acknowledgements, Publisher Confirms & At-Least-Once Delivery:**
+    - **Concept & Foundation:** By default, standard `publish()` is fire-and-forget; if the broker crashes before flushing to disk or RAM buffers overflow, messages are silently lost. Similarly, consumers must explicitly acknowledge messages only after work completes.
     - **NUTS Production Implementation:**
-      - RabbitMQ consumer sets `noAck: false` (manual acknowledgements).
+      - **Publisher Confirms (`createConfirmChannel`):** `RabbitMQService` upgrades standard channels to AMQP Confirm Channels. Published messages resolve a Promise on positive broker acknowledgement (`ack`) or gracefully report backpressure/failure, while logging publisher buffer backpressure (`!writable`).
+      - **Manual Consumer Acknowledgements:** RabbitMQ consumers operate with `noAck: false`.
       - After the external email API returns a `2xx` success code, the worker executes `channel.ack(message)`.
       - If an unexpected error occurs, the worker issues `channel.nack(message, false, false)` to route the failure to a dead-letter queue rather than looping infinitely on the primary queue.
-    - **Architecture & Interview Takeaway:** *Never use automatic acknowledgements (`noAck: true`) in mission-critical systems. Manual acknowledgements ensure messages are only cleared after work has actually succeeded.*
+    - **Architecture & Interview Takeaway:** *Pair Publisher Confirms with manual Consumer Acknowledgements. Fire-and-forget publishing creates a false sense of reliability in distributed architectures.*
 
 42. **Poison Messages, Exponential Backoff & Dead Letter Exchanges (DLX / DLQ):**
     - **Concept & Foundation:** A *poison message* is a malformed or invalid message that crashes the consumer every time it is processed. If requeued blindly, it creates an infinite crash loop. A Dead Letter Exchange (DLX) captures messages that have exceeded maximum retry attempts.

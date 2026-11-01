@@ -38,7 +38,7 @@ import { Message } from '@api/modules/shared/decorators/message.decorator';
 import { ApiResponseDto } from '@api/modules/shared/dto/api-response.dto';
 
 @ApiTags('VENDOR - DISCOUNT CODES')
-@Controller(['vendors/discounts', 'dashboard/discounts'])
+@Controller('vendors/discounts')
 @Roles(ROLE.VENDOR)
 @ApiBearerAuth('JWT-auth')
 export class VendorDiscountCodesController {

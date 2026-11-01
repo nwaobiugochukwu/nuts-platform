@@ -15,7 +15,7 @@ import { VendorAnalyticsSummaryDto } from './dto/vendor-analytics-summary.dto';
 import { VendorAnalyticsService } from './vendor-analytics.service';
 
 @ApiTags('VENDOR - ANALYTICS')
-@Controller(['vendors/analytics', 'dashboard/analytics'])
+@Controller('vendors/analytics')
 @Roles(ROLE.VENDOR)
 export class VendorAnalyticsController {
   constructor(private readonly analyticsService: VendorAnalyticsService) {}

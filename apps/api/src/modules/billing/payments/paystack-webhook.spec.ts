@@ -35,6 +35,9 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       outboxEvent: {
         create: jest.fn(),
       },
+      auditLog: {
+        create: jest.fn(),
+      },
       $transaction: jest.fn(
         (callback: (tx: any) => Promise<unknown>, _opts?: unknown) =>
           callback(mockPrisma),
