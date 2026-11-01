@@ -950,6 +950,7 @@ model OutboxEvent {
 
   @@index([status, attempts, createdAt])
   @@index([status, createdAt])
+  @@index([status, processedAt])
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")
 }

@@ -35,7 +35,7 @@ import { ApiEnvelopeResponse } from '@api/modules/shared/decorators/api-envelope
 
 @ApiTags('ADMIN - CATEGORY')
 @ApiBearerAuth('JWT-auth')
-@Controller(['admin/category', 'admin/categories'])
+@Controller('admin/categories')
 @Roles(ROLE.ADMIN)
 export class AdminCategoryController {
   constructor(private readonly categoriesService: CategoriesService) {}

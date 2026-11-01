@@ -21,7 +21,7 @@ type ConsumerHandler<T = unknown> = (
 export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RabbitMQService.name);
   private connection: amqp.ChannelModel | null = null;
-  private channel: amqp.Channel | null = null;
+  private channel: amqp.ConfirmChannel | null = null;
   private isConnecting = false;
   private isConnected = false;
   private isDestroyed = false;
@@ -93,7 +93,7 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
 
     try {
       this.connection = await amqp.connect(url);
-      this.channel = await this.connection.createChannel();
+      this.channel = await this.connection.createConfirmChannel();
 
       this.connection.on('error', (err) => {
         this.logger.error(
@@ -261,30 +261,63 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     message: T,
     options?: amqp.Options.Publish,
   ): Promise<boolean> {
-    if (!this.channel || !this.isConnected) {
+    const channel = this.channel;
+    if (!channel || !this.isConnected) {
       this.logger.debug(
         `RabbitMQ channel offline. Skipping live publish to [${routingKey}]. Transactional Outbox will handle delivery.`,
       );
       return Promise.resolve(false);
     }
 
+    let buffer: Buffer;
     try {
-      const buffer = Buffer.from(JSON.stringify(message));
-      return Promise.resolve(
-        this.channel.publish(RABBITMQ_EXCHANGES.TOPIC, routingKey, buffer, {
-          persistent: true,
-          contentType: 'application/json',
-          timestamp: Date.now(),
-          ...options,
-        }),
-      );
+      buffer = Buffer.from(JSON.stringify(message));
     } catch (err: unknown) {
       this.logger.error(
         { routingKey, code: getErrorCode(err) },
-        'Failed to publish RabbitMQ message',
+        'Failed to serialize RabbitMQ message',
       );
       return Promise.resolve(false);
     }
+
+    return new Promise<boolean>((resolve) => {
+      try {
+        const writable = channel.publish(
+          RABBITMQ_EXCHANGES.TOPIC,
+          routingKey,
+          buffer,
+          {
+            persistent: true,
+            contentType: 'application/json',
+            timestamp: Date.now(),
+            ...options,
+          },
+          (err) => {
+            if (err) {
+              this.logger.error(
+                { routingKey, code: getErrorCode(err) },
+                'RabbitMQ rejected published message',
+              );
+              resolve(false);
+              return;
+            }
+            resolve(true);
+          },
+        );
+        if (!writable) {
+          this.logger.debug(
+            { routingKey },
+            'RabbitMQ publisher buffer is full; waiting for broker confirmation',
+          );
+        }
+      } catch (err: unknown) {
+        this.logger.error(
+          { routingKey, code: getErrorCode(err) },
+          'Failed to publish to RabbitMQ channel',
+        );
+        resolve(false);
+      }
+    });
   }
 
   /**

@@ -7,7 +7,7 @@ PaymentResponseDto,
 export const paymentService = {
   initialize(orderId: string) {
     return userApi.post<InitializePaymentResponseDto>(
-      "/payment/initialize",
+      "/payments/initialize",
       null,
       {
         params: { orderId },
@@ -15,7 +15,7 @@ export const paymentService = {
     );
   },
   getByOrderId(orderId: string) {
-    return userApi.get<PaymentResponseDto>(`/payment/order/${orderId}`);
+    return userApi.get<PaymentResponseDto>(`/payments/order/${orderId}`);
   },
   verify(reference: string) {
     return userApi.get<PaymentResponseDto>(

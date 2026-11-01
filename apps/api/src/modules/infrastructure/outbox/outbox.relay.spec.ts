@@ -8,6 +8,10 @@ describe('OutboxRelay', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $transaction: jest.fn(async (cb: (tx: any) => Promise<unknown>) =>
+        cb(mockPrisma),
+      ),
+      $queryRaw: jest.fn(),
       outboxEvent: {
         findMany: jest.fn(),
         update: jest.fn(),
@@ -28,7 +32,7 @@ describe('OutboxRelay', () => {
 
     await relay.processOutboxEvents();
 
-    expect(mockPrisma.outboxEvent.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('claims pending events and marks them PUBLISHED on successful queue dispatch', async () => {
@@ -44,7 +48,7 @@ describe('OutboxRelay', () => {
       },
     ];
 
-    mockPrisma.outboxEvent.findMany.mockResolvedValue(pendingEvents);
+    mockPrisma.$queryRaw.mockResolvedValue(pendingEvents);
     mockPrisma.outboxEvent.updateMany.mockResolvedValue({ count: 1 });
 
     await relay.processOutboxEvents();
@@ -82,7 +86,7 @@ describe('OutboxRelay', () => {
       },
     ];
 
-    mockPrisma.outboxEvent.findMany.mockResolvedValue(pendingEvents);
+    mockPrisma.$queryRaw.mockResolvedValue(pendingEvents);
     mockPrisma.outboxEvent.updateMany.mockResolvedValue({ count: 1 });
 
     await relay.processOutboxEvents();

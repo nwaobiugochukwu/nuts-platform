@@ -650,6 +650,15 @@ export class PaymentsService {
           );
         }
 
+        await tx.auditLog.create({
+          data: {
+            action: 'PAYMENT_REFUNDED',
+            entity: 'PAYMENT',
+            entityId: paymentId,
+            adminId,
+            payload: { orderId: payment.orderId, amount: refundAmount },
+          },
+        });
         return tx.payment.findUniqueOrThrow({
           where: {
             id: paymentId,
@@ -920,6 +929,20 @@ export class PaymentsService {
           },
         });
 
+        await tx.auditLog.create({
+          data: {
+            action: 'PAYMENT_CONFIRMED',
+            entity: 'PAYMENT',
+            entityId: payment.id,
+            userId: payment.userId,
+            payload: {
+              orderId: payment.orderId,
+              amount: Number(payment.amount),
+              currency: payment.currency,
+              reference,
+            },
+          },
+        });
         return tx.payment.findUniqueOrThrow({
           where: {
             id: payment.id,

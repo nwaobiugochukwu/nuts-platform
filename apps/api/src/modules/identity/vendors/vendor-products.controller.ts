@@ -52,7 +52,7 @@ import {
 
 @ApiTags('VENDOR - PRODUCTS')
 @ApiBearerAuth('JWT-auth')
-@Controller(['vendors/products', 'dashboard/products'])
+@Controller('vendors/products')
 @Roles(ROLE.VENDOR)
 export class VendorProductsController {
   constructor(

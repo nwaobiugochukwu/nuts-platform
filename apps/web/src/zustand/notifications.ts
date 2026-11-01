@@ -191,14 +191,8 @@ function notificationsApiForCurrentRole() {
   return notificationsApiForRole(getActiveNotificationRole());
 }
 
-function getSseUrl(role: AuthRole): string {
-  const normalized = (role ? String(role).toLowerCase() : "user") as AuthRole;
-  const routeByRole: Record<AuthRole, string> = {
-    user: "notifications/sse/stream",
-    admin: "admin/notifications/sse/stream",
-    vendor: "vendors/notifications/sse/stream",
-  };
-  const targetRoute = routeByRole[normalized] || routeByRole.user;
+function getSseUrl(): string {
+  const targetRoute = "notifications/sse/stream";
   const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/+$/, "");
   const backend = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "") || "";
 
@@ -305,7 +299,7 @@ async function consumeNotificationStream(
   onConnectionChange: (connected: boolean) => void,
   onRetryExhausted: () => void,
 ): Promise<void> {
-  const url = getSseUrl(role);
+  const url = getSseUrl();
   let retryAttempt = 0;
   let refreshedAfterUnauthorized = false;
   let lastSeenEventId: string | null = null;

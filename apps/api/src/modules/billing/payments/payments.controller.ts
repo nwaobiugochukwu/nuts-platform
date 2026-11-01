@@ -44,7 +44,7 @@ import { Roles } from '@api/modules/shared/decorators/role.decorator';
 
 @ApiTags('PAYMENTS')
 @ApiBearerAuth('JWT-auth')
-@Controller(['payment', 'payments'])
+@Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
@@ -120,7 +120,7 @@ export class PaymentsController {
   // ---------------------------------------------------------------------------
 
   @Public()
-  @Get(['callback', 'verify'])
+  @Get('callback')
   @HttpCode(HttpStatus.OK)
   @Message('Payment verified successfully')
   @ApiOperation({
@@ -189,7 +189,7 @@ export class PaymentsController {
   // ---------------------------------------------------------------------------
 
   @Public()
-  @Post(['webhook', 'webhooks'])
+  @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @Message('Payment webhook processed successfully')
   @ApiOperation({
