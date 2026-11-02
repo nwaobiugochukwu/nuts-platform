@@ -23,7 +23,7 @@ import { WalletService } from '@api/modules/wallet/wallet.service';
 import { VendorWalletResponseDto } from '../dto/vendor-wallet-response.dto';
 
 @ApiTags('VENDOR - WALLET')
-@Controller(['vendors/wallet', 'dashboard/wallet'])
+@Controller('vendors/wallet')
 @Roles(ROLE.VENDOR)
 @ApiBearerAuth('JWT-auth')
 export class VendorWalletController {

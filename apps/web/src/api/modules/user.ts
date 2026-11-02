@@ -105,12 +105,12 @@ export const adminUserService = {
 
 export const walletService = {
   getUserWallet() {
-    return userApi.get<UserWalletResponseDto>("/users/wallet");
+    return userApi.get<UserWalletResponseDto>("/account/wallet");
   },
   getUserTransactions(params?: { page?: number; limit?: number }) {
     return userApi.get<{
       data: WalletTransactionResponseDto[];
       meta: { total: number; page: number; limit: number; totalPages: number };
-    }>("/users/wallet/transactions", { params });
+    }>("/account/wallet/transactions", { params });
   },
 };

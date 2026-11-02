@@ -48,7 +48,7 @@ import { UserResponseDto } from './dto/user-response.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('USERS')
-@Controller(['account', 'users'])
+@Controller('account')
 export class UsersController {
   constructor(
     private readonly usersService: UsersService,
@@ -174,7 +174,7 @@ export class UsersController {
    * Generates and dispatches a 6-digit OTP to the user's email address for sensitive
    * account operations such as deactivation.
    */
-  @Post(['deactivate/otp', 'otp/request'])
+  @Post('otp/request')
   @Roles(ROLE.USER)
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)

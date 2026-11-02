@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 
 import {
@@ -13,6 +14,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { AuditLogService } from '@api/modules/shared/audit-log/audit-log.service';
 
 import {
   CreateAdminDiscountCodeDto,
@@ -26,7 +28,10 @@ import {
 
 @Injectable()
 export class DiscountCodeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly auditLog?: AuditLogService,
+  ) {}
 
   // ============================================================
   // CODE NORMALIZATION
@@ -717,6 +722,12 @@ export class DiscountCodeService {
       where: { id },
       data: { isActive: false },
     });
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_DEACTIVATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: id,
+      payload: { vendorId, isAdmin },
+    });
 
     return null;
   }
@@ -742,6 +753,12 @@ export class DiscountCodeService {
     await this.prisma.discountCode.update({
       where: { id },
       data: { isActive: true },
+    });
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_REACTIVATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: id,
+      payload: { vendorId, isAdmin },
     });
 
     return null;
@@ -782,6 +799,12 @@ export class DiscountCodeService {
         isActive: false,
         deletedAt: new Date(),
       },
+    });
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_DELETED',
+      entity: 'DISCOUNT_CODE',
+      entityId: discountCodeId,
+      payload: { vendorId, isAdmin },
     });
 
     return null;
@@ -826,6 +849,12 @@ export class DiscountCodeService {
     dto: CreateAdminDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
     const created = await this.create(dto);
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_CREATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: created.id,
+      payload: { vendorId: null, code: created.code },
+    });
     return this.toResponseDto(created);
   }
 
@@ -839,6 +868,12 @@ export class DiscountCodeService {
     dto: UpdateAdminDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
     const updated = await this.update(id, dto);
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_UPDATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: updated.id,
+      payload: { actorType: 'ADMIN', updatedFields: Object.keys(dto) },
+    });
     return this.toResponseDto(updated);
   }
 
@@ -847,6 +882,12 @@ export class DiscountCodeService {
     dto: CreateVendorDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
     const created = await this.create(dto, vendorId);
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_CREATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: created.id,
+      payload: { vendorId, code: created.code },
+    });
     return this.toResponseDto(created);
   }
 
@@ -888,6 +929,12 @@ export class DiscountCodeService {
     }
 
     const updated = await this.update(id, dto);
+    await this.auditLog?.log({
+      action: 'DISCOUNT_CODE_UPDATED',
+      entity: 'DISCOUNT_CODE',
+      entityId: updated.id,
+      payload: { vendorId, updatedFields: Object.keys(dto) },
+    });
     return this.toResponseDto(updated);
   }
 

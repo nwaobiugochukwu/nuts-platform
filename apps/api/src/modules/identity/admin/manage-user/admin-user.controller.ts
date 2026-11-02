@@ -58,7 +58,7 @@ export class AdminUsersController {
   ) {}
 
   // REQUEST OTP FOR ADMIN ACTIONS
-  @Post(['request-otp', 'otp/request'])
+  @Post('request-otp')
   @HttpCode(HttpStatus.OK)
   @Message('Security verification code sent to your admin email')
   @ApiOperation({
@@ -135,7 +135,7 @@ export class AdminUsersController {
   }
 
   // SUSPEND USER (ADMIN)
-  @Patch([':id/suspend', ':id/deactivate'])
+  @Patch(':id/suspend')
   @OtpRequired('admin:action')
   @Message('User account suspended successfully')
   @ApiOperation({
@@ -169,7 +169,7 @@ export class AdminUsersController {
   }
 
   // UNSUSPEND / RESTORE USER (ADMIN)
-  @Patch([':id/unsuspend', ':id/reactivate'])
+  @Patch(':id/unsuspend')
   @OtpRequired('admin:action')
   @HttpCode(HttpStatus.OK)
   @Message('User account unsuspended successfully')

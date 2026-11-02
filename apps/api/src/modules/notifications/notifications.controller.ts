@@ -52,14 +52,14 @@ export class NotificationsController {
     return { count };
   }
 
-  @Patch(['mark-all-read', 'read-all'])
+  @Patch('mark-all-read')
   @Message('All notifications marked as read successfully')
   @ApiOperation({ summary: 'Mark all unread notifications as read' })
   async markAllAsRead(@GetUser() user: AuthenticatedUser) {
     return this.notificationsService.markAllAsRead(user.id, user.role);
   }
 
-  @Delete(['clear-all', 'read'])
+  @Delete('clear-all')
   @Message('All read notifications cleared successfully')
   @ApiOperation({ summary: 'Clear all read notifications' })
   async clearAll(@GetUser() user: AuthenticatedUser) {

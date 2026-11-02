@@ -284,7 +284,7 @@ export class AuthController {
 
   @Public()
   @StrictThrottle()
-  @Post(['otp/request', 'register/otp', 'request-otp'])
+  @Post('otp/request')
   @HttpCode(HttpStatus.OK)
   @Message('Verification code sent to your email')
   @ApiOperation({
@@ -310,7 +310,7 @@ export class AuthController {
 
   @Public()
   @StrictThrottle()
-  @Post(['otp/verify', 'verify-otp'])
+  @Post('otp/verify')
   @HttpCode(HttpStatus.OK)
   @Message('Verification code confirmed successfully')
   @ApiOperation({
@@ -334,12 +334,7 @@ export class AuthController {
 
   @Public()
   @PasswordResetThrottle()
-  @Post([
-    'forgot-password/otp/request',
-    'forgot-password/otp',
-    'forgot-password',
-    'password-reset/otp',
-  ])
+  @Post('forgot-password/otp/request')
   @HttpCode(HttpStatus.OK)
   @Message(
     'If an account exists with this email, a verification code has been sent.',
@@ -364,7 +359,7 @@ export class AuthController {
 
   @Public()
   @PasswordResetThrottle()
-  @Post(['reset-password', 'forgot-password/reset'])
+  @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Message('Password reset successfully')
   @ApiOperation({

@@ -26,11 +26,7 @@ import { NotificationsService } from '../notifications.service';
 @Roles(ROLE.USER, ROLE.ADMIN, ROLE.VENDOR)
 @BypassResponseInterceptor()
 @SkipThrottle()
-@Controller([
-  'notifications/sse/stream',
-  'admin/notifications/sse/stream',
-  'vendors/notifications/sse/stream',
-])
+@Controller('notifications/sse/stream')
 export class NotificationsSseController {
   constructor(private readonly notificationsService: NotificationsService) {}
 

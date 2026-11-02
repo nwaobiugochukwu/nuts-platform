@@ -35,7 +35,6 @@ export class PaystackIpMiddleware implements NestMiddleware {
 
     const ip = req.ip || req.socket.remoteAddress || '';
 
-    // Try x-forwarded-for header (Paystack sends requests via load balancers/proxies)
     const forwardedFor = req.headers['x-forwarded-for'];
     const rawIp =
       (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor) || ip;
