@@ -26,6 +26,9 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "NUTS",
   description: "Discover premium products from top vendors",
+  other: {
+    "google-adsense-account": "ca-pub-7056273601633505",
+  },
 };
 
 export default function RootLayout({
