@@ -2,24 +2,133 @@
   "compilerOptions": {
     "baseUrl": "./dist",
     "paths": {
-      "@api/modules/auth/*": ["modules/auth/*"],
-      "@api/modules/users/*": ["modules/identity/users/*", "modules/users/*"],
-      "@api/modules/creators/*": ["modules/identity/creators/*", "modules/creators/*"],
-      "@api/modules/admin/*": ["modules/identity/admin/*", "modules/admin/*"],
-      "@api/modules/products/*": ["modules/catalog/products/*", "modules/products/*"],
-      "@api/modules/category/*": ["modules/catalog/categories/*", "modules/catalog/category/*", "modules/category/*"],
-      "@api/modules/product-variants/*": ["modules/catalog/variants/*", "modules/catalog/product-variants/*", "modules/product-variants/*"],
-      "@api/modules/cart/*": ["modules/checkout/cart/*", "modules/cart/*"],
-      "@api/modules/orders/*": ["modules/checkout/orders/*", "modules/orders/*"],
-      "@api/modules/promotions/*": ["modules/checkout/discounts/*", "modules/checkout/promotions/*", "modules/promotions/*"],
-      "@api/modules/payments/*": ["modules/billing/payments/*", "modules/payments/*"],
-      "@api/modules/wallet/*": ["modules/billing/wallets/*", "modules/billing/wallet/*", "modules/wallet/*"],
-      "@api/modules/reviews/*": ["modules/engagement/reviews/*", "modules/reviews/*"],
-      "@api/modules/wishlist/*": ["modules/engagement/wishlist/*", "modules/wishlist/*"],
-      "@api/modules/referral/*": ["modules/engagement/referral/*", "modules/referral/*"],
-      "@api/modules/*": ["modules/*"],
-      "@api/common/*": ["common/*"],
-      "@api/*": ["*"]
+      "@common/*": [
+        "common/*"
+      ],
+      "@infra/*": [
+        "infrastructure/*"
+      ],
+      "@infrastructure/*": [
+        "infrastructure/*"
+      ],
+      "@modules/*": [
+        "modules/*"
+      ],
+      "@api/common/search/*": [
+        "modules/search/*"
+      ],
+      "@api/common/audit-log/*": [
+        "common/audit-log/*",
+        "modules/security/audit/*"
+      ],
+      "@api/common/*": [
+        "common/*"
+      ],
+      "@api/infrastructure/*": [
+        "infrastructure/*"
+      ],
+      "@api/modules/shared/*": [
+        "common/*"
+      ],
+      "@api/modules/infrastructure/*": [
+        "infrastructure/*"
+      ],
+      "@api/modules/auth/*": [
+        "modules/auth/*"
+      ],
+      "@api/modules/users/*": [
+        "modules/users/*"
+      ],
+      "@api/modules/vendors/*": [
+        "modules/vendors/*"
+      ],
+      "@api/modules/creators/*": [
+        "modules/vendors/*"
+      ],
+      "@api/modules/admin/*": [
+        "modules/admin/*"
+      ],
+      "@api/modules/products/*": [
+        "modules/products/*"
+      ],
+      "@api/modules/categories/*": [
+        "modules/categories/*"
+      ],
+      "@api/modules/category/*": [
+        "modules/categories/*"
+      ],
+      "@api/modules/product-variants/*": [
+        "modules/products/*"
+      ],
+      "@api/modules/cart/*": [
+        "modules/cart/*"
+      ],
+      "@api/modules/checkout/cart/*": [
+        "modules/cart/*"
+      ],
+      "@api/modules/checkout/orders/*": [
+        "modules/orders/*"
+      ],
+      "@api/modules/checkout/*": [
+        "modules/cart/*"
+      ],
+      "@api/modules/orders/*": [
+        "modules/orders/*"
+      ],
+      "@api/modules/discounts/*": [
+        "modules/discounts/*"
+      ],
+      "@api/modules/promotions/*": [
+        "modules/discounts/*"
+      ],
+      "@api/modules/payments/*": [
+        "modules/payments/*"
+      ],
+      "@api/modules/wallets/*": [
+        "modules/wallets/*"
+      ],
+      "@api/modules/wallet/*": [
+        "modules/wallets/*"
+      ],
+      "@api/modules/reviews/*": [
+        "modules/reviews/*"
+      ],
+      "@api/modules/wishlists/*": [
+        "modules/wishlists/*"
+      ],
+      "@api/modules/wishlist/*": [
+        "modules/wishlists/*"
+      ],
+      "@api/modules/referrals/*": [
+        "modules/referrals/*"
+      ],
+      "@api/modules/referral/*": [
+        "modules/referrals/*"
+      ],
+      "@api/modules/analytics/*": [
+        "modules/analytics/*"
+      ],
+      "@api/modules/search/*": [
+        "modules/search/*"
+      ],
+      "@api/modules/upload/*": [
+        "modules/upload/*"
+      ],
+      "@api/modules/notifications/*": [
+        "modules/notifications/*"
+      ],
+      "@api/modules/security/*": [
+        "modules/security/*"
+      ],
+      "@api/modules/health/*": [
+        "modules/health/*"
+      ],
+      "@api/modules/*": [
+        "modules/*"
+      ],
+      "@api/*": [
+        "*"
+      ]
     }
   }
 }

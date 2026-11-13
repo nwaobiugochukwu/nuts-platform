@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { UpdateNotificationPreferencesDto } from './dto/update-preferences.dto';
 
 export type NotificationChannel = 'email' | 'inApp' | 'push';
@@ -8,6 +8,7 @@ export type NotificationCategory =
   | 'orderUpdates'
   | 'paymentAlerts'
   | 'inventoryAlerts'
+  | 'socialUpdates'
   | 'marketingPromos'
   | 'securityAlerts';
 
@@ -41,6 +42,7 @@ export class NotificationPreferencesService {
         orderUpdates: true,
         paymentAlerts: true,
         inventoryAlerts: true,
+        socialUpdates: true,
         marketingPromos: false,
       },
     });
@@ -67,6 +69,7 @@ export class NotificationPreferencesService {
         orderUpdates: dto.orderUpdates ?? true,
         paymentAlerts: dto.paymentAlerts ?? true,
         inventoryAlerts: dto.inventoryAlerts ?? true,
+        socialUpdates: dto.socialUpdates ?? true,
         marketingPromos: dto.marketingPromos ?? false,
       },
       update: {
@@ -85,6 +88,9 @@ export class NotificationPreferencesService {
         }),
         ...(dto.inventoryAlerts !== undefined && {
           inventoryAlerts: dto.inventoryAlerts,
+        }),
+        ...(dto.socialUpdates !== undefined && {
+          socialUpdates: dto.socialUpdates,
         }),
         ...(dto.marketingPromos !== undefined && {
           marketingPromos: dto.marketingPromos,
@@ -121,6 +127,7 @@ export class NotificationPreferencesService {
       if (category === 'paymentAlerts' && !prefs.paymentAlerts) return false;
       if (category === 'inventoryAlerts' && !prefs.inventoryAlerts)
         return false;
+      if (category === 'socialUpdates' && !prefs.socialUpdates) return false;
       if (category === 'marketingPromos' && !prefs.marketingPromos)
         return false;
 

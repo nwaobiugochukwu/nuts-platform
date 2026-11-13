@@ -1,33 +1,53 @@
 "use client";
 
 import { adminAnalyticsService } from "@/api/analytics";
-import { PageHeader,StatCard } from "@/component/common/PageHeader";
-import { Badge } from "@/component/ui/badge";
+import { StatCard } from "@/component/common/PageHeader";
 import { formatPrice } from "@/lib/util";
-import { useQuery } from "@tanstack/react-query";
 import {
-CreditCard,
-Layers,
-ShoppingBag,
-Sparkles,
-UserCheck,
-Users
-} from "lucide-react";
-import { useState } from "react";
+  CalendarPeriodFilter,
+  useCalendarPeriod,
+} from "@/components/domain/analytics/CalendarPeriodFilter";
+import { useQuery } from "@tanstack/react-query";
 
-type TimePeriod = "7d" | "30d" | "90d" | "1y";
+function AnalyticsEmptyState({
+  message,
+  onShowYear,
+}: {
+  message: string;
+  onShowYear?: () => void;
+}) {
+  return (
+    <div className="py-8 text-center">
+      <p className="text-xs text-neutral-400">{message}</p>
+      {onShowYear && (
+        <button
+          type="button"
+          onClick={onShowYear}
+          className="mt-3 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        >
+          View this year
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function AdminAnalyticsPage() {
-  const [period, setPeriod] = useState<TimePeriod>("30d");
+  const calendar = useCalendarPeriod();
+  const periodKey = `${calendar.bounds.startDate}:${calendar.bounds.endDate}`;
 
   const queryParams = {
-    range: period,
+    startDate: calendar.bounds.startDate,
+    endDate: calendar.bounds.endDate,
     top: 10,
   };
 
-  const { data: summary } = useQuery({
-    queryKey: ["admin", "analytics", "summary", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: summary, isError, isLoading: isSummaryLoading } = useQuery({
+    queryKey: ["admin", "analytics", "summary", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -36,9 +56,12 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: topProducts = [] } = useQuery({
-    queryKey: ["admin", "analytics", "topProducts", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: topProducts = [], isLoading: isTopProductsLoading, isError: isTopProductsError } = useQuery({
+    queryKey: ["admin", "analytics", "topProducts", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -47,9 +70,12 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: topVendors = [] } = useQuery({
-    queryKey: ["admin", "analytics", "topVendors", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: topVendors = [], isLoading: isTopVendorsLoading, isError: isTopVendorsError } = useQuery({
+    queryKey: ["admin", "analytics", "topVendors", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -58,9 +84,12 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: topCategories = [] } = useQuery({
-    queryKey: ["admin", "analytics", "topCategories", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: topCategories = [], isLoading: isTopCategoriesLoading, isError: isTopCategoriesError } = useQuery({
+    queryKey: ["admin", "analytics", "topCategories", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -69,9 +98,12 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: payments } = useQuery({
-    queryKey: ["admin", "analytics", "payments", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: payments, isLoading: isPaymentsLoading, isError: isPaymentsError } = useQuery({
+    queryKey: ["admin", "analytics", "payments", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -80,9 +112,12 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: discounts } = useQuery({
-    queryKey: ["admin", "analytics", "discounts", period],
-    staleTime: 1000 * 60 * 5,
+  const { data: discounts, isLoading: isDiscountsLoading, isError: isDiscountsError } = useQuery({
+    queryKey: ["admin", "analytics", "discounts", periodKey],
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
@@ -91,68 +126,64 @@ export default function AdminAnalyticsPage() {
     },
   });
 
+  const { data: marketplace, isLoading: isMarketplaceLoading, isError: isMarketplaceError } = useQuery({
+    queryKey: ["admin", "analytics", "marketplace-performance", periodKey],
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
+    gcTime: 1000 * 60 * 15,
+    placeholderData: (previousData) => previousData,
+    queryFn: async () => {
+      const res = await adminAnalyticsService.marketplacePerformance(queryParams);
+      return res.data;
+    },
+  });
+
   const s = summary;
-  const grossRev = Number(s?.revenueInPeriod || s?.totalRevenue || 0);
+  const summaryMetric = (value: number | string | undefined) =>
+    isError ? "Unavailable" : isSummaryLoading ? "..." : value ?? 0;
+  const marketplaceMetric = (value: number | string | undefined) =>
+    isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : value ?? 0;
+  const showYearForData = calendar.mode === "day"
+    ? () => calendar.setMode("year")
+    : undefined;
 
   return (
     <div className="space-y-8">
-      {/* Page Title & Time Window Switcher */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Executive Analytics"
-          description="Holistic performance metrics, cross-marketplace volume, and transaction audits."
-        />
-
-        {/* Luxury Time Period Selector */}
-        <div className="flex items-center gap-1 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/60 p-1 shadow-xs backdrop-blur-md self-start sm:self-auto">
-          {(
-            [
-              { id: "7d", label: "7 Days" },
-              { id: "30d", label: "30 Days" },
-              { id: "90d", label: "90 Days" },
-              { id: "1y", label: "1 Year" },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setPeriod(t.id)}
-              className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
-                period === t.id
-                  ? "bg-neutral-900 text-white shadow-xs dark:bg-white dark:text-neutral-950"
-                  : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {/* Page title and calendar period filter */}
+      <div className="flex justify-end">
+        <div className="w-full sm:w-auto">
+          <CalendarPeriodFilter
+            mode={calendar.mode}
+            value={calendar.value}
+            onModeChange={calendar.setMode}
+            onValueChange={calendar.setValue}
+          />
         </div>
       </div>
 
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Total Platform Revenue"
-          value={formatPrice(grossRev)}
-          subtitle={`${s?.newOrdersInPeriod ?? s?.totalOrders ?? 0} settled transactions`}
+          title="All-time Gross Paid Revenue"
+          value={isError ? "Unavailable" : isSummaryLoading ? "..." : formatPrice(Number(s?.totalRevenue ?? 0))}
+          subtitle={isError ? "Revenue unavailable" : isSummaryLoading ? "Loading selected period…" : `${formatPrice(Number(s?.revenueInPeriod ?? 0))} paid revenue in selected period`}
         />
         <StatCard
           title="Total Orders"
-          value={s?.totalOrders ?? 0}
-          subtitle={`${s?.newOrdersInPeriod ?? 0} in selected window`}
-          icon={<ShoppingBag className="h-5 w-5 text-emerald-500" />}
+          value={summaryMetric(s?.totalOrders)}
+          subtitle={isError ? "Unavailable" : isSummaryLoading ? "Loading selected window…" : `${s?.newOrdersInPeriod ?? 0} in selected window`}
         />
         <StatCard
           title="Verified Vendors"
-          value={s?.verifiedVendors ?? s?.totalVendors ?? 0}
-          subtitle={`${s?.activeVendors ?? 0} active merchants`}
-          icon={<UserCheck className="h-5 w-5 text-violet-500" />}
+          value={summaryMetric(s?.verifiedVendors ?? s?.totalVendors)}
+          subtitle={isError ? "Unavailable" : isSummaryLoading ? "Loading…" : `${s?.activeVendors ?? 0} active merchants`}
         />
         <StatCard
           title="Registered Buyers"
-          value={s?.totalUsers ?? 0}
-          subtitle={`${s?.newUsersInPeriod ?? 0} newly registered`}
-          icon={<Users className="h-5 w-5 text-blue-500" />}
+          value={summaryMetric(s?.totalUsers)}
+          subtitle={isError ? "Unavailable" : isSummaryLoading ? "Loading selected period…" : `${s?.newUsersInPeriod ?? 0} newly registered`}
         />
       </div>
 
@@ -163,10 +194,10 @@ export default function AdminAnalyticsPage() {
             Catalog Products
           </span>
           <p className="text-xl font-bold text-neutral-900 dark:text-white mt-1">
-            {s?.totalProducts ?? 0}
+            {summaryMetric(s?.totalProducts)}
           </p>
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            {s?.totalVariants ?? 0} variant options
+            {summaryMetric(s?.totalVariants)} variant options
           </span>
         </div>
 
@@ -175,10 +206,10 @@ export default function AdminAnalyticsPage() {
             Payment Success Rate
           </span>
           <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-            {payments?.successRate !== undefined ? `${payments.successRate.toFixed(1)}%` : "N/A"}
+            {isPaymentsLoading ? "..." : isPaymentsError ? "Unavailable" : (payments?.totalPayments ?? 0) > 0 ? `${payments?.successRate.toFixed(1)}%` : "N/A"}
           </p>
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            {payments?.failedPayments ?? 0} failed / abandoned
+            {isPaymentsLoading ? "Loading payments…" : isPaymentsError ? "Unavailable" : `${payments?.failedPayments ?? 0} failed / abandoned`}
           </span>
         </div>
 
@@ -187,10 +218,10 @@ export default function AdminAnalyticsPage() {
             Active Discount Codes
           </span>
           <p className="text-xl font-bold text-neutral-900 dark:text-white mt-1">
-            {discounts?.activeCodes ?? s?.totalDiscountCodes ?? 0}
+            {isDiscountsLoading ? "..." : isDiscountsError ? "Unavailable" : discounts?.activeCodes ?? 0}
           </p>
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            {discounts?.totalUsages ?? 0} total redemptions
+            {isDiscountsLoading ? "Loading redemptions…" : isDiscountsError ? "Redemptions unavailable" : `${discounts?.totalUsages ?? 0} redemptions in selected period`}
           </span>
         </div>
 
@@ -199,13 +230,116 @@ export default function AdminAnalyticsPage() {
             Orders Fulfilled
           </span>
           <p className="text-xl font-bold text-neutral-900 dark:text-white mt-1">
-            {s?.orderStatusCounts?.find((c) => c.status === "DELIVERED")?.count ?? 0}
+            {summaryMetric(s?.orderStatusCounts?.find((c) => c.status === "DELIVERED")?.count)}
           </p>
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            {s?.orderStatusCounts?.find((c) => c.status === "PROCESSING")?.count ?? 0} in processing
+            {isError ? "Unavailable" : isSummaryLoading ? "Loading…" : `${s?.orderStatusCounts?.find((c) => c.status === "PROCESSING")?.count ?? 0} in processing`}
           </span>
         </div>
       </div>
+
+      <section aria-labelledby="marketplace-funnel-heading" className="space-y-4">
+        <div>
+          <h2 id="marketplace-funnel-heading" className="text-lg font-semibold text-neutral-900 dark:text-white">Marketplace engagement & conversion</h2>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+            Views count recorded product-page visits. Unique viewers count distinct account or anonymous browser/session IDs in this period; those identities are not merged. View-to-purchase follows identified product/account pairs to a paid order within 7 days. Cart-to-purchase follows cart lines to a paid order within 7 days. Recent conversion cohorts are still maturing, and paid revenue is before refunds.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            title="Store Views"
+            value={marketplaceMetric(marketplace?.storeViews)}
+            subtitle={`${marketplaceMetric(marketplace?.uniqueStoreVisitors)} unique visitors`}
+          />
+          <StatCard
+            title="Product Views"
+            value={marketplaceMetric(marketplace?.productViews)}
+            subtitle={`${marketplaceMetric(marketplace?.uniqueProductViewers)} distinct viewers`}
+          />
+          <StatCard
+            title="View → Cart"
+            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.productViewToCartRate ?? 0}%`}
+            subtitle={`${marketplaceMetric(marketplace?.viewersToCart)} of ${marketplaceMetric(marketplace?.identifiedProductViewers)} identified viewer-product pairs`}
+          />
+          <StatCard
+            title="View → Paid Purchase"
+            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.productViewToPurchaseRate ?? 0}%`}
+            subtitle={`${marketplaceMetric(marketplace?.viewersToPurchase)} of ${marketplaceMetric(marketplace?.identifiedProductViewers)} identified viewer-product pairs`}
+          />
+          <StatCard
+            title="Cart → Paid Purchase"
+            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.cartToPurchaseRate ?? 0}%`}
+            subtitle={`${marketplaceMetric(marketplace?.cartLinesPurchased)} of ${marketplaceMetric(marketplace?.cartLinesAdded)} cart lines matched within 7 days`}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="Current Follows"
+            value={marketplaceMetric(marketplace?.currentFollowers)}
+            subtitle={`${marketplaceMetric(marketplace?.uniqueFollowers)} unique people following stores`}
+          />
+          <StatCard
+            title="New Follows"
+            value={marketplaceMetric(marketplace?.newFollowers)}
+            subtitle="During this period"
+          />
+          <StatCard
+            title="Unfollows"
+            value={marketplaceMetric(marketplace?.unfollows)}
+            subtitle="During this period"
+          />
+          <StatCard
+            title="Net Follower Growth"
+            value={marketplaceMetric(marketplace?.netFollowerGrowth)}
+            subtitle="Follows minus unfollows"
+          />
+        </div>
+        <div className="rounded-3xl border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-[#121214] sm:p-6">
+          <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Stores with the most followers</h3>
+          <ol className="mt-3 divide-y divide-neutral-100 dark:divide-neutral-800">
+            {(marketplace?.topFollowerStores ?? []).map((store, index) => (
+              <li key={store.vendorId} className="flex items-center justify-between gap-3 py-3">
+                <span className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                    {index + 1}
+                  </span>
+                  <span className="truncate text-sm font-medium text-neutral-900 dark:text-white">{store.storeName}</span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-neutral-600 dark:text-neutral-300">
+                  {store.followerCount} followers
+                </span>
+              </li>
+            ))}
+            {(marketplace?.topFollowerStores.length ?? 0) === 0 && (
+              <li className="py-6 text-center text-sm text-neutral-500">
+                {isMarketplaceError ? "Follower analytics are unavailable." : isMarketplaceLoading ? "Loading follower analytics…" : "No active stores have followers yet."}
+              </li>
+            )}
+          </ol>
+        </div>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Wishlist additions</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.wishlistAdds)}</p>
+            <span className="text-xs text-neutral-500">{marketplaceMetric(marketplace?.uniqueWishlistSavers)} unique savers</span>
+          </div>
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Cart removals</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.cartRemovals)}</p>
+            <span className="text-xs text-neutral-500">Removed cart lines</span>
+          </div>
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Paid units</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.paidUnits)}</p>
+            <span className="text-xs text-neutral-500">{marketplaceMetric(marketplace?.paidOrders)} paid orders</span>
+          </div>
+          <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Paid product revenue</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : formatPrice(Number(marketplace?.paidRevenue ?? 0))}</p>
+            <span className="text-xs text-neutral-500">Before refunds</span>
+          </div>
+        </div>
+      </section>
 
       {/* Grid: Top Products Leaderboard & Top Vendors */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -213,24 +347,25 @@ export default function AdminAnalyticsPage() {
         <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 Top Selling Products
               </h2>
               <p className="text-xs text-neutral-400">
                 Highest grossing inventory in selected window
               </p>
             </div>
-            <Badge variant="outline" className="text-xs font-mono">
-              Leaderboard
-            </Badge>
           </div>
 
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800/80 overflow-hidden">
-            {topProducts.length === 0 ? (
-              <p className="py-8 text-center text-xs text-neutral-400">
-                No product transactions recorded for this period.
-              </p>
+            {isTopProductsLoading ? (
+              <p className="py-8 text-center text-xs text-neutral-400">Loading product sales…</p>
+            ) : isTopProductsError ? (
+              <p className="py-8 text-center text-xs text-rose-500">Product sales could not be loaded.</p>
+            ) : topProducts.length === 0 ? (
+              <AnalyticsEmptyState
+                message="No paid product sales were recorded in this selected period."
+                onShowYear={showYearForData}
+              />
             ) : (
               topProducts.slice(0, 5).map((p, idx) => (
                 <div key={p.id} className="flex items-center justify-between py-3">
@@ -262,24 +397,25 @@ export default function AdminAnalyticsPage() {
         <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-indigo-500" />
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 Top Performing Vendors
               </h2>
               <p className="text-xs text-neutral-400">
                 Merchants driving maximum platform volume
               </p>
             </div>
-            <Badge variant="outline" className="text-xs font-mono">
-              Merchants
-            </Badge>
           </div>
 
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800/80 overflow-hidden">
-            {topVendors.length === 0 ? (
-              <p className="py-8 text-center text-xs text-neutral-400">
-                No vendor revenue recorded for this period.
-              </p>
+            {isTopVendorsLoading ? (
+              <p className="py-8 text-center text-xs text-neutral-400">Loading vendor sales…</p>
+            ) : isTopVendorsError ? (
+              <p className="py-8 text-center text-xs text-rose-500">Vendor sales could not be loaded.</p>
+            ) : topVendors.length === 0 ? (
+              <AnalyticsEmptyState
+                message="No paid vendor sales were recorded in this selected period."
+                onShowYear={showYearForData}
+              />
             ) : (
               topVendors.slice(0, 5).map((c, idx) => (
                 <div key={c.id} className="flex items-center justify-between py-3">
@@ -314,8 +450,7 @@ export default function AdminAnalyticsPage() {
         <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                <Layers className="h-4 w-4 text-emerald-500" />
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 Category Performance
               </h2>
               <p className="text-xs text-neutral-400">
@@ -325,10 +460,15 @@ export default function AdminAnalyticsPage() {
           </div>
 
           <div className="divide-y divide-neutral-100 dark:divide-neutral-800/80 overflow-hidden">
-            {topCategories.length === 0 ? (
-              <p className="py-8 text-center text-xs text-neutral-400">
-                No category sales recorded yet.
-              </p>
+            {isTopCategoriesLoading ? (
+              <p className="py-8 text-center text-xs text-neutral-400">Loading category sales…</p>
+            ) : isTopCategoriesError ? (
+              <p className="py-8 text-center text-xs text-rose-500">Category sales could not be loaded.</p>
+            ) : topCategories.length === 0 ? (
+              <AnalyticsEmptyState
+                message="No paid category sales were recorded in this selected period."
+                onShowYear={showYearForData}
+              />
             ) : (
               topCategories.slice(0, 5).map((cat) => (
                 <div key={cat.id} className="flex items-center justify-between py-3">
@@ -351,22 +491,17 @@ export default function AdminAnalyticsPage() {
           </div>
         </div>
 
-        {/* Payment Health Card */}
+        {/* Payment Gateway Health */}
         <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-violet-500" />
+              <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 Payment Gateway Health
               </h2>
               <p className="text-xs text-neutral-400">
                 Live Paystack transaction throughput
               </p>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-500 border border-emerald-500/20">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Gateway Healthy
-            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-4">
@@ -375,7 +510,7 @@ export default function AdminAnalyticsPage() {
                 Successful Payments
               </span>
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {payments?.successfulPayments ?? s?.totalOrders ?? 0}
+                {isPaymentsLoading ? "..." : isPaymentsError ? "Unavailable" : payments?.successfulPayments ?? 0}
               </p>
             </div>
             <div className="rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 p-3.5">
@@ -383,7 +518,7 @@ export default function AdminAnalyticsPage() {
                 Failed Attempts
               </span>
               <p className="text-lg font-bold text-rose-500 mt-0.5">
-                {payments?.failedPayments ?? 0}
+                {isPaymentsLoading ? "..." : isPaymentsError ? "Unavailable" : payments?.failedPayments ?? 0}
               </p>
             </div>
           </div>
@@ -392,13 +527,13 @@ export default function AdminAnalyticsPage() {
             <div className="flex justify-between text-neutral-600 dark:text-neutral-400">
               <span>Total Transactions Processed</span>
               <span className="font-semibold text-neutral-900 dark:text-white">
-                {payments?.totalPayments ?? s?.totalOrders ?? 0}
+                {isPaymentsLoading ? "..." : isPaymentsError ? "Unavailable" : payments?.totalPayments ?? 0}
               </span>
             </div>
             <div className="flex justify-between text-neutral-600 dark:text-neutral-400">
               <span>Refunded Volume</span>
               <span className="font-semibold text-rose-500">
-                {formatPrice(Number(payments?.refundedAmount ?? 0))}
+                {isPaymentsLoading ? "..." : isPaymentsError ? "Unavailable" : formatPrice(Number(payments?.refundedAmount ?? 0))}
               </span>
             </div>
           </div>

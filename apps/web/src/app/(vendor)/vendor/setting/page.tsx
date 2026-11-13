@@ -196,19 +196,14 @@ export default function VendorSettingPage() {
               </CardHeader>
               <CardContent>
                   {vendor?.storeSlug && (
-                    <div className="mb-4 flex items-center justify-between rounded-xl bg-neutral-100/70 dark:bg-neutral-800/60 p-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <Store className="h-4 w-4 text-primary" />
-                        <span className="font-semibold text-foreground">Public Storefront:</span>
-                        <span className="font-mono text-muted-foreground">/vendor/{vendor.storeSlug}</span>
-                      </div>
+                    <div className="mb-4 flex justify-end">
                       <Link
                         href={`/vendor/${vendor.storeSlug}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-primary transition-colors hover:bg-secondary"
                       >
-                        Visit Store <ExternalLink className="h-3 w-3" />
+                        Visit store <ExternalLink className="h-3.5 w-3.5" />
                       </Link>
                     </div>
                   )}

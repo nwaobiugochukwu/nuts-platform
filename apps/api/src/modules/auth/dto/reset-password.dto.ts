@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+﻿import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
   IsString,
@@ -7,9 +7,9 @@ import {
   MinLength,
 } from 'class-validator';
 
-import { MaxPasswordBytes } from '@api/modules/shared/decorators/max-password-bytes.decorator';
-import { NormalizeEmail } from '@api/modules/shared/decorators/normalize-email.decorator';
-import { Trim } from '@api/modules/shared/decorators/string-trim.decorator';
+import { MaxPasswordBytes } from '@api/common/decorators/max-password-bytes.decorator';
+import { NormalizeEmail } from '@api/common/decorators/normalize-email.decorator';
+import { Trim } from '@api/common/decorators/string-trim.decorator';
 
 export class ResetPasswordDto {
   @ApiProperty({

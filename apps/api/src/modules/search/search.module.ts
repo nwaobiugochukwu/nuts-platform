@@ -1,16 +1,18 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/modules/infrastructure/prisma/prisma.module';
-import { SearchModule as CommonSearchModule } from '@api/modules/shared/search/search.module';
-import { AdminSearchController } from './admin-search.controller';
-import { SearchController } from './search.controller';
-import { VendorSearchController } from './vendor-search.controller';
+import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { AdminSearchController } from './controllers/admin-search.controller';
+import { SearchController } from './controllers/search.controller';
+import { VendorSearchController } from './controllers/vendor-search.controller';
+import { SearchService } from './search.service';
 
 @Module({
-  imports: [CommonSearchModule, PrismaModule],
+  imports: [PrismaModule],
   controllers: [
     SearchController,
     AdminSearchController,
     VendorSearchController,
   ],
+  providers: [SearchService],
+  exports: [SearchService],
 })
 export class SearchModule {}

@@ -7,7 +7,7 @@ import type { CategoryResponseDto } from "@/api/dto/category";
 import { CustomerLayout } from "@/component/layout/CustomerLayout";
 import { Button } from "@/component/ui/button";
 import { Input } from "@/component/ui/input";
-import { useCart } from "@/hook/use-cart";
+import { useCart } from "@/hooks/use-cart";
 import { formatPrice } from "@/lib/util";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useDiscountStore } from "@/zustand/discount";

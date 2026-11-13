@@ -1,5 +1,5 @@
-import { Prisma } from '@prisma/client';
-import { VariantCombinations } from '@api/modules/shared/dto/variant-combinations.dto';
+﻿import { Prisma } from '@prisma/client';
+import { VariantCombinations } from '@api/common/dto/variant-combinations.dto';
 
 type OptionsShape =
   | { options: Prisma.JsonValue }
@@ -9,7 +9,7 @@ type OptionsShape =
  * Given an array of variant-like objects, extracts the unique option values
  * grouped by option name. Returns an empty object when no variants exist.
  *
- * Intended usage — product detail responses so the frontend can build
+ * Intended usage â€” product detail responses so the frontend can build
  * filter/selctor UIs (size buttons, color swatches, etc.):
  *
  * ```ts

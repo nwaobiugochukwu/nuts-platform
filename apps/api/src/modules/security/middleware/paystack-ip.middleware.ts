@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   Logger,
   NestMiddleware,
@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NextFunction, Request, Response } from 'express';
-import { SECURITY } from '@api/modules/shared/constants';
+import { SECURITY } from '@api/common/constants';
 
 /**
  * Middleware to verify that incoming Paystack webhook requests

@@ -232,6 +232,8 @@ export default function AdminOrderDetailPage() {
                           src={item.productSnapshot.images[0]}
                           alt={item.productSnapshot.name ?? "Item"}
                           fill
+                          sizes="64px"
+                          priority={idx < 4}
                           className="object-cover"
                         />
                       ) : (
@@ -413,9 +415,6 @@ export default function AdminOrderDetailPage() {
               <CardContent className="space-y-2 p-5 text-sm">
                 <p className="font-semibold text-foreground">
                   {order.vendor.storeName}
-                </p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  Slug: {order.vendor.storeSlug}
                 </p>
               </CardContent>
             </Card>

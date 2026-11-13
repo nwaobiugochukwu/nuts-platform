@@ -5,38 +5,6 @@ import type { CursorPaginationMeta, PaginationMeta } from "@/api/core/types";
 import { cache } from "react";
 
 /**
- * Server-side hot picks fetch for homepage hero showcase.
- * Cached with 60s revalidation.
- */
-export const serverGetHotPicks = cache(async function serverGetHotPicks(limit = 20): Promise<ProductCardDto[]> {
-  const data = await serverFetch<ProductCardDto[]>(
-    `/products?limit=${limit}&sort=newest`,
-    {
-      revalidate: 60,
-      tags: ["products", "hot-picks"],
-    }
-  );
-  return Array.isArray(data) ? data : [];
-});
-
-/**
- * Server-side Going Nuts top purchased items fetch.
- * Cached with 60s revalidation.
- */
-export const serverGetGoingNuts = cache(async function serverGetGoingNuts(limit = 20): Promise<ProductCardDto[]> {
-  const data = await serverFetch<ProductCardDto[] | { data: ProductCardDto[] }>(
-    `/products/going-nuts?limit=${limit}&days=30`,
-    {
-      revalidate: 60,
-      tags: ["products", "going-nuts"],
-    }
-  );
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.data)) return data.data;
-  return [];
-});
-
-/**
  * Server-side public products listing with filters and cursor/pagination.
  * Cached with 60s revalidation.
  */
@@ -109,6 +77,89 @@ export const serverGetProducts = cache(async function serverGetProducts(params: 
   return {
     data: Array.isArray(res?.data) ? res.data : [],
     meta: parseProductPaginationMeta(res?.meta),
+  };
+});
+
+export interface ServerCategoryProductPreview {
+  items: ProductCardDto[];
+  totalItems: number;
+  totalPages: number;
+}
+
+export const serverGetCategoryPreviews = cache(async function serverGetCategoryPreviews(
+  parentCategoryId: string,
+  limit = 12,
+): Promise<Record<string, ServerCategoryProductPreview>> {
+  if (!parentCategoryId) return {};
+  const query = new URLSearchParams({ parentCategoryId, limit: String(limit) });
+  const response = await serverFetchEnvelope<Record<string, ServerCategoryProductPreview>>(
+    `/products/category-previews?${query.toString()}`,
+    {
+      revalidate: 60,
+      tags: ["products", `category:${parentCategoryId}`],
+    },
+  );
+  return response?.data && typeof response.data === "object" ? response.data : {};
+});
+
+export const serverGetTrendingProducts = cache(async function serverGetTrendingProducts(params: {
+  categoryId?: string;
+  limit?: number;
+  days?: number;
+} = {}): Promise<ProductCardDto[]> {
+  const query = new URLSearchParams();
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.days) query.set("days", String(params.days));
+  const searchParams = query.toString();
+  const response = await serverFetch<ProductCardDto[]>(
+    `/products/trending${searchParams ? `?${searchParams}` : ""}`,
+    { revalidate: 60, tags: ["products", "trending", ...(params.categoryId ? [`category:${params.categoryId}`] : [])] },
+  );
+  return Array.isArray(response) ? response : [];
+});
+
+/** Cursor-based product feed used by the Discover page. */
+export const serverGetProductDiscovery = cache(async function serverGetProductDiscovery(params: {
+  limit?: number;
+  cursor?: string;
+  categoryId?: string;
+  categoryPath?: string;
+  vendorId?: string;
+  sort?: string;
+  search?: string;
+  minPrice?: number | string;
+  maxPrice?: number | string;
+  inStock?: boolean | string;
+} = {}): Promise<{
+  data: ProductCardDto[];
+  meta: CursorPaginationMeta | null;
+  failed: boolean;
+}> {
+  const query = new URLSearchParams();
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.cursor) query.set("cursor", params.cursor);
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.categoryPath) query.set("categoryPath", params.categoryPath);
+  if (params.vendorId) query.set("vendorId", params.vendorId);
+  if (params.sort) query.set("sort", params.sort);
+  if (params.search) query.set("search", params.search);
+  if (params.minPrice !== undefined && params.minPrice !== "") query.set("minPrice", String(params.minPrice));
+  if (params.maxPrice !== undefined && params.maxPrice !== "") query.set("maxPrice", String(params.maxPrice));
+  if (params.inStock !== undefined) query.set("inStock", String(params.inStock));
+
+  const searchParams = query.toString();
+  const endpoint = `/discover${searchParams ? `?${searchParams}` : ""}`;
+  const response = await serverFetchEnvelope<ProductCardDto[]>(endpoint, {
+    revalidate: 60,
+    includeHttpErrorStatus: true,
+    tags: ["products", "discover", ...(params.categoryId ? [`category:${params.categoryId}`] : [])],
+  });
+
+  return {
+    data: Array.isArray(response?.data) ? response.data : [],
+    meta: response ? parseProductPaginationMeta(response.meta) as CursorPaginationMeta | null : null,
+    failed: !response || response.statusCode !== undefined || !Array.isArray(response.data),
   };
 });
 

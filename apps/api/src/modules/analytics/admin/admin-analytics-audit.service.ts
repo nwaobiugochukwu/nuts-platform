@@ -1,9 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
-import {
-  ActivityAnalyticsDto,
-  DailyTrendDto,
-} from './dto/admin-analytics-summary.dto';
+﻿import { Injectable } from '@nestjs/common';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { fillAnalyticsDateGaps } from '@api/common/utils/date-range.util';
+import { ActivityAnalyticsDto } from './dto/admin-analytics-summary.dto';
 
 @Injectable()
 export class AdminAnalyticsAuditService {
@@ -26,7 +24,7 @@ export class AdminAnalyticsAuditService {
     const totalActions = Number(summary.total_actions);
     const uniqueAdmins = Number(summary.unique_admins);
 
-    // Action breakdown — still efficient with groupBy since we group by enum col, not timestamp
+    // Action breakdown â€” still efficient with groupBy since we group by enum col, not timestamp
     const actionRows = await this.prisma.auditLog.groupBy({
       by: ['action'],
       where: { createdAt: { gte: start, lte: end } },
@@ -38,7 +36,7 @@ export class AdminAnalyticsAuditService {
       actionBreakdown[r.action] = r._count.action ?? 0;
     }
 
-    // Top admins by activity — use $queryRaw to JOIN with admins table in one shot
+    // Top admins by activity â€” use $queryRaw to JOIN with admins table in one shot
     const topAdminRows = await this.prisma.$queryRaw<
       Array<{
         admin_id: string;
@@ -67,20 +65,23 @@ export class AdminAnalyticsAuditService {
 
     // Daily activity trend with DATE_TRUNC for correct bucketing
     const trendRows = await this.prisma.$queryRaw<
-      Array<{ day: Date; count: bigint }>
+      Array<{ date: string; count: bigint }>
     >`
-      SELECT DATE_TRUNC('day', "createdAt") AS day,
+      SELECT TO_CHAR(
+               DATE_TRUNC('day', ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+               'YYYY-MM-DD'
+             ) AS date,
              COUNT(*) AS count
       FROM   "audit_logs"
       WHERE  "createdAt" >= ${start}
         AND  "createdAt" <= ${end}
-      GROUP  BY DATE_TRUNC('day', "createdAt")
-      ORDER  BY day ASC
+      GROUP  BY 1
+      ORDER  BY 1 ASC
     `;
 
-    const activityTrend = this.fillDateGaps(
+    const activityTrend = fillAnalyticsDateGaps(
       trendRows.map((r) => ({
-        date: r.day.toISOString().slice(0, 10),
+        date: r.date,
         value: Number(r.count ?? 0),
       })),
       start,
@@ -94,21 +95,5 @@ export class AdminAnalyticsAuditService {
       topAdmins,
       activityTrend,
     };
-  }
-
-  private fillDateGaps(
-    data: DailyTrendDto[],
-    start: Date,
-    end: Date,
-  ): DailyTrendDto[] {
-    const map = new Map(data.map((d) => [d.date, d.value]));
-    const result: DailyTrendDto[] = [];
-    const current = new Date(start);
-    while (current <= end) {
-      const key = current.toISOString().slice(0, 10);
-      result.push({ date: key, value: map.get(key) ?? 0 });
-      current.setDate(current.getDate() + 1);
-    }
-    return result;
   }
 }

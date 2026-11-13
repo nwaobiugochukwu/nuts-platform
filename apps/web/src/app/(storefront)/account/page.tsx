@@ -1,9 +1,9 @@
 "use client";
 
-import { orderService,userService,walletService } from "@/api";
+import { orderService,referralService,userService,walletService,vendorFollowingService } from "@/api";
 import { Button } from "@/component/ui/button";
 import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
-import { useWishlist } from "@/hook/use-wishlist";
+import { useWishlist } from "@/hooks/use-wishlist";
 import { queryKey } from "@/lib/query-key";
 import { formatDate,formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";
@@ -21,6 +21,7 @@ Settings,
 Share2,
 User,
 Wallet,
+Store,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useState } from "react";
@@ -46,6 +47,20 @@ export default function AccountPage() {
     queryFn: async () => await orderService.list({ page: 1, limit: 1 }),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 15,
+  });
+
+  const { data: referralStats } = useQuery({
+    queryKey: ["account", user?.id, "referral-stats"],
+    queryFn: async () => (await referralService.getStats()).data,
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: followingCount } = useQuery({
+    queryKey: ["vendor-follows", user?.id ?? null, "count"],
+    queryFn: async () => (await vendorFollowingService.count()).data,
+    enabled: Boolean(user?.id),
+    staleTime: 1000 * 60,
   });
 
   const { items: wishlistItems } = useWishlist();
@@ -122,7 +137,7 @@ export default function AccountPage() {
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {/* Wallet Stat */}
         <Link href="/wallet" className="group block">
           <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
@@ -187,6 +202,26 @@ export default function AccountPage() {
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-foreground">
                 <Heart className="h-6 w-6 stroke-[1.5]" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/account/following" className="group block">
+          <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Following Stores</p>
+                <p className="mt-2 text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
+                  {followingCount?.count ?? 0}
+                </p>
+                <p className="mt-1 text-xs text-neutral-500 flex items-center gap-1">
+                  <span>Manage the stores you follow</span>
+                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-foreground">
+                <Store className="h-6 w-6 stroke-[1.5]" />
               </div>
             </CardContent>
           </Card>
@@ -318,13 +353,17 @@ export default function AccountPage() {
               <span className="text-xs font-semibold text-muted-foreground block mb-1">Your Referral Code</span>
               <div className="flex items-center gap-2">
                 <div className="flex-1 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-4 py-3 font-mono font-bold text-xl tracking-widest text-foreground select-all">
-                  {user.referralCode || "NUTS-MEMBER"}
+                  {referralStats?.code ?? "Referral code unavailable"}
                 </div>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    const code = user.referralCode || "NUTS-MEMBER";
+                    const code = referralStats?.code;
+                    if (!code) {
+                      toast.error("Your referral code is not available yet");
+                      return;
+                    }
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(code);
                       setCopied(true);
@@ -364,19 +403,24 @@ export default function AccountPage() {
                   type="text"
                   readOnly
                   value={
-                    typeof window !== "undefined"
-                      ? `${window.location.origin}/auth/register?ref=${user.referralCode || "NUTS-MEMBER"}`
-                      : `https://nuts.com/auth/register?ref=${user.referralCode || "NUTS-MEMBER"}`
+                    typeof window !== "undefined" && referralStats?.code
+                      ? `${window.location.origin}/auth/register?ref=${encodeURIComponent(referralStats.code)}`
+                      : ""
                   }
                   className="flex-1 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-muted-foreground truncate"
                 />
                 <Button
                   type="button"
                   onClick={() => {
-                    const link =
+                    const link = referralStats?.code ?
                       typeof window !== "undefined"
-                        ? `${window.location.origin}/auth/register?ref=${user.referralCode || "NUTS-MEMBER"}`
-                        : `https://nuts.com/auth/register?ref=${user.referralCode || "NUTS-MEMBER"}`;
+                        ? `${window.location.origin}/auth/register?ref=${encodeURIComponent(referralStats.code)}`
+                        : ""
+                      : "";
+                    if (!link) {
+                      toast.error("Your referral code is not available yet");
+                      return;
+                    }
                     if (navigator.clipboard) {
                       navigator.clipboard.writeText(link);
                       toast.success("Referral invite link copied!");

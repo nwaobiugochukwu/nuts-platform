@@ -9,7 +9,7 @@ import { DataTable,type Column } from "@/component/data/DataTable";
 import { OtpPromptDialog } from "@/component/modal/OtpPromptDialog";
 import { Badge } from "@/component/ui/badge";
 import { Button } from "@/component/ui/button";
-import { useDebouncedValue } from "@/hook/use-debounced-value";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {

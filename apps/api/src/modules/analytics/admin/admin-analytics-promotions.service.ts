@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 import { PaymentStatus, WalletTransactionReason } from '@prisma/client';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import {
   DiscountAnalyticsDto,
   PaymentAnalyticsDto,
@@ -11,44 +11,53 @@ import {
 export class AdminAnalyticsPromotionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // ── Discounts ──────────────────────────────────────────
+  // â”€â”€ Discounts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  async getDiscountAnalytics(): Promise<DiscountAnalyticsDto> {
-    const [totalCodes, activeCodes, usageAgg, topCodesRaw] = await Promise.all([
+  async getDiscountAnalytics(
+    start: Date,
+    end: Date,
+  ): Promise<DiscountAnalyticsDto> {
+    const usageWhere = { createdAt: { gte: start, lte: end } };
+    const [totalCodes, activeCodes, usageAgg, usageGroups] = await Promise.all([
       this.prisma.discountCode.count(),
       this.prisma.discountCode.count({ where: { isActive: true } }),
-      this.prisma.order.aggregate({
+      this.prisma.discountCodeUsage.aggregate({
         _sum: { discountAmount: true },
-        where: {
-          discountAmount: { gt: 0 },
-          status: { not: 'CANCELLED' },
-        },
+        _count: { id: true },
+        where: usageWhere,
       }),
-      this.prisma.discountCode.findMany({
-        where: { usageCount: { gt: 0 } },
-        orderBy: { usageCount: 'desc' },
+      this.prisma.discountCodeUsage.groupBy({
+        by: ['discountCodeId'],
+        where: usageWhere,
+        _sum: { discountAmount: true },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
         take: 10,
-        select: { code: true, usageCount: true },
       }),
     ]);
 
-    // Estimate discount per code (orders × code = rough)
-    const topCodes = topCodesRaw.map((c) => ({
-      code: c.code,
-      usageCount: c.usageCount,
-      totalDiscount: '0.00', // would need join to order for exact
+    // Rank codes by exact discount usage captured in the selected calendar window.
+    const codes = await this.prisma.discountCode.findMany({
+      where: { id: { in: usageGroups.map((group) => group.discountCodeId) } },
+      select: { id: true, code: true },
+    });
+    const codeById = new Map(codes.map((code) => [code.id, code.code]));
+    const topCodes = usageGroups.map((group) => ({
+      code: codeById.get(group.discountCodeId) ?? 'Deleted code',
+      usageCount: group._count.id,
+      totalDiscount: Number(group._sum.discountAmount ?? 0).toFixed(2),
     }));
 
     return {
       totalCodes,
       activeCodes,
-      totalUsages: topCodesRaw.reduce((s, c) => s + c.usageCount, 0),
+      totalUsages: usageAgg._count.id,
       totalDiscountGiven: Number(usageAgg._sum.discountAmount ?? 0).toFixed(2),
       topCodes,
     };
   }
 
-  // ── Referrals ──────────────────────────────────────────
+  // â”€â”€ Referrals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getReferralAnalytics(): Promise<ReferralAnalyticsDto> {
     const [totalReferrals, rewardAgg] = await Promise.all([
@@ -66,28 +75,32 @@ export class AdminAnalyticsPromotionsService {
     };
   }
 
-  // ── Payments ───────────────────────────────────────────
+  // â”€â”€ Payments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  async getPaymentAnalytics(): Promise<PaymentAnalyticsDto> {
+  async getPaymentAnalytics(
+    start: Date,
+    end: Date,
+  ): Promise<PaymentAnalyticsDto> {
+    const createdAt = { gte: start, lte: end };
     const [totalPayments, successfulPayments, failedPayments, refundedAgg] =
       await Promise.all([
-        this.prisma.payment.count(),
+        this.prisma.payment.count({ where: { createdAt } }),
         this.prisma.payment.count({
-          where: { status: PaymentStatus.SUCCESS },
+          where: { status: PaymentStatus.SUCCESS, createdAt },
         }),
         this.prisma.payment.count({
-          where: { status: PaymentStatus.FAILED },
+          where: { status: PaymentStatus.FAILED, createdAt },
         }),
         this.prisma.payment.aggregate({
           _sum: { amount: true },
-          where: { status: PaymentStatus.REFUNDED },
+          where: { status: PaymentStatus.REFUNDED, createdAt },
         }),
       ]);
 
     // Revenue grouped by payment method
     const byMethod = await this.prisma.payment.groupBy({
       by: ['paymentMethod'],
-      where: { status: PaymentStatus.SUCCESS },
+      where: { status: PaymentStatus.SUCCESS, createdAt },
       _sum: { amount: true },
     });
     const revenueByMethod: Record<string, string> = {};

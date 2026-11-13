@@ -126,7 +126,7 @@ function OrderSuccessContent() {
           </Link>
         </Button>
         <Button variant="outline" asChild className="w-full sm:w-auto h-11 rounded-xl px-6 font-semibold flex items-center justify-center gap-2 cursor-pointer">
-          <Link href="/product">
+          <Link href="/">
             <ShoppingBag className="h-4 w-4" />
             <span>Continue Shopping</span>
           </Link>

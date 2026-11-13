@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthStore } from "@/zustand/auth";
+import { RecentHistoryClaim } from "@/components/domain/auth/RecentHistoryClaim";
 import { useEffect } from "react";
 
 /**
@@ -23,5 +24,10 @@ export function SessionHydrator({ children }: { children: React.ReactNode }) {
     };
   }, [hydrateFromCookies]);
 
-  return <>{children}</>;
+  return (
+    <>
+      <RecentHistoryClaim />
+      {children}
+    </>
+  );
 }

@@ -13,8 +13,10 @@ export type NotificationType =
   | "ORDER_CANCELLED"
   | "PAYMENT_RECEIVED"
   | "PAYMENT_FAILED"
+  | "PAYMENT_REFUNDED"
   | "PAYOUT_PROCESSED"
   | "LOW_STOCK_ALERT"
+  | "VENDOR_FOLLOWED"
   | "SYSTEM_ANNOUNCEMENT";
 
 export type NotificationPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
@@ -59,6 +61,7 @@ export interface NotificationPreferences {
   orderUpdates: boolean;
   paymentAlerts: boolean;
   inventoryAlerts: boolean;
+  socialUpdates: boolean;
   marketingPromos: boolean;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +76,7 @@ export type UpdateNotificationPreferencesDto = Partial<
     | "orderUpdates"
     | "paymentAlerts"
     | "inventoryAlerts"
+    | "socialUpdates"
     | "marketingPromos"
   >
 >;
@@ -130,6 +134,12 @@ function createNotificationsApi(client: typeof userApi) {
 
     getVapidKey() {
       return client.get<{ publicKey: string }>("/notifications/push/vapid-key");
+    },
+
+    getPushStatus(endpoint?: string) {
+      return client.get<{ registered: boolean; pushEnabled: boolean }>("/notifications/push/status", {
+        params: endpoint ? { endpoint } : undefined,
+      });
     },
 
     subscribePush(dto: PushSubscriptionDto) {

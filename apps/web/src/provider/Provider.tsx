@@ -3,7 +3,7 @@
 import { SessionHydrator } from "@/component/auth/SessionHydrator";
 import { ThemeProvider } from "@/component/provider/ThemeProvider";
 import { Toaster } from "@/component/ui/sonner";
-import { NotificationStreamHost } from "@/hook/use-notifications";
+import { NotificationStreamHost } from "@/hooks/use-notifications";
 import { Suspense,type ReactNode } from "react";
 import { QueryProvider } from "./QueryProvider";
 

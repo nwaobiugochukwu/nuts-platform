@@ -18,21 +18,25 @@ import Link from "@/components/navigation/AppLink";
 import { usePathname } from "next/navigation";
 import { useEffect,useRef,useState } from "react";
 
-import type { CategoryResponseDto } from "@/api/dto/category";
-import { CategoryNavMenu } from "@/component/category/CategoryNavMenu";
 import { NotificationBell } from "@/component/notification/NotificationBell";
-import { useCart } from "@/hook/use-cart";
-import { useHydrated } from "../../hook/use-hydrated";
-import { useWishlist } from "@/hook/use-wishlist";
+import { CategoryNavMenu } from "@/component/category/CategoryNavMenu";
+import type { CategoryResponseDto } from "@/api/dto/category";
+import { useCart } from "@/hooks/use-cart";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useWishlist } from "@/hooks/use-wishlist";
 import { usePublicCategories } from "@/hooks/use-public-categories";
 import { useAuthStore } from "@/zustand/auth";
 import { logoutWithFeedback } from "@/lib/logout";
 
 import { SearchDrawer } from "@/components/search/SearchDrawer";
 
-export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = {}) {
-  const { data: cachedCategories } = usePublicCategories(categories);
-  const navCategories = cachedCategories ?? categories;
+export function Navbar({
+  categories = [],
+  showCategoryNavigation = true,
+}: {
+  categories?: CategoryResponseDto[];
+  showCategoryNavigation?: boolean;
+}) {
   const pathname = usePathname();
   const { user, isAuthenticated, role, logout } = useAuthStore();
   const isMounted = useHydrated();
@@ -47,6 +51,11 @@ export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = 
 
   const { count: cartCount } = useCart();
   const { count: wishlistCount } = useWishlist();
+  const { data: cachedCategories } = usePublicCategories(
+    categories,
+    showCategoryNavigation,
+  );
+  const categoryItems = cachedCategories ?? categories ?? [];
 
   const isLinkActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -91,11 +100,9 @@ export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = 
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
-        {/* Left: Category Menu, Brand Logo & Main Nav */}
+        {/* Brand Logo and primary navigation */}
         <div className="flex items-center gap-2.5 sm:gap-5 min-w-0">
-          <div className="hidden xl:flex">
-            <CategoryNavMenu categories={navCategories} />
-          </div>
+          {showCategoryNavigation && <CategoryNavMenu categories={categoryItems} />}
 
           <Link href="/" className="flex shrink-0 items-center gap-1 group">
             <span className="text-xl sm:text-2xl font-bold tracking-tight text-foreground transition-transform group-hover:scale-105">
@@ -113,12 +120,12 @@ export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = 
               Home
             </Link>
             <Link
-              href="/product"
+              href="/discover"
               className={`text-sm font-medium transition-colors ${
-                pathname.startsWith("/product") ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                pathname === "/discover" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Products
+              Discover
             </Link>
             <Link
               href="/vendor"
@@ -141,7 +148,7 @@ export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = 
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <Search className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
-              <span className="truncate">Search products, vendors, categories...</span>
+              <span className="truncate">Search NUTS</span>
             </div>
           </button>
         </div>
@@ -430,7 +437,6 @@ export function Navbar({ categories }: { categories?: CategoryResponseDto[] } = 
       <SearchDrawer
         isOpen={searchDrawerOpen}
         onClose={() => setSearchDrawerOpen(false)}
-        categories={navCategories}
       />
     </header>
   );

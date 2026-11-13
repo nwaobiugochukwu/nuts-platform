@@ -27,7 +27,7 @@ DialogFooter,
 DialogHeader,
 DialogTitle,
 } from "@/component/ui/dialog";
-import { useDebouncedValue } from "@/hook/use-debounced-value";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { zodResolver } from "@hookform/resolvers/zod";

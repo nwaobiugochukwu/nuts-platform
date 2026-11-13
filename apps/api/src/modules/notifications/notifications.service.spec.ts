@@ -73,6 +73,7 @@ describe('NotificationsService', () => {
                 in: [
                   NotificationType.PAYMENT_RECEIVED,
                   NotificationType.PAYMENT_FAILED,
+                  NotificationType.PAYMENT_REFUNDED,
                   NotificationType.PAYOUT_PROCESSED,
                 ],
               },

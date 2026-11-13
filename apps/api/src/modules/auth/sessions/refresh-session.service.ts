@@ -1,4 +1,4 @@
-import {
+﻿import {
   Inject,
   Injectable,
   Logger,
@@ -13,8 +13,8 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import type { StringValue } from 'ms';
 import type Redis from 'ioredis';
 
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/modules/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
 import { AuthSessionService } from './auth-session.service';
 
 import {
@@ -123,7 +123,7 @@ export class RefreshSessionService {
   /**
    * Issues a new admin session.
    *
-   * Admin accounts do not use the UserAuthSession table — the refresh
+   * Admin accounts do not use the UserAuthSession table â€” the refresh
    * token is stored directly on the Admin row (single-session model).
    */
   async issueAdminSession(admin: AdminAuthRecord): Promise<AuthSession> {

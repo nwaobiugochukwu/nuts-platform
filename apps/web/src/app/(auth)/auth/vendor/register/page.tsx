@@ -1,12 +1,16 @@
 "use client";
 
 import { publicApi } from "@/api/core/client";
+import { vendorAuthService } from "@/api";
 import type { RegisterResponseDto, VerifyOtpResponseDto } from "@/api/dto/auth";
 import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
 import { FormInput } from "@/component/form/FormInput";
 import { FormTextarea } from "@/component/form/FormTextarea";
 import { Button } from "@/component/ui/button";
 import { SegmentedOtpInput } from "@/component/ui/SegmentedOtpInput";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { parseGoogleAuthError } from "@/lib/google-auth-error";
+import { safeInternalPath } from "@/lib/safe-internal-path";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AxiosError } from "axios";
 import {
@@ -21,8 +25,8 @@ import {
   Store,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -63,26 +67,22 @@ const vendorStepThreeSchema = z.object({
   lastName: z.string().optional(),
 });
 
-export const fullVendorSchema = z.object({
-  storeName: z.string().min(2),
-  email: z.string().email(),
-  password: z.string().min(8),
-  confirmPassword: z.string(),
-  otpCode: z.string().length(6),
-  storeDescription: z.string().min(10),
-  businessPhone: z.string(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-});
+type VendorFormData = z.infer<typeof vendorStepOneSchema> &
+  z.infer<typeof vendorStepTwoSchema> &
+  z.infer<typeof vendorStepThreeSchema>;
 
-export type VendorFormData = z.infer<typeof fullVendorSchema>;
-
-export default function VendorRegisterPage() {
+function VendorRegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = safeInternalPath(
+    searchParams.get("redirect"),
+    "/vendor/analytic",
+  );
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
   const [resendTimer, setResendTimer] = useState(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+  const [isGoogleRegistering, setIsGoogleRegistering] = useState(false);
   const [registeredStoreName, setRegisteredStoreName] = useState("");
 
   const methods = useForm<VendorFormData>({
@@ -119,6 +119,8 @@ export default function VendorRegisterPage() {
 
   const currentEmail = useWatch({ control, name: "email" });
   const currentOtp = useWatch({ control, name: "otpCode" });
+  const currentStoreName = useWatch({ control, name: "storeName" });
+  const canRegisterWithGoogle = (currentStoreName?.trim().length ?? 0) >= 2;
 
   useEffect(() => {
     if (resendTimer > 0) {
@@ -149,6 +151,16 @@ export default function VendorRegisterPage() {
         (typeof data?.error?.retryAfter === "number" && data.error.retryAfter) ||
         null;
       const msg = data?.message ?? "Failed to send code. Please try again.";
+
+      const authError = parseGoogleAuthError(err);
+      if (authError.isAccountAlreadyExists) {
+        toast.info("You already have a vendor account with this email. Please sign in instead.");
+        const loginUrl = searchParams.get("redirect")
+          ? `/auth/vendor/login?redirect=${encodeURIComponent(redirectUrl)}`
+          : "/auth/vendor/login";
+        router.replace(loginUrl);
+        return false;
+      }
 
       if (retryAfter && retryAfter > 0) {
         setResendTimer(retryAfter);
@@ -206,6 +218,15 @@ export default function VendorRegisterPage() {
       toast.success("Vendor registration application submitted!");
       setCurrentStep(4);
     } catch (err: unknown) {
+      const authError = parseGoogleAuthError(err);
+      if (authError.isAccountAlreadyExists) {
+        toast.info("You already have a vendor account with this email. Please sign in instead.");
+        const loginUrl = searchParams.get("redirect")
+          ? `/auth/vendor/login?redirect=${encodeURIComponent(redirectUrl)}`
+          : "/auth/vendor/login";
+        router.replace(loginUrl);
+        return;
+      }
       const msg =
         (err as AxiosError<{ message: string }>)?.response?.data?.message ??
         "Registration failed. Please check your details.";
@@ -216,52 +237,115 @@ export default function VendorRegisterPage() {
   }
 
   return (
-    <PublicOnlyLayout>
-      <div className="w-full space-y-6">
-        {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-xs transition-transform hover:scale-105">
-            {currentStep === 4 ? (
-              <Clock className="h-6 w-6 sm:h-7 sm:w-7 text-amber-500" />
-            ) : currentStep === 2 ? (
-              <ShieldCheck className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-            ) : (
-              <Store className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-            )}
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            {currentStep === 4
-              ? "Application Submitted"
-              : currentStep === 2
-              ? "Verify Your Email"
-              : currentStep === 3
-              ? "Store Profile & Contact"
-              : "Open Your Merchant Store"}
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            {currentStep === 4
-              ? "Your application is under administrative review."
-              : currentStep === 2
-              ? "Enter the 6-digit verification code sent to your email to continue."
-              : currentStep === 3
-              ? "Provide your business contact details and brand description."
-              : "Launch your digital storefront on NUTS and start selling to verified customers nationwide."}
-          </p>
+    <div className="w-full space-y-6">
+      {/* Brand Header */}
+      <div className="text-center space-y-2">
+        <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-xs transition-transform hover:scale-105">
+          {currentStep === 4 ? (
+            <Clock className="h-6 w-6 sm:h-7 sm:w-7 text-amber-500" />
+          ) : currentStep === 2 ? (
+            <ShieldCheck className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
+          ) : (
+            <Store className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
+          )}
         </div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+          {currentStep === 4
+            ? "Application Submitted"
+            : currentStep === 2
+            ? "Verify Your Email"
+            : currentStep === 3
+            ? "Store Profile & Contact"
+            : "Open Your Merchant Store"}
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+          {currentStep === 4
+            ? "Your application is under administrative review."
+            : currentStep === 2
+            ? "Enter the 6-digit verification code sent to your email to continue."
+            : currentStep === 3
+            ? "Provide your business contact details and brand description."
+            : "Launch your digital storefront on NUTS and start selling to verified customers nationwide."}
+        </p>
+      </div>
 
-        {/* Wizard Card */}
-        <div className="rounded-2xl sm:rounded-3xl border border-border/80 bg-card p-5 sm:p-8 shadow-sm transition-all">
-          <FormProvider {...methods}>
-            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-              {/* STEP 1: Store Credentials */}
-              {currentStep === 1 && (
-                <div className="space-y-4 animate-in fade-in-50 duration-200">
-                  <FormInput
-                    name="storeName"
-                    label="Store / Brand Name"
-                    placeholder="e.g. Lagos Artisan Leather"
-                    required
+      {/* Wizard Card */}
+      <div className="rounded-2xl sm:rounded-3xl border border-border/80 bg-card p-5 sm:p-8 shadow-sm transition-all">
+        <FormProvider {...methods}>
+          <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+            {/* STEP 1: Store Credentials */}
+            {currentStep === 1 && (
+              <div className="space-y-4 animate-in fade-in-50 duration-200">
+                <div className="space-y-4">
+                  <GoogleSignInButton
+                    mode="signup"
+                    loading={isGoogleRegistering}
+                    disabled={!canRegisterWithGoogle}
+                    onDisabledClick={() => {
+                      toast.error(
+                        "Please enter a valid Store / Brand Name (min 2 characters) before continuing.",
+                      );
+                      methods.setFocus("storeName");
+                    }}
+                    onSuccess={async (idToken) => {
+                      try {
+                        setIsGoogleRegistering(true);
+                        const enteredStoreName = getValues("storeName")?.trim() || undefined;
+                        const res = await vendorAuthService.googleRegister({
+                          idToken,
+                          storeName: enteredStoreName,
+                        });
+
+                        const vendor = res.data.vendor;
+                        if (!vendor.isApproved || !res.data.accessToken) {
+                          setRegisteredStoreName(vendor.storeName);
+                          toast.success("Merchant application submitted successfully!");
+                          setCurrentStep(4);
+                          return;
+                        }
+
+                        // If already an approved vendor, log them in
+                        toast.success("Welcome back to your vendor dashboard!");
+                        router.push("/vendor/analytic");
+                      } catch (err: unknown) {
+                        const parsed = parseGoogleAuthError(err);
+                        if (parsed.isAccountAlreadyExists) {
+                          toast.info("You already have a vendor account with this Google email. Please sign in instead.");
+                          const loginUrl = searchParams.get("redirect")
+                            ? `/auth/vendor/login?redirect=${encodeURIComponent(redirectUrl)}`
+                            : "/auth/vendor/login";
+                          router.replace(loginUrl);
+                          return;
+                        }
+                        if (parsed.isPendingApproval) {
+                          toast.info(parsed.message);
+                          setCurrentStep(4);
+                        } else {
+                          toast.error(parsed.message);
+                        }
+                      } finally {
+                        setIsGoogleRegistering(false);
+                      }
+                    }}
+                    onError={(msg) => toast.error(msg)}
                   />
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-border/60" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">or register with email</span>
+                    </div>
+                  </div>
+                </div>
+
+                <FormInput
+                  name="storeName"
+                  label="Store / Brand Name"
+                  placeholder="e.g. Lagos Artisan Leather"
+                  required
+                />
 
                   <FormInput
                     name="email"
@@ -499,6 +583,21 @@ export default function VendorRegisterPage() {
           </p>
         )}
       </div>
+  );
+}
+
+export default function VendorRegisterPage() {
+  return (
+    <PublicOnlyLayout>
+      <Suspense
+        fallback={
+          <div className="w-full max-w-md mx-auto p-8 text-center">
+            <div className="h-10 w-32 mx-auto animate-pulse rounded bg-muted/60" />
+          </div>
+        }
+      >
+        <VendorRegisterContent />
+      </Suspense>
     </PublicOnlyLayout>
   );
 }

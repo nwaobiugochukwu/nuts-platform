@@ -38,6 +38,7 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "'self'",
     "https://api.paystack.co",
     "https://standard.paystack.co",
+    "https://accounts.google.com/gsi/",
   ]);
 
   for (const rawUrl of [
@@ -54,6 +55,7 @@ export function buildContentSecurityPolicy(nonce: string): string {
     `'nonce-${nonce}'`,
     "'strict-dynamic'",
     "https://js.paystack.co",
+    "https://accounts.google.com/gsi/client",
   ];
 
   if (!isSecureContext) {
@@ -87,13 +89,13 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "frame-ancestors 'none'",
     "form-action 'self'",
     `script-src ${scriptSources.join(" ")}`,
-    "style-src 'self' 'unsafe-inline'",
-    "style-src-elem 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
+    "style-src-elem 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
     "style-src-attr 'unsafe-inline'",
     `img-src ${Array.from(imageSources).join(" ")}`,
     "font-src 'self' data:",
     `connect-src ${Array.from(connectSources).join(" ")}`,
-    "frame-src https://checkout.paystack.com https://standard.paystack.co",
+    "frame-src https://checkout.paystack.com https://standard.paystack.co https://accounts.google.com/gsi/",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     ...(isSecureContext ? ["upgrade-insecure-requests"] : []),

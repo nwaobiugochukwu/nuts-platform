@@ -1,5 +1,5 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+﻿import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 
 const MAX_DEPTH = 10;
 

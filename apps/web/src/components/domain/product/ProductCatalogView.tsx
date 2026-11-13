@@ -1,59 +1,116 @@
 "use client";
 
 import { productService } from "@/api";
+import { categoryService } from "@/api/modules/category";
+import { analyticsEventService } from "@/api/modules/analytics";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PaginationMeta, CursorPaginationMeta } from "@/api/core/types";
+import type { ApiResult } from "@/api/core/client";
 import type { ProductCardDto } from "@/api/dto/product";
 import type { VendorResponseDto } from "@/api/dto/vendor";
+import { DiscoverPersonalizedShelf } from "@/components/domain/product/DiscoverPersonalizedShelf";
 import { CustomerLayout } from "@/component/layout/CustomerLayout";
 import { ProductCard } from "@/component/product/ProductCard";
 import { ProductGridSkeleton } from "@/component/product/ProductGridSkeleton";
 import { RemoteImage } from "@/component/ui/RemoteImage";
 import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { CategoryFilterDrawer } from "@/component/category/CategoryFilterDrawer";
 import { Loader2, Search, SlidersHorizontal, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useEffect, useRef, useState } from "react";
+import { useAuthStore } from "@/zustand/auth";
+import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
 
 const EMPTY_CATEGORIES: CategoryResponseDto[] = [];
+
+function flattenActiveCategories(
+  categories: CategoryResponseDto[],
+  depth = 0,
+): Array<{ id: string; name: string; depth: number }> {
+  return categories.flatMap((category) => {
+    const current = category.isActive
+      ? [{ id: category.id, name: category.name, depth }]
+      : [];
+    const children = category.children ?? category.subCategories ?? [];
+    return [...current, ...flattenActiveCategories(children, depth + 1)];
+  });
+}
 
 export interface ProductCatalogViewProps {
   initialCategories: CategoryResponseDto[];
   initialProducts: ProductCardDto[];
   initialMeta?: PaginationMeta | CursorPaginationMeta;
+  initialLoadFailed?: boolean;
   initialVendors?: VendorResponseDto[];
   searchPage?: boolean;
+  showPersonalizedShelf?: boolean;
+  vendorOptions?: Array<{ id: string; storeName: string }>;
   initialFilters?: {
     search?: string;
     sort?: string;
     minPrice?: string;
     maxPrice?: string;
     inStock?: boolean;
+    categoryId?: string;
+    vendorId?: string;
   };
 }
 
 export function ProductCatalogView({
   initialCategories,
   initialProducts,
+  initialMeta,
+  initialLoadFailed = false,
   initialVendors = [],
   searchPage = false,
+  showPersonalizedShelf = false,
+  vendorOptions = [],
   initialFilters,
 }: ProductCatalogViewProps) {
   const [searchInput, setSearchInput] = useState(initialFilters?.search || "");
-  const search = useDebouncedValue(searchInput.trim().toLowerCase(), 300);
+  const search = useDebouncedValue(searchInput.trim().toLowerCase(), 200);
   const [inStock, setInStock] = useState(Boolean(initialFilters?.inStock));
   const [minPrice, setMinPrice] = useState(initialFilters?.minPrice || "");
   const [maxPrice, setMaxPrice] = useState(initialFilters?.maxPrice || "");
   const [sortBy, setSortBy] = useState(initialFilters?.sort || "newest");
+  const [categoryId, setCategoryId] = useState(initialFilters?.categoryId || "");
+  const [vendorId, setVendorId] = useState(initialFilters?.vendorId || "");
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+  const trackedSearchRef = useRef("");
+  const userId = useAuthStore((state) => state.user?.id);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
+  const sessionId = useRecommendationSessionId();
 
   const allCategories = initialCategories ?? EMPTY_CATEGORIES;
+  const categoryOptions = flattenActiveCategories(allCategories);
+  const categoryName = categoryOptions.find((category) => category.id === categoryId)?.name;
+  const vendorName = vendorOptions.find((vendor) => vendor.id === vendorId)?.storeName;
   const minPriceValue = minPrice.trim() ? Number(minPrice) : undefined;
   const maxPriceValue = maxPrice.trim() ? Number(maxPrice) : undefined;
+  const canUseInitialSearchResults =
+    searchPage &&
+    search.length > 0 &&
+    search === (initialFilters?.search ?? "").trim().toLowerCase() &&
+    !inStock &&
+    !categoryId &&
+    !vendorId &&
+    !minPrice &&
+    !maxPrice &&
+    sortBy === "newest";
+  const canUseInitialCatalogResults =
+    !searchPage &&
+    search === (initialFilters?.search ?? "").trim().toLowerCase() &&
+    categoryId === (initialFilters?.categoryId ?? "") &&
+    vendorId === (initialFilters?.vendorId ?? "") &&
+    inStock === Boolean(initialFilters?.inStock) &&
+    minPrice === (initialFilters?.minPrice ?? "") &&
+    maxPrice === (initialFilters?.maxPrice ?? "") &&
+    sortBy === (initialFilters?.sort ?? "newest");
 
   // Keep browser URL cleanly reflecting search?query=... without reloading
   useEffect(() => {
@@ -72,6 +129,31 @@ export function ProductCatalogView({
     }
   }, [search, searchInput, searchPage]);
 
+  // Keep the discover feed filters shareable and restorable on reload.
+  useEffect(() => {
+    if (searchPage || typeof window === "undefined") return;
+
+    const url = new URL(window.location.href);
+    const filters: Record<string, string> = {
+      categoryId,
+      vendorId,
+      sort: sortBy === "newest" ? "" : sortBy,
+      minPrice: minPrice.trim(),
+      maxPrice: maxPrice.trim(),
+      inStock: inStock ? "true" : "",
+      search: searchInput.trim(),
+    };
+
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    }
+
+    if (url.toString() !== window.location.href) {
+      window.history.replaceState(null, "", url.toString());
+    }
+  }, [searchPage, categoryId, vendorId, sortBy, minPrice, maxPrice, inStock, searchInput]);
+
   const {
     data,
     fetchNextPage,
@@ -88,37 +170,82 @@ export function ProductCatalogView({
       minPrice,
       maxPrice,
       sortBy,
+      categoryId,
+      vendorId,
     ],
-    queryFn: async ({ pageParam = 1, signal }) => {
-      const res = await productService.getCards(
-        {
-          page: pageParam,
-          limit: 24,
-          search: search || undefined,
-          minPrice: Number.isFinite(minPriceValue) ? minPriceValue : undefined,
-          maxPrice: Number.isFinite(maxPriceValue) ? maxPriceValue : undefined,
-          inStock: inStock || undefined,
-          sort: sortBy,
-        },
-        signal,
-      );
-      return res.data ?? [];
+    queryFn: async ({ pageParam, signal }) => {
+      const filters = {
+        limit: 24,
+        search: search || undefined,
+        categoryId: categoryId || undefined,
+        vendorId: vendorId || undefined,
+        minPrice: Number.isFinite(minPriceValue) ? minPriceValue : undefined,
+        maxPrice: Number.isFinite(maxPriceValue) ? maxPriceValue : undefined,
+        inStock: inStock || undefined,
+        sort: sortBy,
+      };
+      const result = searchPage
+        ? productService.getCards(
+            { ...filters, page: typeof pageParam === "number" ? pageParam : 1 },
+            signal,
+          )
+        : productService.getDiscovery(
+            { ...filters, cursor: typeof pageParam === "string" ? pageParam || undefined : undefined },
+            signal,
+          );
+      return result as Promise<
+        ApiResult<ProductCardDto[], PaginationMeta | CursorPaginationMeta>
+      >;
     },
-    initialPageParam: 1,
+    initialPageParam: searchPage ? 1 : "",
     getNextPageParam: (lastPage, allPages) => {
-      if (!lastPage || lastPage.length < 24) return undefined;
-      return allPages.length + 1;
+      if (searchPage) {
+        const meta = lastPage.meta as PaginationMeta | undefined;
+        if (meta?.hasNextPage) return (meta.page ?? allPages.length) + 1;
+        return lastPage.data.length >= 24 ? allPages.length + 1 : undefined;
+      }
+      const meta = lastPage.meta as CursorPaginationMeta | undefined;
+      return meta?.hasNextPage && meta.nextCursor ? meta.nextCursor : undefined;
     },
     initialData:
-      !search && !inStock && !minPrice && !maxPrice && sortBy === "newest"
+      !initialLoadFailed && (canUseInitialSearchResults || canUseInitialCatalogResults)
         ? {
-            pages: [initialProducts],
-            pageParams: [1],
+            pages: [{ data: initialProducts, meta: initialMeta }],
+            pageParams: [searchPage ? 1 : ""],
           }
         : undefined,
   });
 
-  const rawProducts = data?.pages ? data.pages.flat() : initialProducts;
+  const rawProducts = data?.pages
+    ? data.pages.flatMap((page) => page.data)
+    : canUseInitialSearchResults || canUseInitialCatalogResults
+      ? initialProducts
+      : [];
+  const searchResultCount = rawProducts.length;
+  const { data: matchingCategories = [] } = useQuery({
+    queryKey: ["search-category-results", search],
+    queryFn: async () => (await categoryService.search(search)).data,
+    enabled: searchPage && search.length >= 2,
+    staleTime: 1000 * 60,
+  });
+
+  useEffect(() => {
+    if (!search || !sessionId || (isAuthenticated && !canPurchase) || isLoading || isError) {
+      return;
+    }
+    const authenticatedCustomer = isAuthenticated && canPurchase;
+    const dedupeKey = `${userId ?? sessionId}:${search}`;
+    if (trackedSearchRef.current === dedupeKey) return;
+    trackedSearchRef.current = dedupeKey;
+    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer).then(() => {
+      void queryClient.invalidateQueries({
+        queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
+        refetchType: "all",
+      });
+    }).catch(() => {
+      if (trackedSearchRef.current === dedupeKey) trackedSearchRef.current = "";
+    });
+  }, [search, searchResultCount, userId, sessionId, isAuthenticated, canPurchase, isLoading, isError, queryClient]);
 
   // Auto-load next page when user scrolls near the bottom of the feed
   useEffect(() => {
@@ -143,6 +270,8 @@ export function ProductCatalogView({
     setMinPrice("");
     setMaxPrice("");
     setInStock(false);
+    setCategoryId("");
+    setVendorId("");
     setSortBy("newest");
     setSearchInput("");
   };
@@ -150,12 +279,14 @@ export function ProductCatalogView({
   const SORT_LABELS: Record<string, string> = {
     price_asc: "Price: Low to High",
     price_desc: "Price: High to Low",
-    popular: "Most Popular",
+    oldest: "Oldest Arrivals",
     newest: "Newest Arrivals",
   };
 
   const activeFiltersCount =
     (search ? 1 : 0) +
+    (categoryId ? 1 : 0) +
+    (vendorId ? 1 : 0) +
     (inStock ? 1 : 0) +
     (minPrice || maxPrice ? 1 : 0) +
     (sortBy !== "newest" ? 1 : 0);
@@ -165,6 +296,7 @@ export function ProductCatalogView({
   return (
     <CustomerLayout categories={allCategories}>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {showPersonalizedShelf && <DiscoverPersonalizedShelf />}
         {/* Header Banner */}
         <div className="mb-8 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 border-b border-neutral-200/80 dark:border-neutral-800 pb-6">
           <div>
@@ -173,39 +305,20 @@ export function ProductCatalogView({
                 ? search
                   ? `Results for “${searchInput.trim()}”`
                   : "Search the marketplace"
-                : "Explore Marketplace"}
+                : "Good Finds Across the Market"}
             </h1>
-            {searchPage && (
+            {searchPage ? (
               <p className="mt-2 text-xs sm:text-sm text-neutral-500">
                 Browse verified vendors and curated products matching your query.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-neutral-500">
+                Find your next favourite from vendors across NUTS.
               </p>
             )}
           </div>
 
-          {/* Quick Search & Filters Controls */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto">
-            <div className="relative w-full sm:w-64">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
-              <Input
-                id="catalog-search-input"
-                name="catalogSearch"
-                aria-label="Search products"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search products..."
-                className="h-10 rounded-full border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 pl-10 pr-9 text-sm focus:bg-white dark:focus:bg-black"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => setSearchInput("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-black dark:hover:text-white cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
+          <div className="flex w-full items-center justify-start sm:w-auto sm:justify-end">
             <Button
               type="button"
               variant="outline"
@@ -264,6 +377,19 @@ export function ProductCatalogView({
           </div>
         )}
 
+        {searchPage && matchingCategories.length > 0 && (
+          <div className="mb-8 rounded-2xl border border-neutral-200 bg-card p-5 dark:border-neutral-800">
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wider">Matching categories</h2>
+            <div className="flex flex-wrap gap-2">
+              {matchingCategories.slice(0, 8).map((category) => (
+                <Link key={category.id} href={`/category/${category.path.split("/").map(encodeURIComponent).join("/")}`} className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:bg-secondary">
+                  {category.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Active Filter Chips */}
         {hasActiveFilters && (
           <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -276,6 +402,32 @@ export function ProductCatalogView({
                   onClick={() => setSearchInput("")}
                   className="hover:opacity-75 cursor-pointer ml-0.5"
                   aria-label="Remove search filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {categoryId && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/90 px-3 py-1 text-xs font-medium text-black dark:text-white shadow-2xs">
+                <span className="text-neutral-500 font-normal">Category:</span> {categoryName || "Selected"}
+                <button
+                  type="button"
+                  onClick={() => setCategoryId("")}
+                  className="ml-0.5 hover:opacity-75"
+                  aria-label="Remove category filter"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {vendorId && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-800/90 px-3 py-1 text-xs font-medium text-black dark:text-white shadow-2xs">
+                <span className="text-neutral-500 font-normal">Store:</span> {vendorName || "Selected store"}
+                <button
+                  type="button"
+                  onClick={() => setVendorId("")}
+                  className="ml-0.5 hover:opacity-75"
+                  aria-label="Remove store filter"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -422,6 +574,12 @@ export function ProductCatalogView({
           sortBy={sortBy}
           onSortByChange={(val) => setSortBy(val)}
           onReset={handleResetFilters}
+          categoryId={categoryId}
+          categoryOptions={categoryOptions}
+          onCategoryChange={setCategoryId}
+          vendorId={vendorId}
+          vendorOptions={vendorOptions}
+          onVendorChange={setVendorId}
         />
       </div>
     </CustomerLayout>

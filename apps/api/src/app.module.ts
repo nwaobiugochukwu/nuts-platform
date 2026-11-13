@@ -1,51 +1,55 @@
 import { Module } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
-
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
-import { PerformanceInterceptor } from './modules/shared/interceptors/performance.interceptor';
 
-import { JwtAuthGuard } from './modules/shared/guards/jwt-auth.guard';
-import { OtpGuard } from './modules/shared/guards/otp.guard';
-import { RolesGuard } from './modules/shared/guards/roles.guard';
+// ── Framework & Core ──────────────────────────────────────
+import { AuditLogModule } from './common/audit-log/audit-log.module';
+import { PerformanceInterceptor } from './common/interceptors/performance.interceptor';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { OtpGuard } from './common/guards/otp.guard';
+import { RolesGuard } from './common/guards/roles.guard';
+import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
 
-import { RedisThrottlerStorage } from './modules/shared/rate-limit/redis-throttler.storage';
+// ── Infrastructure Layer ──────────────────────────────────
+import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
+import { CacheModule } from './infrastructure/cache/cache.module';
+import { RedisThrottlerStorage } from './infrastructure/cache/redis-throttler.storage';
+import { RabbitMQModule } from './infrastructure/rabbitmq/rabbitmq.module';
+import { OutboxModule } from './infrastructure/outbox/outbox.module';
+import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
+import { MailModule } from './infrastructure/mail/mail.module';
+import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
+import { validateEnv } from './infrastructure/configuration/env.validation';
+import { pinoLoggerConfig } from './infrastructure/configuration/logger.config';
 
-import { CacheModule } from './modules/infrastructure/cache/cache.module';
-import { PrismaModule } from './modules/infrastructure/prisma/prisma.module';
-import { RedisModule } from './modules/infrastructure/redis/redis.module';
-
-import { BillingModule } from './modules/billing/billing.module';
-import { CatalogModule } from './modules/catalog/catalog.module';
-import { CheckoutModule } from './modules/checkout/checkout.module';
-import { EngagementModule } from './modules/engagement/engagement.module';
-import { HealthModule } from './modules/health/health.module';
-import { IdentityModule } from './modules/identity/identity.module';
-
-import { AdminAnalyticsModule } from './modules/analytics/admin/admin-analytics.module';
-import { AdminCacheModule } from './modules/identity/admin/manage-cache/admin-cache.module';
-import { SearchModule } from './modules/search/search.module';
-import { AuditLogModule } from './modules/shared/audit-log/audit-log.module';
-import { CloudinaryModule } from './modules/shared/services/cloudinary.module';
-import { UploadModule } from './modules/shared/upload/upload.module';
-
-// ── Priority 2 Infrastructure Modules ────────────────────
-import { AnalyticsModule } from './modules/analytics/analytics.module';
-import { CronModule } from './modules/cron/cron.module';
-import { MailModule } from './modules/infrastructure/mail/mail.module';
-import { OutboxModule } from './modules/infrastructure/outbox/outbox.module';
-import { RabbitMQModule } from './modules/infrastructure/rabbitmq/rabbitmq.module';
-import { ResiliencyModule } from './modules/infrastructure/resiliency/resiliency.module';
+// ── Direct Feature Slices (Screaming Architecture) ────────
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { VendorsModule } from './modules/vendors/vendors.module';
+import { ProductsModule } from './modules/products/products.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { CartModule } from './modules/cart/cart.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { DiscountsModule } from './modules/discounts/discounts.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { WalletsModule } from './modules/wallets/wallets.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { WishlistsModule } from './modules/wishlists/wishlist.module';
+import { ReferralsModule } from './modules/referrals/referral.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { SearchModule } from './modules/search/search.module';
+import { UploadModule } from './modules/upload/upload.module';
 import { SecurityModule } from './modules/security/security.module';
-import { TrackingModule } from './modules/tracking/tracking.module';
-
-import { validateEnv } from './modules/infrastructure/configuration/env.validation';
-import { pinoLoggerConfig } from './modules/infrastructure/configuration/logger.config';
+import { HealthModule } from './modules/health/health.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -74,9 +78,6 @@ import { pinoLoggerConfig } from './modules/infrastructure/configuration/logger.
       verboseMemoryLeak: false,
       ignoreErrors: false,
     }),
-    // Global rate limits, backed by Redis (shared across instances).
-    // Named throttlers let individual controllers tighten their own limits
-    // via @Throttle() while inheriting the Redis storage.
     ThrottlerModule.forRootAsync({
       inject: ['REDIS_CLIENT'],
       useFactory: (redis: import('ioredis').default) => ({
@@ -84,44 +85,46 @@ import { pinoLoggerConfig } from './modules/infrastructure/configuration/logger.
           {
             name: 'default',
             ttl: 60_000,
-            limit: 100, // 100 req/min baseline; tightened per-route via @StrictThrottle, etc.
+            limit: 100,
           },
         ],
         storage: new RedisThrottlerStorage(redis),
       }),
     }),
 
-    // ── Database & Core ────────────────────────────────
+    // ── Infrastructure Layer ──────────────────────────────
+    AuditLogModule,
     PrismaModule,
     RedisModule,
     CacheModule,
-    HealthModule,
-
-    // ── Domain Bounded Contexts ────────────────────────
-    IdentityModule,
-    CatalogModule,
-    CheckoutModule,
-    BillingModule,
-    EngagementModule,
-
-    // ── Cross-Cutting & Operational Modules ────────────
-    AdminAnalyticsModule,
-    AdminCacheModule,
-    SearchModule,
-    AuditLogModule,
-    UploadModule,
-    CloudinaryModule,
-
-    // ── Priority 2 New Infrastructure ──────────────────
     RabbitMQModule,
     OutboxModule,
     ResiliencyModule,
-    NotificationsModule,
     MailModule,
-    TrackingModule,
+    CloudinaryModule,
+
+    // ── Direct Feature Modules ────────────────────────────
+    AuthModule,
+    UsersModule,
+    VendorsModule,
+    ProductsModule,
+    CategoriesModule,
+    CartModule,
+    OrdersModule,
+    DiscountsModule,
+    PaymentsModule,
+    WalletsModule,
+    ReviewsModule,
+    WishlistsModule,
+    ReferralsModule,
+    NotificationsModule,
     AnalyticsModule,
-    CronModule,
+    SearchModule,
+    UploadModule,
     SecurityModule,
+    HealthModule,
+    AdminModule,
+    RecommendationsModule,
   ],
 
   providers: [
@@ -129,6 +132,7 @@ import { pinoLoggerConfig } from './modules/infrastructure/configuration/logger.
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: OtpGuard },
+    { provide: APP_GUARD, useClass: MaintenanceModeGuard },
     { provide: APP_INTERCEPTOR, useClass: PerformanceInterceptor },
   ],
 })

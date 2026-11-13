@@ -1,8 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
+﻿import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
-import { MaxPasswordBytes } from '@api/modules/shared/decorators/max-password-bytes.decorator';
-import { NormalizeEmail } from '@api/modules/shared/decorators/normalize-email.decorator';
+import { MaxPasswordBytes } from '@api/common/decorators/max-password-bytes.decorator';
+import { NormalizeEmail } from '@api/common/decorators/normalize-email.decorator';
 
 export class LoginDto {
   @ApiProperty({

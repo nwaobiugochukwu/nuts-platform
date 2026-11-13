@@ -18,9 +18,28 @@ x-api-env: &api-env
 x-client-env: &client-env
   NODE_ENV: ${NODE_ENV:-development}
   INTERNAL_API_URL: http://api:3001
-  JWT_SECRET: ${JWT_SECRET:-9d8a7f6e5d4c3b2a10fe9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8e}
 
 services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    profiles: ["dev"]
+    environment:
+      RABBITMQ_DEFAULT_USER: nuts
+      RABBITMQ_DEFAULT_PASS: nuts_local_dev
+    ports:
+      - "15673:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
 
   # ── NestJS API (Development) ───────────────────────────────────────────────
   api:
@@ -39,9 +58,14 @@ services:
       <<: *api-env
       NODE_ENV: development
       SWAGGER_ENABLED: "true"
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     networks:
       nuts_net:
         aliases:
@@ -66,9 +90,10 @@ services:
     profiles: ["prod", "staging"]
     entrypoint: ["dumb-init", "./docker-migrate.sh"]
     env_file:
-      - ./apps/api/.env.production
+      - ./apps/api/.env.${APP_ENV:-production}
     environment:
       <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
       NODE_ENV: ${NODE_ENV:-production}
     networks:
       - nuts_net
@@ -86,9 +111,10 @@ services:
     expose:
       - "3001"
     env_file:
-      - ./apps/api/.env.production
+      - ./apps/api/.env.${APP_ENV:-production}
     environment:
       <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
       NODE_ENV: ${NODE_ENV:-production}
       SWAGGER_ENABLED: "${SWAGGER_ENABLED:-false}"
       AUTO_MIGRATE: "false"
@@ -141,7 +167,7 @@ services:
     networks:
       - nuts_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 5
@@ -164,7 +190,7 @@ services:
     expose:
       - "3000"
     env_file:
-      - ./apps/web/.env.production
+      - ./apps/web/.env.${APP_ENV:-production}
     environment:
       <<: *client-env
       NODE_ENV: ${NODE_ENV:-production}
@@ -182,7 +208,7 @@ services:
     networks:
       - nuts_net
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 3
@@ -233,6 +259,10 @@ networks:
   nuts_net:
     name: nuts_network
     driver: bridge
+
+volumes:
+  rabbitmq_data:
+    name: nuts_app_rabbitmq_data
 
 # ==============================================================================
 # DOCKER COMMAND REFERENCE CHEAT SHEET
@@ -336,13 +366,13 @@ networks:
 # Run Prisma schema operations directly through the containerized runtime.
 #
 # • Deploy pending database migrations:
-#   docker exec -it nuts_api prisma migrate deploy --schema=src/modules/infrastructure/prisma/schema.prisma
+#   docker exec -it nuts_api prisma migrate deploy --schema=/app/packages/database/schema.prisma
 #
 # • Check migration synchronization status:
-#   docker exec -it nuts_api prisma migrate status --schema=src/modules/infrastructure/prisma/schema.prisma
+#   docker exec -it nuts_api prisma migrate status --schema=/app/packages/database/schema.prisma
 #
 # • Re-generate Prisma Client inside the container:
-#   docker exec -it nuts_api prisma generate --schema=src/modules/infrastructure/prisma/schema.prisma
+#   docker exec -it nuts_api prisma generate --schema=/app/packages/database/schema.prisma
 #
 #
 # ── 6. MONITORING, DIAGNOSTICS & SYSTEM CLEANUP ──────────────────────────────
@@ -360,6 +390,6 @@ networks:
 #   docker system prune -f
 # ==============================================================================
 
-#docker exec nuts_api prisma generate --schema=src/modules/infrastructure/prisma/schema.prisma
+#docker exec nuts_api prisma generate --schema=/app/packages/database/schema.prisma
 #docker restart nuts_client
 #docker logs --tail 25 nuts_client

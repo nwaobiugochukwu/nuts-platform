@@ -51,8 +51,15 @@ export default function OrderDetailPage() {
       return data;
     },
     enabled: !!id,
-    refetchInterval: (query) =>
-      query.state.data?.status === "PENDING" ? 3000 : false,
+    refetchInterval: (query) => {
+      const currentOrder = query.state.data;
+      if (!currentOrder || currentOrder.status !== "PENDING") return false;
+      const placedAt = new Date(currentOrder.createdAt).getTime();
+      const paymentWindowMs = 15 * 60 * 1000;
+      return Number.isFinite(placedAt) && Date.now() - placedAt < paymentWindowMs
+        ? 3000
+        : false;
+    },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   });

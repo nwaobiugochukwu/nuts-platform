@@ -1,7 +1,7 @@
 export interface SendEmailOptions {
   to: string | string[];
   subject: string;
-  html: string;
+  html?: string;
   text?: string;
   attachments?: Array<{
     filename: string;

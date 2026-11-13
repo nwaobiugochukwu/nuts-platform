@@ -1,4 +1,4 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+﻿import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -8,7 +8,7 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { SearchIndex } from '@api/modules/shared/search/search.service';
+import { SearchIndex } from '@api/common/search/search.service';
 
 const ALLOWED_SEARCH_TYPES: SearchIndex[] = [
   'products',
@@ -20,7 +20,7 @@ const ALLOWED_SEARCH_TYPES: SearchIndex[] = [
 ];
 
 /**
- * Search filters — sent in the POST body (not the query string).
+ * Search filters â€” sent in the POST body (not the query string).
  * Search results are relevance-scored, so pagination stays page-based
  * (page/limit) inside the body; the flagship cursor endpoint is
  * POST /products/query.

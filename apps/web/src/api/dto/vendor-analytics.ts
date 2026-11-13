@@ -58,6 +58,72 @@ export interface VendorAnalyticsSummaryDto {
   avgOrderValue: string;
   recentOrders?: VendorRecentOrderDto[];
   conversionRate: number;
+  engagement: MarketplaceAnalyticsSummaryDto;
+}
+
+export interface MarketplaceAnalyticsSummaryDto {
+  storeViews: number;
+  uniqueStoreVisitors: number;
+  productViews: number;
+  uniqueProductViewers: number;
+  cartAdds: number;
+  uniqueCartAdders: number;
+  cartRemovals: number;
+  wishlistAdds: number;
+  uniqueWishlistSavers: number;
+  wishlistRemovals: number;
+  cartLinesAdded: number;
+  cartLinesPurchased: number;
+  cartToPurchaseRate: number;
+  identifiedProductViewers: number;
+  viewersToCart: number;
+  viewersToPurchase: number;
+  productViewToCartRate: number;
+  productViewToPurchaseRate: number;
+  currentFollowers: number;
+  uniqueFollowers: number;
+  newFollowers: number;
+  unfollows: number;
+  netFollowerGrowth: number;
+  topFollowerStores: Array<{
+    vendorId: string;
+    storeName: string;
+    followerCount: number;
+  }>;
+  paidOrders: number;
+  paidUnits: number;
+  paidRevenue: string;
+}
+
+export interface VendorProductPerformanceDto {
+  id: string;
+  name: string;
+  sku: string;
+  categoryName: string;
+  isActive: boolean;
+  views: number;
+  uniqueViewers: number;
+  cartAdds: number;
+  wishlistAdds: number;
+  paidOrders: number;
+  paidUnits: number;
+  paidRevenue: string;
+  cartLinesAdded: number;
+  cartLinesPurchased: number;
+  cartToPurchaseRate: number;
+  identifiedViewers: number;
+  viewersToCart: number;
+  viewersToPurchase: number;
+  productViewToCartRate: number;
+  productViewToPurchaseRate: number;
+}
+
+export interface VendorProductPerformancePageDto {
+  items: VendorProductPerformanceDto[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface VendorQueryAnalyticsDto {

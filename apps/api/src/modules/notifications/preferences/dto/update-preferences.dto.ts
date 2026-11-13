@@ -44,6 +44,13 @@ export class UpdateNotificationPreferencesDto {
   inventoryAlerts?: boolean;
 
   @ApiPropertyOptional({
+    description: 'Toggle for social activity such as new store followers',
+  })
+  @IsOptional()
+  @IsBoolean()
+  socialUpdates?: boolean;
+
+  @ApiPropertyOptional({
     description: 'Toggle for marketing promotions, deals, and discounts',
   })
   @IsOptional()

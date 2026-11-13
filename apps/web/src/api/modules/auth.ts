@@ -1,5 +1,7 @@
 import { adminApi, publicApi, userApi, vendorApi } from "@/api/core/client";
 import type {
+  GoogleAuthPayload,
+  VendorGoogleAuthPayload,
 AdminAuthResponseDto,
 AdminLoginPayload,
 AdminSetupPayload,
@@ -55,6 +57,14 @@ export const authService = {
   logoutAll() {
     return userApi.post<void>("/auth/logout-all");
   },
+  /** Sign in only; the API rejects Google identities without an account. */
+  googleLogin(payload: GoogleAuthPayload) {
+    return publicApi.post<AuthResponseDto>("/auth/google", payload);
+  },
+  /** Register with Google; account creation is only available on this route. */
+  googleRegister(payload: GoogleAuthPayload) {
+    return publicApi.post<AuthResponseDto>("/auth/google/register", payload);
+  },
 };
 
 export const adminAuthService = {
@@ -101,5 +111,13 @@ export const vendorAuthService = {
   },
   logout() {
     return vendorApi.post<void>("/vendors/auth/logout");
+  },
+  /** Sign in to an existing vendor account only. */
+  googleLogin(payload: Pick<VendorGoogleAuthPayload, "idToken">) {
+    return publicApi.post<import("@/api/dto/vendor").VendorAuthSessionDto>("/vendors/auth/google", payload);
+  },
+  /** Register a vendor account with Google. */
+  googleRegister(payload: VendorGoogleAuthPayload) {
+    return publicApi.post<import("@/api/dto/vendor").VendorAuthSessionDto>("/vendors/auth/google/register", payload);
   },
 };

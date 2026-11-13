@@ -10,7 +10,7 @@ import { DataTable,type Column } from "@/component/data/DataTable";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { Badge } from "@/component/ui/badge";
 import { Button } from "@/component/ui/button";
-import { useDebouncedValue } from "@/hook/use-debounced-value";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
@@ -146,7 +146,7 @@ export default function AdminVendorPage() {
               <Store className="h-5 w-5 text-muted-foreground" />
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-semibold text-foreground flex items-center gap-1.5">
               <span>{r.storeName}</span>
               {r.isVerified && (
@@ -155,7 +155,6 @@ export default function AdminVendorPage() {
                 </span>
               )}
             </div>
-            <div className="text-xs text-muted-foreground">/{r.storeSlug}</div>
           </div>
         </div>
       ),
@@ -309,7 +308,7 @@ export default function AdminVendorPage() {
           setSearch(v);
           setPage(1);
         }}
-        placeholder="Search vendor name, store slug, or contact email..."
+        placeholder="Search store, contact name, or email..."
         filterValue={filter}
         onFilterChange={(v) => {
           setFilter(v);

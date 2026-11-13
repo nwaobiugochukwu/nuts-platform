@@ -16,19 +16,22 @@ import Link from "@/components/navigation/AppLink";
 import { usePathname } from "next/navigation";
 import { useEffect,useRef,useState } from "react";
 
-const ROUTE_NAMES: Record<string, { title: string; subtitle: string; category?: string }> = {
-  "/admin": { title: "Executive Overview", subtitle: "Live platform revenue, volume, and vital metrics", category: "Dashboard" },
-  "/admin/analytic": { title: "Analytics & Intelligence", subtitle: "Deep-dive sales reports, funnel, and trends", category: "Intelligence" },
-  "/admin/product": { title: "Product Inventory", subtitle: "Manage multi-vendor catalog, pricing, and stock", category: "Commerce" },
-  "/admin/category": { title: "Category Taxonomies", subtitle: "Multi-level hierarchy tree and breadcrumb paths", category: "Commerce" },
-  "/admin/order": { title: "Customer Orders", subtitle: "Process transactions, fulfillment, and status transitions", category: "Fulfillment" },
-  "/admin/user": { title: "Customer & Staff Directory", subtitle: "Manage accounts, permissions, and security bans", category: "Access" },
-  "/admin/vendor": { title: "Vendor Stores", subtitle: "Store approvals, verification badges, and accounts", category: "Partners" },
-  "/admin/discount": { title: "Promotions & Vouchers", subtitle: "Platform and merchant coupon campaign codes", category: "Marketing" },
-  "/admin/setting": { title: "System & Cache Hub", subtitle: "Purge Redis cache, re-index search, and inspect engine", category: "Operations" },
+const ROUTE_NAMES: Record<string, { title: string; subtitle: string }> = {
+  "/admin": { title: "Executive Overview", subtitle: "Live platform revenue, volume, and vital metrics" },
+  "/admin/analytic": { title: "Marketplace analytics", subtitle: "Sales, shopper engagement, and follower growth" },
+  "/admin/product": { title: "Product Inventory", subtitle: "Manage multi-vendor catalog, pricing, and stock" },
+  "/admin/category": { title: "Category Taxonomies", subtitle: "Multi-level hierarchy tree and breadcrumb paths" },
+  "/admin/order": { title: "Customer Orders", subtitle: "Process transactions, fulfillment, and status transitions" },
+  "/admin/user": { title: "Customer & Staff Directory", subtitle: "Manage accounts, permissions, and security bans" },
+  "/admin/vendor": { title: "Vendor Stores", subtitle: "Store approvals, verification badges, and accounts" },
+  "/admin/discount": { title: "Promotions & Vouchers", subtitle: "Platform and merchant coupon campaign codes" },
+  "/admin/setting": { title: "System & Cache Hub", subtitle: "Purge Redis cache, re-index search, and inspect engine" },
+  "/admin/staff": { title: "Staff & Governance", subtitle: "Manage platform operators, permissions, and audit logs" },
+  "/admin/platform": { title: "Platform Controls", subtitle: "Runtime feature toggles and maintenance mode" },
+  "/admin/announcements": { title: "Announcements", subtitle: "Publish targeted updates to customers and administrators" },
 };
 
-export function AdminHeader({ onMobileMenuClick }: { onMobileMenuClick?: () => void }) {
+export function AdminHeader({ onMobileMenuClick, mobileMenuOpen = false }: { onMobileMenuClick?: () => void; mobileMenuOpen?: boolean }) {
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading, isInitialized, logout } = useAuthStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -37,7 +40,6 @@ export function AdminHeader({ onMobileMenuClick }: { onMobileMenuClick?: () => v
   const routeInfo = ROUTE_NAMES[pathname] ?? {
     title: "Admin Console",
     subtitle: "Enterprise management interface",
-    category: "Management",
   };
 
   useEffect(() => {
@@ -79,20 +81,17 @@ export function AdminHeader({ onMobileMenuClick }: { onMobileMenuClick?: () => v
             onClick={onMobileMenuClick}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground hover:bg-secondary lg:hidden transition-colors"
             aria-label="Open mobile navigation"
+            aria-controls="panel-navigation"
+            aria-expanded={mobileMenuOpen}
           >
             <Menu className="h-5 w-5" />
           </button>
         )}
 
         <div className="min-w-0 flex-1 sm:flex-none">
-          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-            <span className="max-[420px]:hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 bg-secondary/80 px-1.5 py-0.5 rounded-md border border-border/40">
-              {routeInfo.category || "Admin"}
-            </span>
-            <h1 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
-              {routeInfo.title}
-            </h1>
-          </div>
+          <h1 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
+            {routeInfo.title}
+          </h1>
           <p className="hidden text-xs text-muted-foreground sm:block mt-0.5">
             {routeInfo.subtitle}
           </p>
@@ -111,7 +110,6 @@ export function AdminHeader({ onMobileMenuClick }: { onMobileMenuClick?: () => v
             Live Marketplace
           </Button>
         </Link>
-
         {isAuthenticated && <NotificationBell />}
 
         {/* Profile Dropdown */}
@@ -142,9 +140,6 @@ export function AdminHeader({ onMobileMenuClick }: { onMobileMenuClick?: () => v
               <div className="hidden sm:flex flex-col text-left leading-none">
                 <span className="text-sm font-semibold text-foreground max-w-[120px] truncate">
                   {shortName}
-                </span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                  Super Admin
                 </span>
               </div>
               <ChevronDown

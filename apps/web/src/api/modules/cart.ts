@@ -6,11 +6,13 @@ CartResponseDto,
 DiscountPreviewDto,
 RemoveCartItemResponseDto,
 } from "@/api/dto/cart";
+import type { RecommendationAttribution } from "@/api/modules/analytics";
 
 export interface AddToCartPayload {
   quantity?: number;
   variantId?: string;
   addedFrom?: AddedFromType;
+  recommendationContext?: RecommendationAttribution;
 }
 
 export interface UpdateCartItemPayload {

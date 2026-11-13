@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppNotification,NotificationType } from "@/api/notifications";
-import { useNotifications } from "@/hook/use-notifications";
+import { useNotifications } from "@/hooks/use-notifications";
 import { notificationDetailPath, notificationListPath } from "@/lib/notification-path";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import {
@@ -13,6 +13,7 @@ DollarSign,
 Info,
 Package,
 SlidersHorizontal,
+Users,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useRouter } from "next/navigation";
@@ -27,7 +28,10 @@ function getNotificationIcon(type: NotificationType) {
     case "ORDER_DELIVERED":
     case "ORDER_CANCELLED":
       return <Package className="h-4 w-4 text-blue-500" />;
+    case "VENDOR_FOLLOWED":
+      return <Users className="h-4 w-4 text-indigo-500" />;
     case "PAYMENT_RECEIVED":
+    case "PAYMENT_REFUNDED":
       return <CreditCard className="h-4 w-4 text-emerald-500" />;
     case "PAYOUT_PROCESSED":
       return <DollarSign className="h-4 w-4 text-amber-500" />;

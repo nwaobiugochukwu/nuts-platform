@@ -15,7 +15,7 @@ export function Footer() {
     <footer className="border-t border-border/70 bg-card/60 pt-12 pb-10 text-foreground">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Footer Navigation Columns */}
-        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-4 pb-10 border-b border-border/60">
+        <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 pb-10 border-b border-border/60">
           {/* Brand Column */}
           <div className="lg:col-span-2 space-y-4">
             <Link href="/" className="inline-block text-2xl font-bold tracking-tight text-foreground group">
@@ -24,39 +24,6 @@ export function Footer() {
             <p className="max-w-sm text-sm text-muted-foreground leading-relaxed">
               The premier multi-vendor commerce marketplace in Nigeria. Discover unique handcrafted goods, fashion, art, and lifestyle products directly from verified independent vendors.
             </p>
-          </div>
-
-          {/* Marketplace Links */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground/90">
-              Marketplace
-            </h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link
-                  href="/product"
-                  className={`transition-colors duration-150 ${
-                    isLinkActive("/product")
-                      ? "font-semibold text-primary"
-                      : "text-muted-foreground hover:text-primary"
-                  }`}
-                >
-                  All Products
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/vendor"
-                  className={`transition-colors duration-150 ${
-                    isLinkActive("/vendor")
-                      ? "font-semibold text-primary"
-                      : "text-muted-foreground hover:text-primary"
-                  }`}
-                >
-                  Verified Vendors
-                </Link>
-              </li>
-            </ul>
           </div>
 
           {/* Vendor Hub Links */}
