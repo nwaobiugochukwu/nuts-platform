@@ -73,7 +73,7 @@ graph TD
 
 ## Current Implementation and Operations
 
-This section records behavior in the current codebase. The domain chapters and engineering field manual below preserve the deeper design rationale, patterns, and edge cases; the [architecture guide](docs/ARCHITECTURE.md) and the [API](apps/api/README.md) and [web](apps/web/README.md) guides describe the current request and runtime contracts.
+This section records behavior in the current codebase. The domain chapters and engineering field manual below preserve the deeper design rationale, patterns, and edge cases; the [architecture guide](docs/architecture/README.md) and the [API](apps/api/README.md) and [web](apps/web/README.md) guides describe the current request and runtime contracts.
 
 ### Runtime and consistency boundaries
 
@@ -90,7 +90,7 @@ An old `PENDING` outbox row with `attempts: 0` has not been claimed by the relay
 
 - Admin and vendor analytics use Africa/Lagos calendar boundaries, accept up to 730 days of history, and cache server results for 20 seconds. Visible dashboards refresh summaries every 30 seconds and details every 60 seconds; this is polling, not push delivery.
 - Product-view and marketplace-action events are retained for 730 days. Recommendation events are retained for 180 days, except follow/unfollow history used for follower-change reporting. Raw views count events; unique viewers count account or anonymous browser/session identities without merging them across login or device changes.
-- View-to-cart and view-to-paid-purchase are identified account/product cohorts with a seven-day attribution window. Cart-to-paid-purchase matches cart/product/variant lines within seven days. Recent cohorts can mature after the selected date range. Revenue is gross before refunds. See [analytics definitions and scaling guidance](docs/ARCHITECTURE.md#analytics-and-reporting).
+- View-to-cart and view-to-paid-purchase are identified account/product cohorts with a seven-day attribution window. Cart-to-paid-purchase matches cart/product/variant lines within seven days. Recent cohorts can mature after the selected date range. Revenue is gross before refunds. See [analytics definitions](docs/domains/analytics-and-measurement.md) and [scaling guidance](docs/scaling/analytics-at-scale.md).
 - `/discover` is the product discovery feed and uses keyset cursors. The recommendation ranker is deterministic API business logic using available activity signals, not a trained machine-learning service. Cold-start marketplace discovery is separate from personalized recommendations.
 
 ### Authentication, Swagger, and deployment
@@ -198,7 +198,7 @@ Manages product categorization in an arbitrary-depth nested category tree (e.g. 
 
 - **Infinite Recursion & Stack Overflow Crashes:**
   - _The Failure Mode:_ An administrator moving a category (e.g., `Electronics`) inside one of its own descendants (e.g., `Gaming Laptops`) creates a circular graph loop (`Gaming Laptops -> Electronics -> Computers -> Gaming Laptops`). Any recursive tree builder or breadcrumb generator then loops infinitely, pegging CPU at 100% and crashing the Node.js event loop with `RangeError: Maximum call stack size exceeded`.
-  - _How NUTS Solved It:_ Engineered a Directed Acyclic Graph (DAG) cycle-detection algorithm in [`CategoriesService.validateParent`](file:///c:/MY%20PROJECT/NUTS-P/apps/api/src/modules/catalog/categories/categories.service.ts). Before committing parent updates: (1) it rejects self-parenting (`parentId === id`); (2) it recursively queries all descendants using `getDescendantIds(currentCategoryId)`; (3) if `descendantIds.includes(newParentId)`, it aborts with `400 Bad Request: Circular hierarchy detected` before any database write occurs.
+  - _How NUTS Solved It:_ Engineered a Directed Acyclic Graph (DAG) cycle-detection algorithm in [`CategoriesService.validateParent`](apps/api/src/modules/catalog/categories/categories.service.ts). Before committing parent updates: (1) it rejects self-parenting (`parentId === id`); (2) it recursively queries all descendants using `getDescendantIds(currentCategoryId)`; (3) if `descendantIds.includes(newParentId)`, it aborts with `400 Bad Request: Circular hierarchy detected` before any database write occurs.
 - **Sibling Name Ambiguity & Route Collisions:**
   - _The Failure Mode:_ Two distinct categories created with the same name under the same parent generate identical URL path slugs, leading to ambiguous routing and customer confusion.
   - _How NUTS Solved It:_ Enforced a database composite unique index `(parentId, slug)` in PostgreSQL coupled with a case-insensitive name pre-check in `CategoriesService` to reject sibling duplicates before hitting constraint violations.
@@ -259,7 +259,7 @@ Coordinates cart item modifications, real-time variant selections, candidate car
   - _How NUTS Solved It:_ Implemented **Lexicographical Lock Sorting**. Before requesting locks or executing decrements, all cart items are sorted alphabetically by ID (`variantId ?? productId`). Because every concurrent transaction acquires row locks in the exact same sequence, circular wait cycles are mathematically impossible.
 - **Ghost Cart Collisions & Multi-Session Desynchronization:**
   - _The Failure Mode:_ Users opening multiple browser tabs or logging in across devices generate multiple cart records. Checkout naively picking the newest cart selects an empty orphan, resulting in false "Empty Cart" checkout rejections.
-  - _How NUTS Solved It:_ Implemented candidate cart evaluation in [`OrdersService`](file:///c:/MY%20PROJECT/NUTS-P/apps/api/src/modules/checkout/orders/orders.service.ts). The service acquires pessimistic row locks (`FOR UPDATE`) across all open carts for the user, evaluates them in-memory to select the active cart containing items (`cartItems.length > 0`), executes checkout, and prunes empty orphan carts in the same atomic SQL commit.
+  - _How NUTS Solved It:_ Implemented candidate cart evaluation in [`OrdersService`](apps/api/src/modules/checkout/orders/orders.service.ts). The service acquires pessimistic row locks (`FOR UPDATE`) across all open carts for the user, evaluates them in-memory to select the active cart containing items (`cartItems.length > 0`), executes checkout, and prunes empty orphan carts in the same atomic SQL commit.
 
 #### 3. Backend Mechanism (With Exact Timings & TTLs)
 
@@ -1067,6 +1067,7 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
 
 ---
 
+<a id="quickstart"></a>
 ## 5. Local Development & Quickstart
 
 ### Prerequisites
