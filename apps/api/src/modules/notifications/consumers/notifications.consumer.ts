@@ -3,12 +3,13 @@ import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
   getErrorMessage,
   getErrorStack,
-} from '../../shared/utils/error-details.util';
-import { RABBITMQ_QUEUES } from '../../infrastructure/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '../../infrastructure/rabbitmq/rabbitmq.service';
+} from '@api/common/utils/error-details.util';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../notifications.service';
 
 interface NotificationMessage {
+  eventId?: string;
   userId: string;
   type: NotificationType;
   priority: NotificationPriority;
@@ -25,6 +26,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseNotificationMessage(value: unknown): NotificationMessage | null {
+  // Older order.confirmed outbox rows only carried the customer and message;
+  // translate them during rolling deployments instead of repeatedly DLQing them.
+  if (
+    isRecord(value) &&
+    typeof value.userId === 'string' &&
+    typeof value.orderId === 'string' &&
+    value.title === 'Order Confirmed' &&
+    typeof value.message === 'string' &&
+    typeof value.type !== 'string'
+  ) {
+    return {
+      userId: value.userId,
+      type: NotificationType.ORDER_CONFIRMED,
+      priority: NotificationPriority.HIGH,
+      role: ROLE.USER,
+      title: value.title,
+      message: value.message,
+      link: `/order/${value.orderId}`,
+      metadata: { orderId: value.orderId },
+      dedupeKey: `ORDER_CONFIRMED:${value.orderId}:USER:${value.userId}`,
+    };
+  }
+
   if (
     !isRecord(value) ||
     typeof value.userId !== 'string' ||
@@ -65,10 +89,13 @@ function parseNotificationMessage(value: unknown): NotificationMessage | null {
   const link = typeof value.link === 'string' ? value.link : undefined;
   const dedupeKey =
     typeof value.dedupeKey === 'string' ? value.dedupeKey : undefined;
+  const eventId =
+    typeof value.eventId === 'string' ? value.eventId.trim() : undefined;
   const metadata = isRecord(value.metadata) ? value.metadata : undefined;
 
   return {
     userId: value.userId,
+    eventId,
     type: value.type as NotificationType,
     priority,
     role,
@@ -112,7 +139,9 @@ export class NotificationsConsumer implements OnModuleInit {
             priority: payload.priority,
             link: payload.link,
             metadata: payload.metadata,
-            dedupeKey: payload.dedupeKey,
+            dedupeKey:
+              payload.dedupeKey ||
+              (payload.eventId ? `outbox:${payload.eventId}` : undefined),
           });
         } catch (err: unknown) {
           this.logger.error(

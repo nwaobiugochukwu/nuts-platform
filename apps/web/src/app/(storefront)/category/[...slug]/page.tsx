@@ -4,6 +4,8 @@ serverGetCategoryByPath,
 serverGetProductBySlug,
 serverGetProductReviews,
 serverGetProducts,
+  serverGetCategoryPreviews,
+  serverGetTrendingProducts,
 } from "@/api/server";
 import { HierarchicalCategoryView } from "@/component/domain/category/HierarchicalCategoryView";
 import { findCategoryNode,resolveCategoryPath } from "@/lib/category-tree";
@@ -71,6 +73,8 @@ export default async function CatchAllCategoryPage({
   const traversal = resolveCategoryPath(categories, slugs);
 
   let initialProduct = null;
+  let initialTopPicks: ProductCardDto[] = [];
+  let initialCategoryPreviews: Awaited<ReturnType<typeof serverGetCategoryPreviews>> = {};
   let initialReviews: Awaited<ReturnType<typeof serverGetProductReviews>> | null = null;
   let initialProductsResult: { data: ProductCardDto[]; meta: PaginationMeta | CursorPaginationMeta | null } = {
     data: [],
@@ -111,18 +115,28 @@ export default async function CatchAllCategoryPage({
     initialReviews = await serverGetProductReviews(initialProduct.id);
   }
 
-  // If this is a category, fetch initial products for it
+  // Root categories show sales-ranked Top Picks and preload one bounded page
+  // for every direct child. Deeper category routes show their own paginated grid.
   if (!initialProduct && resolvedCategory?.id) {
-    initialProductsResult = await serverGetProducts({
-      categoryId: resolvedCategory.id,
-      category: resolvedCategory.slug,
-      limit: 100,
-      search: sParams.search,
-      sort: sParams.sort || "newest",
-      minPrice: sParams.minPrice,
-      maxPrice: sParams.maxPrice,
-      inStock: sParams.inStock,
-    });
+    const isRootCategory = resolvedCategory.isRoot || !resolvedCategory.parentId;
+    if (isRootCategory) {
+      [initialTopPicks, initialCategoryPreviews] = await Promise.all([
+        serverGetTrendingProducts({ categoryId: resolvedCategory.id, limit: 12, days: 30 }),
+        serverGetCategoryPreviews(resolvedCategory.id, 12),
+      ]);
+    } else {
+      initialProductsResult = await serverGetProducts({
+        categoryId: resolvedCategory.id,
+        category: resolvedCategory.slug,
+        page: 1,
+        limit: 24,
+        search: sParams.search,
+        sort: sParams.sort || "newest",
+        minPrice: sParams.minPrice,
+        maxPrice: sParams.maxPrice,
+        inStock: sParams.inStock,
+      });
+    }
   }
 
   return (
@@ -132,6 +146,9 @@ export default async function CatchAllCategoryPage({
       initialCategories={categories}
       initialCategoryNode={resolvedCategory}
       initialProducts={initialProductsResult.data}
+      initialProductMeta={initialProductsResult.meta}
+      initialTopPicks={initialTopPicks}
+      initialCategoryPreviews={initialCategoryPreviews}
       initialProduct={initialProduct}
       initialReviews={initialReviews}
       initialSearchParams={{

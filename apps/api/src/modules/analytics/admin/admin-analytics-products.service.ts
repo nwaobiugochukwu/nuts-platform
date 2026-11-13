@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import {
   TopCategoryDto,
   TopProductDto,
@@ -18,7 +18,12 @@ export class AdminAnalyticsProductsService {
     return this.prisma.productVariant.count({ where: { isActive: true } });
   }
 
-  async getTotalVendors(): Promise<number> {
+  async getVendorCounts(): Promise<{
+    total: number;
+    active: number;
+    verified: number;
+    approved: number;
+  }> {
     const [row] = await this.prisma.$queryRaw<
       Array<{
         total: bigint;
@@ -34,37 +39,12 @@ export class AdminAnalyticsProductsService {
         COUNT(*) FILTER (WHERE "isApproved" = TRUE) AS approved
       FROM "vendors"
     `;
-    // Cache the breakdown so the three sibling methods can reuse it.
-    this._cachedVendorCounts = {
+    return {
       total: Number(row.total),
       active: Number(row.active),
       verified: Number(row.verified),
       approved: Number(row.approved),
     };
-    return this._cachedVendorCounts.total;
-  }
-
-  /** Internal cache populated by getTotalVendors() — avoids 3 extra round-trips. */
-  private _cachedVendorCounts: {
-    total: number;
-    active: number;
-    verified: number;
-    approved: number;
-  } | null = null;
-
-  async getActiveVendors(): Promise<number> {
-    if (this._cachedVendorCounts) return this._cachedVendorCounts.active;
-    return this.prisma.vendor.count({ where: { isActive: true } });
-  }
-
-  async getVerifiedVendors(): Promise<number> {
-    if (this._cachedVendorCounts) return this._cachedVendorCounts.verified;
-    return this.prisma.vendor.count({ where: { isVerified: true } });
-  }
-
-  async getApprovedVendors(): Promise<number> {
-    if (this._cachedVendorCounts) return this._cachedVendorCounts.approved;
-    return this.prisma.vendor.count({ where: { isApproved: true } });
   }
 
   async getNewVendorsInPeriod(start: Date, end: Date): Promise<number> {
@@ -74,7 +54,11 @@ export class AdminAnalyticsProductsService {
   }
 
   /** Top N products by revenue */
-  async getTopProducts(limit: number): Promise<TopProductDto[]> {
+  async getTopProducts(
+    limit: number,
+    start: Date,
+    end: Date,
+  ): Promise<TopProductDto[]> {
     // Column is named "unitPrice" in the DB (Prisma keeps camelCase column names
     // unless explicitly mapped with @map). Use totalPrice which is pre-computed.
     const rows = await this.prisma.$queryRaw<
@@ -93,8 +77,11 @@ export class AdminAnalyticsProductsService {
               SUM(oi.quantity) as total_qty
        FROM "order_items" oi
        JOIN "orders" o ON o.id = oi."orderId"
+       JOIN "payments" pay ON pay."orderId" = o.id
+         AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
        JOIN "products" p ON p.id = oi."productId"
-       WHERE o.status IN ('PROCESSING','SHIPPED','DELIVERED','PENDING')
+       WHERE o.status != 'CANCELLED'
+         AND o."createdAt" >= ${start} AND o."createdAt" <= ${end}
        GROUP BY oi."productId", p.name, p.sku
        ORDER BY total_price DESC
        LIMIT ${limit}
@@ -110,7 +97,11 @@ export class AdminAnalyticsProductsService {
   }
 
   /** Top N categories by revenue */
-  async getTopCategories(limit: number): Promise<TopCategoryDto[]> {
+  async getTopCategories(
+    limit: number,
+    start: Date,
+    end: Date,
+  ): Promise<TopCategoryDto[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{
         id: string;
@@ -125,9 +116,12 @@ export class AdminAnalyticsProductsService {
               SUM(oi."totalPrice") as revenue
        FROM "order_items" oi
        JOIN "orders" o ON o.id = oi."orderId"
+       JOIN "payments" pay ON pay."orderId" = o.id
+         AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
        JOIN "products" p ON p.id = oi."productId"
        JOIN "categories" c ON c.id = p."categoryId"
-       WHERE o.status IN ('PROCESSING','SHIPPED','DELIVERED','PENDING')
+       WHERE o.status != 'CANCELLED'
+         AND o."createdAt" >= ${start} AND o."createdAt" <= ${end}
        GROUP BY c.id, c.name, c.slug
        ORDER BY revenue DESC
        LIMIT ${limit}
@@ -143,7 +137,11 @@ export class AdminAnalyticsProductsService {
   }
 
   /** Top N vendors by revenue */
-  async getTopVendors(limit: number): Promise<TopVendorDto[]> {
+  async getTopVendors(
+    limit: number,
+    start: Date,
+    end: Date,
+  ): Promise<TopVendorDto[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{
         vendor_id: string;
@@ -156,7 +154,10 @@ export class AdminAnalyticsProductsService {
               COUNT(DISTINCT oi."orderId") as order_count
        FROM "order_items" oi
        JOIN "orders" o ON o.id = oi."orderId"
-       WHERE o.status IN ('PROCESSING','SHIPPED','DELIVERED','PENDING')
+       JOIN "payments" pay ON pay."orderId" = o.id
+         AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
+       WHERE o.status != 'CANCELLED'
+         AND o."createdAt" >= ${start} AND o."createdAt" <= ${end}
        GROUP BY oi."vendorId"
        ORDER BY total_revenue DESC
        LIMIT ${limit}

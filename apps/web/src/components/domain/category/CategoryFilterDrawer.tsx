@@ -2,7 +2,7 @@
 
 import { Button } from "@/component/ui/button";
 import { Input } from "@/component/ui/input";
-import { Check, RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { Check, RotateCcw, Search, SlidersHorizontal, Store, Tag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export interface CategoryFilterDrawerProps {
@@ -17,11 +17,20 @@ export interface CategoryFilterDrawerProps {
   sortBy: string;
   onSortByChange: (val: string) => void;
   onReset: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  categoryId?: string;
+  categoryOptions?: Array<{ id: string; name: string; depth?: number }>;
+  onCategoryChange?: (value: string) => void;
+  vendorId?: string;
+  vendorOptions?: Array<{ id: string; storeName: string }>;
+  onVendorChange?: (value: string) => void;
+  showSort?: boolean;
 }
 
 const SORT_OPTIONS = [
   { id: "newest", label: "Newest Arrivals", description: "Recently added products" },
-  { id: "popular", label: "Most Popular", description: "Top trending items" },
+  { id: "oldest", label: "Oldest Arrivals", description: "Earliest listed products" },
   { id: "price_asc", label: "Price: Low to High", description: "Budget friendly first" },
   { id: "price_desc", label: "Price: High to Low", description: "Premium items first" },
 ];
@@ -46,12 +55,26 @@ export function CategoryFilterDrawer({
   sortBy,
   onSortByChange,
   onReset,
+  searchValue = "",
+  onSearchChange,
+  categoryId = "",
+  categoryOptions = [],
+  onCategoryChange,
+  vendorId = "",
+  vendorOptions = [],
+  onVendorChange,
+  showSort = true,
 }: CategoryFilterDrawerProps) {
   // Local draft state so user can configure filters and apply them atomically
   const [draftMinPrice, setDraftMinPrice] = useState(minPrice);
   const [draftMaxPrice, setDraftMaxPrice] = useState(maxPrice);
   const [draftInStock, setDraftInStock] = useState(inStock);
   const [draftSortBy, setDraftSortBy] = useState(sortBy);
+  const [draftSearch, setDraftSearch] = useState(searchValue);
+  const [draftCategorySearch, setDraftCategorySearch] = useState("");
+  const [draftVendorSearch, setDraftVendorSearch] = useState("");
+  const [draftCategoryId, setDraftCategoryId] = useState(categoryId);
+  const [draftVendorId, setDraftVendorId] = useState(vendorId);
 
   // Sync draft state with incoming props every time the drawer opens or props change
   useEffect(() => {
@@ -61,9 +84,14 @@ export function CategoryFilterDrawer({
       setDraftMaxPrice(maxPrice);
       setDraftInStock(inStock);
       setDraftSortBy(sortBy || "newest");
+      setDraftSearch(searchValue);
+      setDraftCategorySearch("");
+      setDraftVendorSearch("");
+      setDraftCategoryId(categoryId);
+      setDraftVendorId(vendorId);
     }, 0);
     return () => clearTimeout(timer);
-  }, [isOpen, minPrice, maxPrice, inStock, sortBy]);
+  }, [isOpen, minPrice, maxPrice, inStock, sortBy, searchValue, categoryId, vendorId]);
 
   // Lock background scrolling when drawer is open
   useEffect(() => {
@@ -91,6 +119,19 @@ export function CategoryFilterDrawer({
 
   if (!isOpen) return null;
 
+  const categorySearch = draftCategorySearch.trim().toLocaleLowerCase();
+  const matchingCategories = categoryOptions.filter((category) =>
+    category.name.toLocaleLowerCase().includes(categorySearch),
+  );
+  const visibleCategories = (categorySearch ? matchingCategories : categoryOptions).slice(0, 6);
+  const vendorSearch = draftVendorSearch.trim().toLocaleLowerCase();
+  const matchingVendors = vendorOptions.filter((vendor) =>
+    vendor.storeName.toLocaleLowerCase().includes(vendorSearch),
+  );
+  const visibleVendors = (vendorSearch ? matchingVendors : vendorOptions).slice(0, 5);
+  const selectedCategory = categoryOptions.find((category) => category.id === draftCategoryId);
+  const selectedVendor = vendorOptions.find((vendor) => vendor.id === draftVendorId);
+
   const handleApply = () => {
     // Normalise min & max if min > max
     let normalizedMin = draftMinPrice.trim();
@@ -111,6 +152,9 @@ export function CategoryFilterDrawer({
     onMaxPriceChange(normalizedMax);
     onInStockChange(draftInStock);
     onSortByChange(draftSortBy);
+    onSearchChange?.(draftSearch.trim());
+    onCategoryChange?.(draftCategoryId);
+    onVendorChange?.(draftVendorId);
     onClose();
   };
 
@@ -119,6 +163,11 @@ export function CategoryFilterDrawer({
     setDraftMaxPrice("");
     setDraftInStock(false);
     setDraftSortBy("newest");
+    setDraftSearch("");
+    setDraftCategorySearch("");
+    setDraftVendorSearch("");
+    setDraftCategoryId("");
+    setDraftVendorId("");
     onReset();
     onClose();
   };
@@ -136,7 +185,10 @@ export function CategoryFilterDrawer({
     draftMinPrice ||
       draftMaxPrice ||
       draftInStock ||
-      (draftSortBy && draftSortBy !== "newest")
+      (showSort && draftSortBy && draftSortBy !== "newest") ||
+      draftSearch.trim() ||
+      draftCategoryId ||
+      draftVendorId
   );
 
   return (
@@ -177,8 +229,114 @@ export function CategoryFilterDrawer({
 
         {/* Drawer Body */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-7 [scrollbar-width:thin]">
+          {onSearchChange && (
+            <div className="space-y-3">
+              <label htmlFor="filter-category-products" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <Search className="h-3.5 w-3.5" /> Search products
+              </label>
+              <Input
+                id="filter-category-products"
+                name="categoryProductSearch"
+                type="search"
+                value={draftSearch}
+                onChange={(event) => setDraftSearch(event.target.value)}
+                placeholder="Search in this category"
+                className="h-10 rounded-xl border-border bg-background text-sm"
+              />
+            </div>
+          )}
+
+          {(categoryOptions.length > 0 || draftCategoryId) && onCategoryChange && (
+            <div className="space-y-3">
+              <label htmlFor="filter-category-search" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <Tag className="h-3.5 w-3.5" /> Find a category
+              </label>
+              <div className="relative">
+                <input
+                  id="filter-category-search"
+                  type="search"
+                  value={draftCategorySearch}
+                  onChange={(event) => setDraftCategorySearch(event.target.value)}
+                  placeholder="Type a category name"
+                  autoComplete="off"
+                  className="h-10 w-full rounded-none border-0 border-b border-border bg-transparent px-0 pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-0"
+                />
+                <Search className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              </div>
+              {selectedCategory && (
+                <button type="button" onClick={() => setDraftCategoryId("")} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+                  {selectedCategory.name}<X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+              {draftCategoryId && !selectedCategory && (
+                <button type="button" onClick={() => setDraftCategoryId("")} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+                  Selected category<X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+              <div className="flex flex-wrap gap-2" aria-label="Suggested categories">
+                {visibleCategories.map((category) => {
+                  const isSelected = draftCategoryId === category.id;
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setDraftCategoryId(isSelected ? "" : category.id)}
+                      className={`max-w-full truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary/60"}`}
+                    >
+                      {category.name}
+                    </button>
+                  );
+                })}
+                {visibleCategories.length === 0 && <p className="text-xs text-muted-foreground">No matching categories.</p>}
+              </div>
+            </div>
+          )}
+
+          {(vendorOptions.length > 0 || draftVendorId) && onVendorChange && (
+            <div className="space-y-3">
+              <label htmlFor="filter-vendor-search" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <Store className="h-3.5 w-3.5" /> Find a store
+              </label>
+              <div className="relative">
+                <input
+                  id="filter-vendor-search"
+                  type="search"
+                  value={draftVendorSearch}
+                  onChange={(event) => setDraftVendorSearch(event.target.value)}
+                  placeholder="Type a store name"
+                  autoComplete="off"
+                  className="h-10 w-full rounded-none border-0 border-b border-border bg-transparent px-0 pr-8 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-0"
+                />
+                <Search className="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              </div>
+              {draftVendorId && (
+                <button type="button" onClick={() => setDraftVendorId("")} className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+                  {selectedVendor?.storeName ?? "Selected store"}<X className="h-3 w-3" aria-hidden="true" />
+                </button>
+              )}
+              <div className="flex flex-wrap gap-2" aria-label="Suggested stores">
+                {visibleVendors.map((vendor) => {
+                  const isSelected = draftVendorId === vendor.id;
+                  return (
+                    <button
+                      key={vendor.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setDraftVendorId(isSelected ? "" : vendor.id)}
+                      className={`max-w-full truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:border-primary/50 hover:bg-secondary/60"}`}
+                    >
+                      {vendor.storeName}
+                    </button>
+                  );
+                })}
+                {visibleVendors.length === 0 && <p className="text-xs text-muted-foreground">No matching stores.</p>}
+              </div>
+            </div>
+          )}
+
           {/* Sort By Section */}
-          <div>
+          {showSort && <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Sort Order
@@ -216,7 +374,7 @@ export function CategoryFilterDrawer({
                 );
               })}
             </div>
-          </div>
+          </div>}
 
           {/* Price Range Section */}
           <div>

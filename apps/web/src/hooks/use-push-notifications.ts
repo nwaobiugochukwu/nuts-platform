@@ -34,12 +34,7 @@ export function usePushNotifications() {
       "Notification" in window
     );
   });
-  const [isSubscribed, setIsSubscribed] = useState(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      return Notification.permission === "granted";
-    }
-    return false;
-  });
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>(() => {
     if (typeof window === "undefined" || !("Notification" in window)) {
       return "default";
@@ -49,23 +44,51 @@ export function usePushNotifications() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!isSupported) return;
-
     let mounted = true;
+    if (!isSupported || !isAuthenticated) {
+      queueMicrotask(() => {
+        if (mounted) setIsSubscribed(false);
+      });
+      return () => {
+        mounted = false;
+      };
+    }
 
-    navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((subscription) => {
-        if (mounted) {
-          setIsSubscribed(subscription !== null || Notification.permission === "granted");
+    const syncDeviceState = async () => {
+      try {
+        const currentPermission = Notification.permission;
+        setPermission(currentPermission);
+        if (currentPermission !== "granted") {
+          setIsSubscribed(false);
+          return;
         }
-      })
-      .catch(() => undefined);
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const subscription = await registration?.pushManager.getSubscription();
+        if (!mounted || !subscription) {
+          if (mounted) setIsSubscribed(false);
+          return;
+        }
+        const api = notificationsApiForRole(activeRole);
+        const status = await api.getPushStatus(subscription.endpoint);
+        if (mounted) {
+          setIsSubscribed(Boolean(status.data.registered && status.data.pushEnabled));
+        }
+      } catch {
+        if (mounted) setIsSubscribed(false);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+    queueMicrotask(() => {
+      if (!mounted) return;
+      setIsLoading(true);
+      void syncDeviceState();
+    });
 
     return () => {
       mounted = false;
     };
-  }, [isSupported, isAuthenticated]);
+  }, [isSupported, isAuthenticated, activeRole, user?.id]);
 
   const subscribe = useCallback(async () => {
     if (!isSupported || !isAuthenticated) return false;
@@ -81,65 +104,36 @@ export function usePushNotifications() {
       }
 
       // Try background WebPush via Service Worker and PushManager
-      let registeredPush = false;
-      try {
-        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-        const readyReg = await navigator.serviceWorker.ready;
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      const readyReg = await navigator.serviceWorker.ready;
+      const api = notificationsApiForRole(activeRole);
+      const vapidRes = await api.getVapidKey();
+      const publicKey = vapidRes.data?.publicKey;
+      if (!publicKey) throw new Error("Push notifications are not configured on the server");
 
-        const api = notificationsApiForRole(activeRole);
-        const vapidRes = await api.getVapidKey();
-        const publicKey = vapidRes.data?.publicKey;
-
-        if (publicKey) {
-          const existingSub = await readyReg.pushManager.getSubscription();
-          if (existingSub) {
-            try {
-              await existingSub.unsubscribe();
-            } catch {
-              // ignore
-            }
-          }
-
-          const applicationServerKey = urlBase64ToUint8Array(publicKey) as unknown as BufferSource;
-          const subscription = await readyReg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey,
-          });
-
-          const p256dh = subscription.getKey("p256dh");
-          const auth = subscription.getKey("auth");
-
-          if (p256dh && auth) {
-            const p256dhBase64 = btoa(
-              String.fromCharCode(...new Uint8Array(p256dh)),
-            );
-            const authBase64 = btoa(String.fromCharCode(...new Uint8Array(auth)));
-
-            await api.subscribePush({
-              endpoint: subscription.endpoint,
-              keys: {
-                p256dh: p256dhBase64,
-                auth: authBase64,
-              },
-              userAgent: navigator.userAgent,
-            });
-            registeredPush = true;
-          }
-        }
-      } catch (pushErr) {
-        // Push service (e.g. FCM in Brave/VPN) unreachable, seamlessly fall back to browser desktop alerts
-        console.info(
-          "PushManager gateway unreachable on this network/browser; falling back to native desktop notifications.",
-          pushErr,
-        );
+      let subscription = await readyReg.pushManager.getSubscription();
+      if (!subscription) {
+        const applicationServerKey = urlBase64ToUint8Array(publicKey) as unknown as BufferSource;
+        subscription = await readyReg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
       }
 
+      const p256dh = subscription.getKey("p256dh");
+      const auth = subscription.getKey("auth");
+      if (!p256dh || !auth) throw new Error("The browser returned an invalid push subscription");
+      await api.subscribePush({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+          auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+        },
+        userAgent: navigator.userAgent,
+      });
+      await api.updatePreferences({ pushEnabled: true });
       setIsSubscribed(true);
-      toast.success(
-        registeredPush
-          ? "Push notifications enabled on this device"
-          : "Desktop notifications enabled for this device",
-      );
+      toast.success("Push notifications enabled on this device");
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to enable notifications";
@@ -155,15 +149,15 @@ export function usePushNotifications() {
 
     setIsLoading(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const registration = await navigator.serviceWorker.getRegistration("/");
+      const subscription = await registration?.pushManager.getSubscription();
 
+      const api = notificationsApiForRole(activeRole);
+      await api.updatePreferences({ pushEnabled: false });
       if (subscription) {
-        await subscription.unsubscribe();
-        const api = notificationsApiForRole(activeRole);
         await api.unsubscribePush(subscription.endpoint);
+        await subscription.unsubscribe();
       }
-
       setIsSubscribed(false);
       toast.success("Notifications disabled on this device");
       return true;
@@ -177,36 +171,17 @@ export function usePushNotifications() {
   }, [isSupported, isAuthenticated, activeRole]);
 
   const sendTestPush = useCallback(async () => {
-    if (!isAuthenticated) return false;
+    if (!isAuthenticated || !isSubscribed) return false;
 
     setIsLoading(true);
     try {
-      // 1. Instant native browser desktop alert
-      if (
-        typeof window !== "undefined" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        try {
-          new Notification("NUTS Notification", {
-            body: "Test Alert: Desktop notifications are active and working smoothly!",
-            icon: "/favicon.svg",
-            tag: "nuts-test-alert",
-          });
-        } catch {
-          // ignore
-        }
+      const api = notificationsApiForRole(activeRole);
+      const result = await api.sendTestPush();
+      if ((result.data?.delivered ?? 0) < 1) {
+        toast.error("No active push device received the test notification");
+        return false;
       }
-
-      // 2. Dispatch backend test push
-      try {
-        const api = notificationsApiForRole(activeRole);
-        await api.sendTestPush();
-      } catch {
-        // If device has no remote FCM token, desktop notification was already shown
-      }
-
-      toast.success("Test notification delivered!");
+      toast.success("Test notification sent to your active device");
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to send test alert";
@@ -215,7 +190,7 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, activeRole]);
+  }, [isAuthenticated, isSubscribed, activeRole]);
 
   return {
     isSupported,

@@ -1,7 +1,12 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import Redis from 'ioredis';
 import { createHash } from 'node:crypto';
-import { SECURITY } from '@api/modules/shared/constants';
+import { SECURITY } from '@api/common/constants';
 
 @Injectable()
 export class AccountLockService {
@@ -38,7 +43,7 @@ export class AccountLockService {
       this.logger.warn(
         `Failed to record failed login attempt in Redis: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return 0;
+      return SECURITY.LOCKOUT_DURATION_MINUTES * 60;
     }
   }
 
@@ -54,7 +59,9 @@ export class AccountLockService {
       this.logger.warn(
         `Failed to check account lock in Redis: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return false;
+      throw new ServiceUnavailableException(
+        'Login protection is temporarily unavailable. Please try again shortly.',
+      );
     }
   }
 
@@ -70,7 +77,7 @@ export class AccountLockService {
       this.logger.warn(
         `Failed to get lockout time remaining: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return 0;
+      return SECURITY.LOCKOUT_DURATION_MINUTES * 60;
     }
   }
 

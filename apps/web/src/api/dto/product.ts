@@ -49,6 +49,8 @@ export interface ProductCardDto {
   discountPrice: number | null;
   thumbnail: string | null;
   stockStatus: string;
+  hasVariants?: boolean;
+  recommendationReason?: string;
   vendor: AdminVendorRefDto;
   category?: CategoryRefDto | null;
   categoryId?: string | null;

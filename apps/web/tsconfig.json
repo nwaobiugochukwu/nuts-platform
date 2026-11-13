@@ -17,8 +17,7 @@
       "@/components/ui/*": ["./src/components/ui/*"],
       "@/components/*": ["./src/components/*", "./src/components/domain/*"],
       "@/component/*": ["./src/components/domain/*", "./src/components/*"],
-      "@/hooks/*": ["./src/hooks/*", "./src/hook/*"],
-      "@/hook/*": ["./src/hook/*", "./src/hooks/*"],
+      "@/hooks/*": ["./src/hooks/*"],
       "@/api/modules/*": ["./src/api/modules/*"],
       "@/api/*": ["./src/api/*", "./src/api/modules/*"]
     }

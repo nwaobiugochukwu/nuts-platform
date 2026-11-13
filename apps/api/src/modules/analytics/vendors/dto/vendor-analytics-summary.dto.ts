@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
+import { MarketplaceAnalyticsSummaryDto } from '../../dto/marketplace-analytics.dto';
 
 export class VendorAnalyticsOrderStatusCountDto {
   @ApiProperty({
@@ -80,21 +81,21 @@ export class VendorTopProductDto {
 export class VendorCustomerSummaryDto {
   @ApiProperty({
     description:
-      'Total number of unique buyers who have purchased from the store',
+      'Number of distinct buyers with a successful payment for this store',
     example: 89,
   })
   totalBuyers!: number;
 
   @ApiProperty({
     description:
-      'Number of buyers who have made more than one purchase (repeat customers)',
+      'Number of buyers with more than one non-cancelled, successfully paid order',
     example: 34,
   })
   repeatBuyers!: number;
 
   @ApiProperty({
     description:
-      'Average order value across all orders (represented as a decimal string)',
+      'Gross paid revenue divided by distinct paid orders, before refunds (decimal string)',
     example: '45.99',
   })
   averageOrderValue!: string;
@@ -152,14 +153,14 @@ export class VendorAnalyticsSummaryDto {
 
   @ApiProperty({
     description:
-      'Total revenue generated across all orders (represented as a decimal string)',
+      'Gross product-line value from successful, refund-pending, or refunded payments, before refunds (decimal string)',
     example: '15250.75',
   })
   totalRevenue!: string;
 
   @ApiProperty({
     description:
-      'Revenue generated within the selected analytics period (represented as a decimal string)',
+      'Gross paid product-line value for orders created in the selected period, before refunds (decimal string)',
     example: '1250.50',
   })
   revenueInPeriod!: string;
@@ -203,7 +204,7 @@ export class VendorAnalyticsSummaryDto {
 
   // ── Frontend-expected aliases ──
   @ApiProperty({
-    description: 'Total revenue (alias for totalRevenue)',
+    description: 'Gross paid revenue before refunds (alias for totalRevenue)',
     example: '15250.75',
   })
   revenue!: string;
@@ -215,7 +216,7 @@ export class VendorAnalyticsSummaryDto {
   orderCount!: number;
 
   @ApiProperty({
-    description: 'Total units sold across all order items',
+    description: 'Units in non-cancelled orders with a successful payment',
     example: 1200,
   })
   productsSold!: number;
@@ -244,4 +245,7 @@ export class VendorAnalyticsSummaryDto {
     example: 12.5,
   })
   conversionRate!: number;
+
+  @ApiProperty({ type: MarketplaceAnalyticsSummaryDto })
+  engagement!: MarketplaceAnalyticsSummaryDto;
 }

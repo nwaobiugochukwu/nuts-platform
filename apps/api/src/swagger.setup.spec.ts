@@ -143,7 +143,7 @@ describe('setupSwagger', () => {
     );
   });
 
-  it('initializes Swagger when Render service or external hostname contains staging even if NODE_ENV is production', () => {
+  it('keeps Swagger disabled when only a staging-like hostname is configured in production', () => {
     mockConfig = {
       get: jest.fn((key: string, defaultValue?: unknown) => {
         if (key === 'NODE_ENV') return 'production';
@@ -157,15 +157,11 @@ describe('setupSwagger', () => {
 
     setupSwagger(mockApp as INestApplication, mockConfig as ConfigService);
 
-    expect(SwaggerModule.setup).toHaveBeenCalledWith(
-      'api/docs',
-      mockApp,
-      expect.any(Object),
-      expect.any(Object),
-    );
+    expect(SwaggerModule.setup).not.toHaveBeenCalled();
+    expect(SwaggerModule.createDocument).not.toHaveBeenCalled();
   });
 
-  it('initializes Swagger when SWAGGER_ENABLED=true even if NODE_ENV is production', () => {
+  it('keeps Swagger disabled when SWAGGER_ENABLED=true in production', () => {
     mockConfig = {
       get: jest.fn((key: string, defaultValue?: unknown) => {
         if (key === 'NODE_ENV') return 'production';
@@ -177,12 +173,8 @@ describe('setupSwagger', () => {
 
     setupSwagger(mockApp as INestApplication, mockConfig as ConfigService);
 
-    expect(SwaggerModule.setup).toHaveBeenCalledWith(
-      'api/docs',
-      mockApp,
-      expect.any(Object),
-      expect.any(Object),
-    );
+    expect(SwaggerModule.setup).not.toHaveBeenCalled();
+    expect(SwaggerModule.createDocument).not.toHaveBeenCalled();
   });
 
   it('MUST NOT initialize Swagger if APP_ENV is explicitly production (Zero-Trust Security Gate override)', () => {

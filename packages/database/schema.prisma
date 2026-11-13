@@ -17,6 +17,21 @@ enum ROLE {
   VENDOR
 }
 
+enum AnnouncementAudience {
+  CUSTOMERS
+  ADMINISTRATORS
+  VENDORS
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+  ARCHIVED
+}
+
 enum CategoryStatus {
   ACTIVE
   INACTIVE
@@ -30,6 +45,7 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+  REFUND_PENDING
   REFUNDED
 }
 
@@ -37,7 +53,17 @@ enum PaymentStatus {
   PENDING
   SUCCESS
   FAILED
+  REFUND_PENDING
   REFUNDED
+}
+
+enum PaymentRefundStatus {
+  REQUESTED
+  PENDING
+  PROCESSING
+  NEEDS_ATTENTION
+  FAILED
+  PROCESSED
 }
 
 enum DiscountCodeType {
@@ -81,6 +107,7 @@ model Admin {
 
   auditLogs          AuditLog[]
   orderStatusChanges OrderStatusHistory[]
+  announcements      Announcement[]
 
   @@index([isActive])
   @@map("admins")
@@ -89,7 +116,10 @@ model Admin {
 model User {
   id                         String    @id @default(uuid())
   email                      String    @unique
-  password                   String
+  password                   String?
+  googleId                   String?   @unique
+  authProvider               String    @default("LOCAL")
+  avatarUrl                  String?
   role                       ROLE      @default(USER)
   refreshToken               String?
   refreshTokenId             String?
@@ -115,6 +145,9 @@ model User {
   orders                 Order[]
   payments               Payment[]
   productViews           ProductView[]
+  recentProductViews     RecentProductView[]
+  recommendationEvents   RecommendationEvent[]
+  followedVendors         VendorFollow[]
   referralCode           ReferralCode?
   referralReceived       Referral?               @relation("ReferredUserRelation")
   referralsGiven         Referral[]              @relation("ReferrerRelation")
@@ -149,10 +182,30 @@ model UserAuthSession {
   @@map("user_auth_sessions")
 }
 
+/// Short-lived encrypted response used to make refresh-token rotation retries idempotent.
+/// Refresh IDs are stored only as keyed hashes, and receipts expire after the replay window.
+model RefreshRotationReceipt {
+  id                       String   @id @default(uuid())
+  role                     ROLE
+  subjectId                String   @map("subject_id")
+  sessionId                String?  @map("session_id")
+  previousRefreshIdHash    String   @map("previous_refresh_id_hash")
+  encryptedResponse        String   @db.Text @map("encrypted_response")
+  expiresAt                DateTime @map("expires_at")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  @@unique([role, subjectId, previousRefreshIdHash], map: "refresh_rotation_receipts_replay_key")
+  @@index([expiresAt], map: "refresh_rotation_receipts_expires_at_idx")
+  @@map("refresh_rotation_receipts")
+}
+
 model Vendor {
   id                String    @id @default(uuid())
   email             String    @unique
-  password          String
+  password          String?
+  googleId          String?   @unique
+  authProvider      String    @default("LOCAL")
+  avatarUrl         String?
   storeName         String
   storeSlug         String    @unique
   storeDescription  String
@@ -179,6 +232,8 @@ model Vendor {
   orderItems         OrderItem[]          @relation("VendorOrderItems")
   orderStatusChanges OrderStatusHistory[]
   products           Product[]
+  follows            VendorFollow[]
+  recommendationEvents RecommendationEvent[]
 
   @@index([isActive])
   @@index([isApproved])
@@ -207,6 +262,7 @@ model Category {
   parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id], onDelete: Restrict)
   children Category[] @relation("CategoryChildren")
   products Product[]
+  recommendationEvents RecommendationEvent[]
 
   @@index([name])
   @@index([parentId])
@@ -241,6 +297,8 @@ model Product {
   images        ProductImage[]
   variants      ProductVariant[]
   productViews  ProductView[]
+  recentProductViews RecentProductView[]
+  recommendationEvents RecommendationEvent[]
   category      Category         @relation(fields: [categoryId], references: [id])
   vendor        Vendor           @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   reviews       Review[]
@@ -341,6 +399,7 @@ model CartItem {
   cartId     String
   productId  String
   variantId  String?
+  recommendationContext Json?
 
   cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
   product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -403,6 +462,7 @@ model OrderItem {
   productId       String
   vendorId        String
   variantId       String?
+  recommendationContext Json?
 
   vendor  Vendor          @relation("VendorOrderItems", fields: [vendorId], references: [id], onDelete: Cascade)
   order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -453,12 +513,38 @@ model Payment {
   userId               String
   orderId              String        @unique
 
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refunds PaymentRefund[]
 
   @@index([userId, status])
   @@index([status, createdAt])
   @@map("payments")
+}
+
+model PaymentRefund {
+  id                 String              @id @default(uuid())
+  paymentId          String
+  amount             Decimal             @db.Decimal(10, 2)
+  status             PaymentRefundStatus @default(REQUESTED)
+  providerReference  String              @unique @db.VarChar(64)
+  providerRefundId   String?             @unique
+  providerStatus     String?
+  requestedByAdminId String
+  previousOrderStatus OrderStatus
+  attempts           Int                 @default(0)
+  lastError          String?             @db.VarChar(1000)
+  lastCheckedAt      DateTime?
+  processedAt        DateTime?
+  failedAt           DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+  @@index([status, updatedAt])
+  @@map("payment_refunds")
 }
 
 model DiscountCode {
@@ -706,6 +792,9 @@ model Review {
 model WishlistItem {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
+  lastObservedPrice Decimal? @db.Decimal(10, 2)
+  lastObservedStock Int?
+  lastObservedAt DateTime @default(now())
   userId    String
   productId String
   variantId String?
@@ -815,6 +904,7 @@ model ProductView {
   id        String   @id @default(uuid())
   productId String
   userId    String?
+  visitorId String?  @map("visitor_id")
   sessionId String?
   createdAt DateTime @default(now())
 
@@ -823,9 +913,28 @@ model ProductView {
 
   @@index([productId, createdAt])
   @@index([userId, createdAt])
+  @@index([visitorId, createdAt], map: "product_views_visitor_id_created_at_idx")
   @@index([sessionId, createdAt])
   @@index([createdAt])
   @@map("product_views")
+}
+
+model RecentProductView {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  visitorId    String?  @map("visitor_id")
+  productId    String   @map("product_id")
+  lastViewedAt DateTime @default(now()) @map("last_viewed_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId], map: "recent_product_views_user_product_key")
+  @@unique([visitorId, productId], map: "recent_product_views_visitor_product_key")
+  @@index([userId, lastViewedAt])
+  @@index([visitorId, lastViewedAt])
+  @@map("recent_product_views")
 }
 
 model SearchQuery {
@@ -840,8 +949,84 @@ model SearchQuery {
 
   @@index([query])
   @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
   @@index([createdAt])
   @@map("search_queries")
+}
+
+model RecommendationEvent {
+  id            String   @id @default(uuid())
+  eventType     String   @map("event_type")
+  surface       String
+  requestId     String?  @map("request_id")
+  rankerVersion String?  @map("ranker_version")
+  position      Int?
+  productId     String?  @map("product_id")
+  vendorId      String?  @map("vendor_id")
+  categoryId    String?  @map("category_id")
+  userId        String?  @map("user_id")
+  sessionId     String?  @map("session_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  metadata      Json?
+
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  vendor  Vendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, eventType, createdAt])
+  @@index([sessionId, eventType, createdAt])
+  @@index([userId, eventType, surface, createdAt])
+  @@index([sessionId, eventType, surface, createdAt])
+  @@index([productId, eventType, createdAt])
+  @@index([vendorId, eventType, createdAt])
+  @@index([categoryId, eventType, createdAt])
+  @@index([requestId, eventType])
+  @@index([createdAt])
+  @@map("recommendation_events")
+}
+
+/// Operational storefront actions used to build product and store conversion funnels.
+/// Shopper identity is pseudonymous; this table intentionally does not retain names or email addresses.
+model MarketplaceEvent {
+  id        String   @id @default(uuid())
+  eventType String   @map("event_type")
+  vendorId  String?  @map("vendor_id")
+  productId String?  @map("product_id")
+  variantId String?  @map("variant_id")
+  categoryId String? @map("category_id")
+  userId    String?  @map("user_id")
+  visitorId String?  @map("visitor_id")
+  sessionId String?  @map("session_id")
+  cartId    String?  @map("cart_id")
+  quantity  Int?
+  surface   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Deliberately no cascading foreign keys: analytics history survives catalog deletion.
+  @@index([vendorId, eventType, createdAt])
+  @@index([productId, eventType, createdAt])
+  @@index([cartId, productId, eventType])
+  @@index([userId, eventType, createdAt])
+  @@index([visitorId, eventType, createdAt])
+  @@index([sessionId, eventType, createdAt])
+  @@index([createdAt])
+  @@map("marketplace_events")
+}
+
+model VendorFollow {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  vendorId  String   @map("vendor_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vendorId])
+  @@index([userId, createdAt])
+  @@index([vendorId, createdAt])
+  @@map("vendor_follows")
 }
 
 // -----------------------------------------------------------------------------
@@ -856,8 +1041,12 @@ enum NotificationType {
   ORDER_CANCELLED
   PAYMENT_RECEIVED
   PAYMENT_FAILED
+  PAYMENT_REFUNDED
   PAYOUT_PROCESSED
   LOW_STOCK_ALERT
+  PRICE_DROP
+  RESTOCKED
+  VENDOR_FOLLOWED
   SYSTEM_ANNOUNCEMENT
 }
 
@@ -866,6 +1055,32 @@ enum NotificationPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+model Announcement {
+  id                 String               @id @default(uuid())
+  title              String               @db.VarChar(120)
+  message            String               @db.VarChar(2000)
+  audience           AnnouncementAudience
+  priority           NotificationPriority @default(MEDIUM)
+  link               String?              @db.VarChar(500)
+  status             AnnouncementStatus   @default(DRAFT)
+  scheduledAt        DateTime?            @map("scheduled_at")
+  processingAt       DateTime?            @map("processing_at")
+  publishedAt        DateTime?            @map("published_at")
+  recipientCount     Int                  @default(0) @map("recipient_count")
+  lastError          String?              @db.VarChar(1000) @map("last_error")
+  createdByAdminId   String?              @map("created_by_admin_id")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  createdByAdmin Admin? @relation(fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@index([status, processingAt])
+  @@index([audience, createdAt])
+  @@index([createdByAdminId, createdAt])
+  @@map("admin_announcements")
 }
 
 model Notification {
@@ -919,6 +1134,7 @@ model NotificationPreference {
   orderUpdates    Boolean  @default(true)
   paymentAlerts   Boolean  @default(true)
   inventoryAlerts Boolean  @default(true)
+  socialUpdates   Boolean  @default(true)
   marketingPromos Boolean  @default(false)
 
   createdAt       DateTime @default(now())

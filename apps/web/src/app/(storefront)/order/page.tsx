@@ -22,8 +22,13 @@ export default function OrderPage() {
     queryKey: queryKey.order.list({ page, limit: 10 }),
     queryFn: async () => await orderService.list({ page, limit: 10 }),
     refetchInterval: (query) => {
-      const orderList = query.state.data?.data;
-      return orderList?.some((o) => o.status === "PENDING") ? 4000 : false;
+      const orderList = query.state.data?.data ?? [];
+      const paymentWindowMs = 15 * 60 * 1000;
+      return orderList.some((order) => {
+        const placedAt = new Date(order.createdAt).getTime();
+        return order.status === "PENDING" && Number.isFinite(placedAt) &&
+          Date.now() - placedAt < paymentWindowMs;
+      }) ? 4000 : false;
     },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,

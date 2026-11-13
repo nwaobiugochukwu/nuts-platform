@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/wait-for-api.mjs",
     "dev": "cross-env NODE_ENV=development next dev -p 5173",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "cross-env NODE_ENV=production NODE_OPTIONS=\"--max-old-space-size=384\" next start -p 5173",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

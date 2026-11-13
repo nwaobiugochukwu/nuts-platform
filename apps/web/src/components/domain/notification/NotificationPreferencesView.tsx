@@ -22,6 +22,7 @@ import {
   Smartphone,
   Sparkles,
   Tag,
+  Users,
 } from "lucide-react";
 
 interface SwitchToggleProps {
@@ -60,7 +61,7 @@ export function SwitchToggle({ id, checked, onChange, disabled }: SwitchTogglePr
 export function NotificationPreferencesContent() {
   const role = useAuthStore((s) => s.role);
   const isMerchant = role === "vendor" || role === "admin";
-  const { preferences, isLoading, isUpdating, updatePreferences } =
+  const { preferences, isLoading, isUpdating, updatePreferences, fetchPreferences } =
     useNotificationPreferences();
   const {
     isSupported: isPushSupported,
@@ -89,6 +90,7 @@ export function NotificationPreferencesContent() {
     orderUpdates: true,
     paymentAlerts: true,
     inventoryAlerts: true,
+    socialUpdates: true,
     marketingPromos: false,
   };
 
@@ -202,19 +204,15 @@ export function NotificationPreferencesContent() {
               ) : (
                 <SwitchToggle
                   id="push-toggle"
-                  checked={Boolean(prefs.pushEnabled)}
+                  checked={isSubscribed && pushPermission === "granted"}
                   disabled={isUpdating || isPushLoading}
                   onChange={async (checked) => {
-                    updatePreferences({ pushEnabled: checked });
                     if (checked) {
-                      if (isPushSupported && !isSubscribed) {
-                        await subscribePush();
-                      }
+                      await subscribePush();
                     } else {
-                      if (isSubscribed) {
-                        await unsubscribePush();
-                      }
+                      await unsubscribePush();
                     }
+                    await fetchPreferences();
                   }}
                 />
               )}
@@ -228,6 +226,15 @@ export function NotificationPreferencesContent() {
             <p>
               Push notifications are blocked in your browser settings. To enable them, click the lock/settings icon in your browser address bar and set Notifications to &quot;Allow&quot;.
             </p>
+          </div>
+        )}
+
+        {isPushSupported && prefs.pushEnabled && pushPermission === "granted" && !isSubscribed && (
+          <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <p>This browser has permission, but its push subscription is inactive. Reconnect this device to receive alerts.</p>
+            <Button type="button" size="sm" variant="outline" disabled={isPushLoading} onClick={async () => { await subscribePush(); await fetchPreferences(); }}>
+              Reconnect device
+            </Button>
           </div>
         )}
       </section>
@@ -263,6 +270,33 @@ export function NotificationPreferencesContent() {
               onChange={(val) => updatePreferences({ orderUpdates: val })}
             />
           </div>
+
+          {role === "vendor" && (
+            <div className="flex items-center justify-between p-4 sm:p-5">
+              <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mt-0.5">
+                  <Users className="h-4 w-4" />
+                </div>
+                <div className="space-y-0.5">
+                  <label
+                    htmlFor="social-toggle"
+                    className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  >
+                    Social Activity
+                  </label>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground">
+                    Get notified when someone follows your store.
+                  </p>
+                </div>
+              </div>
+              <SwitchToggle
+                id="social-toggle"
+                checked={prefs.socialUpdates}
+                disabled={isUpdating}
+                onChange={(val) => updatePreferences({ socialUpdates: val })}
+              />
+            </div>
+          )}
 
           {/* Payment & Payout Alerts */}
           <div className="flex items-center justify-between p-4 sm:p-5">
@@ -306,7 +340,7 @@ export function NotificationPreferencesContent() {
                   Inventory & Stock Alerts
                 </label>
                 <p className="text-[11px] sm:text-xs text-muted-foreground">
-                  Alerts when items in your saved wishlist restock or seller products drop below threshold.
+                  Alerts when saved items drop in price or come back in stock, plus seller stock warnings.
                 </p>
               </div>
             </div>

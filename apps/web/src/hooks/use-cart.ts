@@ -1,4 +1,5 @@
 import { cartService } from "@/api/cart";
+import type { RecommendationAttribution } from "@/api/modules/analytics";
 import type {
 CartItemResponseDto,
 CartResponseDto,
@@ -26,6 +27,7 @@ function matchesCartItem(
 export function useCart(initialData?: CartResponseDto | null) {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const isCustomerSession = isAuthenticated && canPurchase;
 
@@ -40,9 +42,20 @@ export function useCart(initialData?: CartResponseDto | null) {
     retry: 2,
   });
 
+  const invalidateForYou = useCallback(
+    () => queryClient.invalidateQueries({
+      queryKey: ["recommendations", "for-you", userId ?? null],
+      refetchType: "all",
+    }),
+    [queryClient, userId],
+  );
+
   const invalidateCart = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: queryKey.cart }),
-    [queryClient]
+    () => Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKey.cart }),
+      invalidateForYou(),
+    ]).then(() => undefined),
+    [invalidateForYou, queryClient]
   );
 
   const updateItem = useMutation({
@@ -103,6 +116,7 @@ export function useCart(initialData?: CartResponseDto | null) {
     },
     onSuccess: ({ data: cart }) => {
       queryClient.setQueryData(queryKey.cart, cart);
+      void invalidateForYou();
     },
   });
 
@@ -145,6 +159,7 @@ export function useCart(initialData?: CartResponseDto | null) {
     },
     onSuccess: ({ data: response }) => {
       queryClient.setQueryData(queryKey.cart, response.cart);
+      void invalidateForYou();
     },
   });
 
@@ -178,6 +193,7 @@ export function useCart(initialData?: CartResponseDto | null) {
     },
     onSuccess: ({ data: cart }) => {
       queryClient.setQueryData(queryKey.cart, cart);
+      void invalidateForYou();
     },
   });
 
@@ -186,6 +202,7 @@ export function useCart(initialData?: CartResponseDto | null) {
       productId,
       quantity,
       variantId,
+      recommendationContext,
     }: {
       productId: string;
       quantity?: number;
@@ -196,11 +213,13 @@ export function useCart(initialData?: CartResponseDto | null) {
       variantName?: string;
       addedFrom?: unknown;
       path?: string;
+      recommendationContext?: RecommendationAttribution;
     }) => {
       if (!isCustomerSession) return Promise.reject(new Error("Cart operations require a customer account."));
       return cartService.addItem(productId, {
         quantity: quantity ?? 1,
         ...(variantId ? { variantId } : {}),
+        ...(recommendationContext ? { recommendationContext } : {}),
       });
     },
     onMutate: async (variables) => {
@@ -315,6 +334,7 @@ export function useCart(initialData?: CartResponseDto | null) {
         cart: response.cart,
         cartItems,
       });
+      void invalidateForYou();
     },
   });
 

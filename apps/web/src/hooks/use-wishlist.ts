@@ -44,9 +44,17 @@ const mapServerItem = (item: WishlistResponseDto): WishlistViewItem => ({
 export function useWishlist(initialData?: WishlistResponseDto[]) {
   const queryClient = useQueryClient();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const isCustomerSession = isAuthenticated && canPurchase;
   const guestItems = useWishlistStore((state) => state.items);
+  const invalidateForYou = useCallback(
+    () => queryClient.invalidateQueries({
+      queryKey: ["recommendations", "for-you", userId ?? null],
+      refetchType: "all",
+    }),
+    [queryClient, userId],
+  );
 
   // Vendor and admin sessions browse the storefront as guests; wishlist
   // endpoints are customer-only.
@@ -128,6 +136,7 @@ export function useWishlist(initialData?: WishlistResponseDto[]) {
     },
     onSuccess: () => {
       toast.info("Removed from wishlist");
+      void invalidateForYou();
     },
     onError: (error, _variables, context) => {
       if (context?.previous) {
@@ -219,6 +228,7 @@ export function useWishlist(initialData?: WishlistResponseDto[]) {
     },
     onSuccess: (addedItem, variables, context) => {
       if (!isCustomerSession) return;
+      void invalidateForYou();
       if (context?.previous === undefined) {
         void queryClient.invalidateQueries({ queryKey: queryKey.wishlist });
         return;
@@ -248,7 +258,8 @@ export function useWishlist(initialData?: WishlistResponseDto[]) {
       )
     );
     queryClient.invalidateQueries({ queryKey: queryKey.wishlist });
-  }, [isCustomerSession, serverItems, queryClient]);
+    invalidateForYou();
+  }, [isCustomerSession, serverItems, queryClient, invalidateForYou]);
 
   return {
     items,

@@ -1,11 +1,11 @@
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { Prisma, ROLE } from '@prisma/client';
-import { EmailService } from '@api/modules/infrastructure/mail/email.service';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { EmailService } from '@api/infrastructure/mail/email.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/modules/shared/audit-log/audit-log.service';
+import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp/otp.service';
 import { RefreshSessionService } from './sessions/refresh-session.service';
@@ -19,6 +19,7 @@ describe('AuthService', () => {
   let mockReferralService: any;
   let mockAccountLockService: any;
   let mockRefreshSessionService: any;
+  let mockGoogleAuthService: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -38,33 +39,27 @@ describe('AuthService', () => {
         callback(mockPrisma),
       ),
     };
-
     mockOtpService = {
       verifyOtp: jest.fn().mockResolvedValue(true),
       consumeVerification: jest.fn().mockResolvedValue(false),
       verifyRegistrationOtp: jest.fn().mockResolvedValue(true),
       isOtpVerified: jest.fn().mockResolvedValue(false),
     };
-
     mockEmailService = {
       sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
     };
-
     mockAuditLog = {
       log: jest.fn().mockResolvedValue(undefined),
     };
-
     mockReferralService = {
       validateReferralCode: jest.fn(),
       createReferralCode: jest.fn().mockResolvedValue({ id: 'ref-code-1' }),
       applyReferralAtSignupById: jest.fn().mockResolvedValue(undefined),
     };
-
     mockAccountLockService = {
       recordFailedAttempt: jest.fn().mockResolvedValue(1),
       resetAttempts: jest.fn().mockResolvedValue(undefined),
     };
-
     mockRefreshSessionService = {
       revokeSession: jest.fn().mockResolvedValue(undefined),
       revokeUserSession: jest.fn().mockResolvedValue(undefined),
@@ -81,6 +76,9 @@ describe('AuthService', () => {
         user: { id: 'u-1', email: 'test@example.com' },
       }),
     };
+    mockGoogleAuthService = {
+      verifyIdToken: jest.fn(),
+    };
 
     service = new AuthService(
       mockPrisma,
@@ -90,6 +88,7 @@ describe('AuthService', () => {
       mockReferralService,
       mockAccountLockService,
       mockRefreshSessionService,
+      mockGoogleAuthService,
     );
   });
 
@@ -101,7 +100,6 @@ describe('AuthService', () => {
       lastName: 'Doe',
       otpCode: '123456',
     };
-
     it('creates user, wallet, and referral code in a single atomic transaction', async () => {
       const createdUser = {
         id: 'u-1',
@@ -111,7 +109,6 @@ describe('AuthService', () => {
         role: 'USER',
         isActive: true,
       };
-
       mockPrisma.user.create.mockResolvedValue(createdUser);
 
       const session = await service.register(registerDto);
@@ -277,6 +274,144 @@ describe('AuthService', () => {
       expect(
         mockRefreshSessionService.revokeAllUserSessions,
       ).toHaveBeenCalledWith('u-1');
+    });
+  });
+
+  describe('googleAuth', () => {
+    const googleDto = {
+      idToken: 'valid-google-id-token',
+    };
+
+    const googlePayload = {
+      googleId: 'google-sub-999',
+      email: 'jane.google@example.com',
+      firstName: 'Jane',
+      lastName: 'Google',
+      avatarUrl: 'https://lh3.googleusercontent.com/avatar.jpg',
+      emailVerified: true,
+    };
+
+    it('authenticates an existing user by googleId directly', async () => {
+      mockGoogleAuthService.verifyIdToken.mockResolvedValue(googlePayload);
+      const existingUser = {
+        id: 'user-google-1',
+        email: 'jane.google@example.com',
+        googleId: 'google-sub-999',
+        role: ROLE.USER,
+        isActive: true,
+      };
+      mockPrisma.user.findUnique.mockResolvedValue(existingUser);
+
+      const session = await service.googleAuth(
+        googleDto,
+        undefined,
+        undefined,
+        'login',
+      );
+
+      expect(mockGoogleAuthService.verifyIdToken).toHaveBeenCalledWith(
+        'valid-google-id-token',
+      );
+      expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+        where: { googleId: 'google-sub-999' },
+        select: expect.any(Object),
+      });
+      expect(mockRefreshSessionService.issueUserSession).toHaveBeenCalledWith(
+        existingUser,
+      );
+      expect(session).toHaveProperty('tokens');
+    });
+
+    it('links googleId to an existing email account if not yet linked', async () => {
+      mockGoogleAuthService.verifyIdToken.mockResolvedValue(googlePayload);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: 'user-local-1',
+          email: 'jane.google@example.com',
+          googleId: null,
+          authProvider: 'LOCAL',
+          role: ROLE.USER,
+          isActive: true,
+          avatarUrl: null,
+        });
+
+      const linkedUser = {
+        id: 'user-local-1',
+        email: 'jane.google@example.com',
+        googleId: 'google-sub-999',
+        authProvider: 'LOCAL',
+        role: ROLE.USER,
+        isActive: true,
+        avatarUrl: 'https://lh3.googleusercontent.com/avatar.jpg',
+      };
+      mockPrisma.user.update.mockResolvedValue(linkedUser);
+
+      const session = await service.googleAuth(
+        googleDto,
+        undefined,
+        undefined,
+        'login',
+      );
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-local-1' },
+        data: expect.objectContaining({
+          googleId: 'google-sub-999',
+          isEmailVerified: true,
+        }),
+        select: expect.any(Object),
+      });
+      expect(session).toHaveProperty('tokens');
+    });
+
+    it('creates a new user, wallet, and referral code if user does not exist', async () => {
+      mockGoogleAuthService.verifyIdToken.mockResolvedValue(googlePayload);
+      mockPrisma.user.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const newUser = {
+        id: 'new-user-1',
+        email: 'jane.google@example.com',
+        firstName: 'Jane',
+        lastName: 'Google',
+        googleId: 'google-sub-999',
+        authProvider: 'GOOGLE',
+        role: ROLE.USER,
+        isActive: true,
+      };
+      mockPrisma.user.create.mockResolvedValue(newUser);
+
+      const session = await service.googleAuth(
+        googleDto,
+        undefined,
+        undefined,
+        'signup',
+      );
+
+      expect(mockPrisma.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'jane.google@example.com',
+          googleId: 'google-sub-999',
+          authProvider: 'GOOGLE',
+          password: null,
+          isEmailVerified: true,
+        }),
+        select: expect.any(Object),
+      });
+      expect(mockPrisma.userWallet.create).toHaveBeenCalledWith({
+        data: { userId: 'new-user-1' },
+      });
+      expect(mockReferralService.createReferralCode).toHaveBeenCalledWith(
+        mockPrisma,
+        'new-user-1',
+      );
+      expect(mockEmailService.sendWelcomeEmail).toHaveBeenCalledWith(
+        'jane.google@example.com',
+        'Jane',
+      );
+      expect(session).toHaveProperty('tokens');
     });
   });
 });

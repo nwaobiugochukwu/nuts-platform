@@ -11,19 +11,9 @@ import type { IncomingMessage } from 'http';
  *   5. `'0.0.0.0'` as final fallback (never returns undefined)
  */
 export function extractIpAddress(request: IncomingMessage): string {
-  const forwardedFor = request.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string') {
-    const ip = forwardedFor.split(',')[0]?.trim();
-    if (ip) return ip;
-  } else if (Array.isArray(forwardedFor) && forwardedFor.length > 0) {
-    const ip = forwardedFor[0]?.split(',')[0]?.trim();
-    if (ip) return ip;
-  }
-
-  const realIp = request.headers['x-real-ip'];
-  if (typeof realIp === 'string' && realIp) return realIp;
-
-  const req = request as { ip?: string };
+  // Express computes req.ip only after trust-proxy has been configured. Reading
+  // forwarded headers directly lets clients spoof audit and lockout addresses.
+  const req = request as IncomingMessage & { ip?: string };
   if (req.ip) return req.ip;
 
   if (request.socket?.remoteAddress) return request.socket.remoteAddress;
@@ -37,7 +27,6 @@ export function extractIpAddress(request: IncomingMessage): string {
  */
 export function extractUserAgent(request: IncomingMessage): string {
   const ua = request.headers['user-agent'];
-  if (typeof ua === 'string') return ua;
-  if (Array.isArray(ua)) return ua[0] ?? '';
+  if (typeof ua === 'string') return ua.slice(0, 512);
   return '';
 }

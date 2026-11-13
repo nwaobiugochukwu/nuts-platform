@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { CategoryRefDto } from '@api/modules/shared/dto/category-ref.dto';
+﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { CategoryRefDto } from '@api/common/dto/category-ref.dto';
 
 export { CategoryRefDto as SearchProductCategoryDto };
 

@@ -2,6 +2,8 @@
 
 import { RemoteImage } from "@/component/ui/RemoteImage";
 import { publicVendorService } from "@/api";
+import { analyticsEventService } from "@/api/modules/analytics";
+import { isApiClientError } from "@/api/core/error";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PublicProductResponseDto } from "@/api/dto/product";
 import type { VendorStoreDto } from "@/api/dto/vendor";
@@ -22,9 +24,12 @@ Store,
 X,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useParams } from "next/navigation";
-import { useMemo,useRef,useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo,useRef,useState } from "react";
 import { toast } from "sonner";
+import { useVendorFollowing } from "@/hooks/use-vendor-following";
+import { useAuthStore } from "@/zustand/auth";
+import { getRecommendationSessionId, getRecommendationVisitorId } from "@/lib/recommendation-session";
 
 function getStoreInitials(name: string): string {
   if (!name) return "CR";
@@ -58,8 +63,12 @@ export function VendorStoreView({
   initialProducts,
   initialCategories,
 }: VendorStoreViewProps) {
+  const router = useRouter();
   const params = useParams();
   const slug = (params?.slug as string) || propSlug;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isCustomer = useAuthStore((state) => state.isAuthenticated && (state.capabilities?.canPurchase ?? false));
+  const { followedIds, isLoading: isLoadingFollows, isPending: isFollowPending, setFollowing } = useVendorFollowing();
 
   // State
   const [searchInput, setSearchInput] = useState("");
@@ -71,9 +80,17 @@ export function VendorStoreView({
   const [activeTab, setActiveTab] = useState<string>("");
 
   const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const trackedStoreViewRef = useRef("");
 
   // 1. Fetch Store Profile (hydrated with server store)
-  const { data: store, isLoading: storeLoading } = useQuery({
+  const {
+    data: store,
+    isLoading: storeLoading,
+    isError: storeRequestFailed,
+    error: storeError,
+    isFetching: storeFetching,
+    refetch: retryStore,
+  } = useQuery({
     queryKey: ["vendor-store", slug],
     queryFn: async () => {
       const { data } = await publicVendorService.getStore(slug);
@@ -100,6 +117,28 @@ export function VendorStoreView({
     staleTime: 1000 * 60 * 5,
     enabled: !!slug,
   });
+
+  const followerCountQuery = useQuery({
+    queryKey: ["vendor-follower-count", slug],
+    queryFn: async ({ signal }) => (await publicVendorService.followerCount(slug, signal)).data,
+    enabled: Boolean(slug),
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!store?.id || (isAuthenticated && !isCustomer)) return;
+    const sessionId = getRecommendationSessionId();
+    const visitorId = getRecommendationVisitorId();
+    if (!sessionId || !visitorId) return;
+    const trackingKey = `${store.id}:${sessionId}`;
+    if (trackedStoreViewRef.current === trackingKey) return;
+    trackedStoreViewRef.current = trackingKey;
+    void analyticsEventService
+      .trackStoreView(store.id, sessionId, visitorId, isAuthenticated && isCustomer)
+      .catch(() => {
+        if (trackedStoreViewRef.current === trackingKey) trackedStoreViewRef.current = "";
+      });
+  }, [isAuthenticated, isCustomer, store?.id]);
 
   // Categories delivered directly via RSC props
   const categoryTree = initialCategories;
@@ -297,6 +336,22 @@ export function VendorStoreView({
     }
   };
 
+  const handleFollowStore = async () => {
+    if (!store) return;
+    if (!isAuthenticated) {
+      router.push(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    if (!isCustomer) return;
+    const following = !followedIds.has(store.id);
+    try {
+      await setFollowing(store, following);
+      toast.success(following ? `Following ${store.storeName}` : `Unfollowed ${store.storeName}`);
+    } catch {
+      toast.error(`Could not ${following ? "follow" : "unfollow"} this store. Please try again.`);
+    }
+  };
+
   const scrollToCategory = (catSlug: string) => {
     setActiveTab(catSlug);
     const element = document.getElementById(`cat-${catSlug}`);
@@ -322,17 +377,34 @@ export function VendorStoreView({
   }
 
   if (!store) {
+    const status = isApiClientError(storeError)
+      ? storeError.response?.status
+      : undefined;
+    const requestUnavailable = storeRequestFailed && status !== 404;
+
     return (
       <CustomerLayout categories={categoryTree}>
         <div className="mx-auto max-w-7xl px-4 py-24 text-center sm:px-6 lg:px-8">
           <Store className="mx-auto h-12 w-12 text-muted-foreground/60" />
           <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
-            Store Not Found
+            {requestUnavailable ? "Store Temporarily Unavailable" : "Store Not Found"}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            The vendor store you are looking for does not exist or has been disabled.
+            {requestUnavailable
+              ? "We couldn't load this store right now. Check your connection and try again."
+              : "The vendor store you are looking for does not exist or has been disabled."}
           </p>
           <div className="mt-6 flex justify-center gap-3">
+            {requestUnavailable && (
+              <button
+                type="button"
+                onClick={() => void retryStore()}
+                disabled={storeFetching}
+                className="rounded-full bg-primary px-5 py-2 text-xs font-semibold text-primary-foreground transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {storeFetching ? "Retrying…" : "Try again"}
+              </button>
+            )}
             <Link
               href="/vendor"
               className="rounded-full bg-primary px-5 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs"
@@ -421,6 +493,27 @@ export function VendorStoreView({
                   {store.storeDescription}
                 </p>
               )}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <span className="rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  {followerCountQuery.isLoading ? "Loading followers…" : `${followerCountQuery.data?.count ?? 0} ${followerCountQuery.data?.count === 1 ? "follower" : "followers"}`}
+                </span>
+                {(isCustomer || !isAuthenticated) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleFollowStore()}
+                    disabled={isCustomer && (isLoadingFollows || isFollowPending(store.id))}
+                    className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-50"
+                  >
+                    {isCustomer && isLoadingFollows
+                      ? "Checking…"
+                      : isCustomer && isFollowPending(store.id)
+                        ? (followedIds.has(store.id) ? "Following…" : "Unfollowing…")
+                        : isCustomer && followedIds.has(store.id)
+                          ? "Following"
+                          : "Follow store"}
+                  </button>
+                )}
+              </div>
               {vendorMainCategories.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   {vendorMainCategories.map((cat) => (

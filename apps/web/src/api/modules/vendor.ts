@@ -1,10 +1,16 @@
-import { adminApi, publicApi, vendorApi } from "@/api/core/client";
+import { adminApi, publicApi, userApi, vendorApi } from "@/api/core/client";
+import type { ApiResult } from "@/api/core/client";
 import type { PublicProductResponseDto } from "@/api/dto/product";
 import type {
 AdminVendorResponseDto,
+FeaturedVendorDto,
+FollowedVendorDto,
+FollowedVendorsPageDto,
+FollowedVendorsMetaDto,
 VendorProfileDto,
 VendorResponseDto,
 VendorStoreDto,
+VendorFollowerCountDto,
 VendorWalletResponseDto,
 } from "@/api/dto/vendor";
 import type { WalletTransactionResponseDto } from "@/api/dto/vendor";
@@ -21,6 +27,56 @@ export const publicVendorService = {
     return publicApi.get<{ store: VendorStoreDto; products: PublicProductResponseDto[] }>(`/vendors/store/${slug}/products`, {
       params,
     });
+  },
+  featured(limit = 8, signal?: AbortSignal) {
+    return publicApi.get<FeaturedVendorDto[]>("/vendors/store/featured", { params: { limit }, signal });
+  },
+  followerCount(slug: string, signal?: AbortSignal) {
+    return publicApi.get<VendorFollowerCountDto>(`/vendors/store/${encodeURIComponent(slug)}/follower-count`, { signal });
+  },
+};
+
+export const vendorFollowingService = {
+  list(signal?: AbortSignal) {
+    return userApi.get<FollowedVendorDto[]>("/vendors/follows", { signal });
+  },
+  async manage(
+    params: { search?: string; page?: number; limit?: number },
+    signal?: AbortSignal,
+  ): Promise<ApiResult<FollowedVendorsPageDto, FollowedVendorsMetaDto>> {
+    const response = await userApi.get<
+      FollowedVendorDto[] | FollowedVendorsPageDto,
+      FollowedVendorsMetaDto
+    >("/vendors/follows/manage", { params, signal });
+    const data = Array.isArray(response.data) ? response.data : response.data.data;
+    const meta = Array.isArray(response.data) ? response.meta : response.data.meta;
+    const followingCount = meta?.followingCount ?? data.length;
+    const pageNumber = meta?.page ?? params.page ?? 1;
+    const limit = meta?.limit ?? params.limit ?? 20;
+    const matchingCount = meta?.matchingCount ?? followingCount;
+
+    return {
+      ...response,
+      data: {
+        data,
+        meta: {
+          followingCount,
+          matchingCount,
+          page: pageNumber,
+          limit,
+          totalPages: meta?.totalPages ?? Math.ceil(matchingCount / limit),
+        },
+      },
+    };
+  },
+  count(signal?: AbortSignal) {
+    return userApi.get<{ count: number }>("/vendors/follows/count", { signal });
+  },
+  follow(vendorId: string) {
+    return userApi.post<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/follows/${encodeURIComponent(vendorId)}`);
+  },
+  unfollow(vendorId: string) {
+    return userApi.delete<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/follows/${encodeURIComponent(vendorId)}`);
   },
 };
 

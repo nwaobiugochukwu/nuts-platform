@@ -1,4 +1,4 @@
 export * from './ProductGridSkeleton';
-export * from './GoingNutsSkeleton';
+export * from './TrendingSkeleton';
 export * from './NutsLoadingScreen';
 export * from './RouteProgressBar';

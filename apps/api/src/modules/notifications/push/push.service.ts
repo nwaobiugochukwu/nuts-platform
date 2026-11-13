@@ -1,9 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ROLE } from '@prisma/client';
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
-import { getErrorMessage } from '@api/modules/shared/utils/error-details.util';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { getErrorMessage } from '@api/common/utils/error-details.util';
 
 export interface PushNotificationPayload {
   title: string;

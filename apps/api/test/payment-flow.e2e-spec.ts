@@ -8,12 +8,12 @@ import { createHmac } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/modules/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '../src/modules/infrastructure/redis/redis.constants';
-import { RedlockService } from '../src/modules/infrastructure/redis/redlock.service';
+import { PrismaService } from '../src/infrastructure/prisma/prisma.service';
+import { REDIS_CLIENT } from '../src/infrastructure/redis/redis.constants';
+import { RedlockService } from '../src/infrastructure/redis/redlock.service';
 import { OtpService } from '../src/modules/auth/otp/otp.service';
-import { ResponseInterceptor } from '../src/modules/shared/interceptors/response.interceptor';
-import { PaymentsService } from '../src/modules/billing/payments/payments.service';
+import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
+import { PaymentsService } from '../src/modules/payments/payments.service';
 
 describe('Payment Flow End-to-End (e2e)', () => {
   let app: INestApplication<App>;
@@ -769,7 +769,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
 
       // 2. Payment verification endpoint returns SUCCESS
       const verifyRes = await request(app.getHttpServer())
-        .get(`/api/v1/payments/verify/${testTransactionRef}`)
+        .get(`/api/v1/payments/callback?reference=${testTransactionRef}`)
         .expect(200);
 
       expect(verifyRes.body.success).toBe(true);

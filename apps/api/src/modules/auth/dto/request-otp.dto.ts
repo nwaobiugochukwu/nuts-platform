@@ -1,7 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
+﻿import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty } from 'class-validator';
 
-import { NormalizeEmail } from '@api/modules/shared/decorators/normalize-email.decorator';
+import { NormalizeEmail } from '@api/common/decorators/normalize-email.decorator';
 
 export class RequestOtpDto {
   @ApiProperty({

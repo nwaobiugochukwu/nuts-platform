@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, createHmac, randomInt } from 'crypto';
 import Redis from 'ioredis';
 
-import { EmailService } from '@api/modules/infrastructure/mail/email.service';
+import { EmailService } from '@api/infrastructure/mail/email.service';
 
 export type OtpPurpose =
   | 'registration'

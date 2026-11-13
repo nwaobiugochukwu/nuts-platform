@@ -19,21 +19,22 @@ import { useEffect, useRef, useState } from "react";
 import { vendorAccountService } from "@/api";
 import { useQuery } from "@tanstack/react-query";
 
-const PAGE_TITLES: Record<string, { title: string; subtitle: string; category?: string }> = {
-  "/vendor": { title: "Merchant Hub", subtitle: "Live store revenue, sales performance, and operations", category: "Vendor" },
-  "/vendor/analytic": { title: "Vendor Analytics", subtitle: "Sales performance, volume, and revenue metrics", category: "Analytics" },
-  "/vendor/product": { title: "Product Catalog", subtitle: "Inventory listings, pricing, and stock controls", category: "Catalog" },
-  "/vendor/order": { title: "Order Fulfillment", subtitle: "Customer purchases, shipments, and status tracking", category: "Fulfillment" },
-  "/vendor/wallet": { title: "Store Wallet", subtitle: "Available earnings, pending payouts, and settlements", category: "Finance" },
-  "/vendor/discount": { title: "Discount Coupons", subtitle: "Custom promotion codes, limits, and campaigns", category: "Marketing" },
-  "/vendor/setting": { title: "Store Settings", subtitle: "Brand identity, profile preferences, and theme appearance", category: "Settings" },
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  "/vendor": { title: "Merchant Hub", subtitle: "Live store revenue, sales performance, and operations" },
+  "/vendor/analytic": { title: "Store analytics", subtitle: "Sales, engagement, and follower performance" },
+  "/vendor/product": { title: "Product Catalog", subtitle: "Inventory listings, pricing, and stock controls" },
+  "/vendor/order": { title: "Order Fulfillment", subtitle: "Customer purchases, shipments, and status tracking" },
+  "/vendor/wallet": { title: "Store Wallet", subtitle: "Available earnings, pending payouts, and settlements" },
+  "/vendor/discount": { title: "Discount Coupons", subtitle: "Custom promotion codes, limits, and campaigns" },
+  "/vendor/setting": { title: "Store Settings", subtitle: "Brand identity, profile preferences, and theme appearance" },
 };
 
 interface VendorHeaderProps {
   onMobileMenuClick?: () => void;
+  mobileMenuOpen?: boolean;
 }
 
-export function VendorHeader({ onMobileMenuClick }: VendorHeaderProps) {
+export function VendorHeader({ onMobileMenuClick, mobileMenuOpen = false }: VendorHeaderProps) {
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading, isInitialized, logout } = useAuthStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -53,7 +54,6 @@ export function VendorHeader({ onMobileMenuClick }: VendorHeaderProps) {
   const pageInfo = PAGE_TITLES[pathname] ?? {
     title: "Vendor Store",
     subtitle: "Manage your storefront and catalog",
-    category: "Management",
   };
 
   // Close dropdown on outside click or Escape key
@@ -102,20 +102,17 @@ export function VendorHeader({ onMobileMenuClick }: VendorHeaderProps) {
             onClick={onMobileMenuClick}
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-card text-foreground hover:bg-secondary lg:hidden transition-colors"
             aria-label="Open mobile navigation"
+            aria-controls="panel-navigation"
+            aria-expanded={mobileMenuOpen}
           >
             <Menu className="h-5 w-5" />
           </button>
         )}
 
         <div className="min-w-0 flex-1 sm:flex-none">
-          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-            <span className="max-[420px]:hidden text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 bg-secondary/80 px-1.5 py-0.5 rounded-md border border-border/40">
-              {pageInfo.category || "Vendor"}
-            </span>
-            <h1 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
-              {pageInfo.title}
-            </h1>
-          </div>
+          <h1 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground sm:text-lg">
+            {pageInfo.title}
+          </h1>
           <p className="hidden text-xs text-muted-foreground sm:block mt-0.5">
             {pageInfo.subtitle}
           </p>
@@ -165,9 +162,6 @@ export function VendorHeader({ onMobileMenuClick }: VendorHeaderProps) {
               <div className="hidden sm:flex flex-col text-left leading-none">
                 <span className="text-sm font-semibold text-foreground max-w-[120px] truncate">
                   {shortName}
-                </span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-0.5">
-                  {effectiveStoreName ? "Merchant" : "Vendor"}
                 </span>
               </div>
               <ChevronDown

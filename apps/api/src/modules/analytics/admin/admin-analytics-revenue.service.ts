@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { fillAnalyticsDateGaps } from '@api/common/utils/date-range.util';
 
 /*
  * Index recommendations for performance:
@@ -21,6 +22,12 @@ import {
   OrderStatusCountDto,
 } from './dto/admin-analytics-summary.dto';
 
+const REVENUE_PAYMENT_STATUSES = [
+  PaymentStatus.SUCCESS,
+  PaymentStatus.REFUND_PENDING,
+  PaymentStatus.REFUNDED,
+];
+
 @Injectable()
 export class AdminAnalyticsRevenueService {
   constructor(private readonly prisma: PrismaService) {}
@@ -37,22 +44,26 @@ export class AdminAnalyticsRevenueService {
     }));
   }
 
-  /** Total revenue from non-cancelled orders */
+  /** Gross revenue from successfully paid, non-cancelled orders. */
   async getTotalRevenue(): Promise<number> {
     const r = await this.prisma.order.aggregate({
       _sum: { finalAmount: true },
-      where: { status: { not: OrderStatus.CANCELLED } },
+      where: {
+        status: { not: OrderStatus.CANCELLED },
+        payment: { is: { status: { in: REVENUE_PAYMENT_STATUSES } } },
+      },
     });
     return Number(r._sum.finalAmount ?? 0);
   }
 
-  /** Revenue in a given period from non-cancelled orders */
+  /** Gross revenue in a period from successfully paid, non-cancelled orders. */
   async getRevenueInPeriod(start: Date, end: Date): Promise<number> {
     const r = await this.prisma.order.aggregate({
       _sum: { finalAmount: true },
       where: {
         status: { not: OrderStatus.CANCELLED },
         createdAt: { gte: start, lte: end },
+        payment: { is: { status: { in: REVENUE_PAYMENT_STATUSES } } },
       },
     });
     return Number(r._sum.finalAmount ?? 0);
@@ -60,23 +71,27 @@ export class AdminAnalyticsRevenueService {
 
   /** Daily revenue trend for a period */
   async getRevenueTrend(start: Date, end: Date): Promise<DailyTrendDto[]> {
-    // Use DATE_TRUNC so rows are bucketed by calendar day, not by raw timestamp
     const rows = await this.prisma.$queryRaw<
-      Array<{ day: Date; total: string }>
+      Array<{ date: string; total: string }>
     >`
-      SELECT DATE_TRUNC('day', "createdAt") AS day,
-             SUM("finalAmount") AS total
-      FROM   "orders"
-      WHERE  status != 'CANCELLED'
-        AND  "createdAt" >= ${start}
-        AND  "createdAt" <= ${end}
-      GROUP  BY DATE_TRUNC('day', "createdAt")
-      ORDER  BY day ASC
+      SELECT TO_CHAR(
+               DATE_TRUNC('day', (o."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+               'YYYY-MM-DD'
+             ) AS date,
+             SUM(o."finalAmount") AS total
+      FROM   "orders" o
+      JOIN   "payments" pay ON pay."orderId" = o.id
+             AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
+      WHERE  o.status != 'CANCELLED'
+        AND  o."createdAt" >= ${start}
+        AND  o."createdAt" <= ${end}
+      GROUP  BY 1
+      ORDER  BY 1 ASC
     `;
 
-    return this.fillDateGaps(
+    return fillAnalyticsDateGaps(
       rows.map((r) => ({
-        date: r.day.toISOString().slice(0, 10),
+        date: r.date,
         value: Number(r.total ?? 0),
       })),
       start,
@@ -87,20 +102,23 @@ export class AdminAnalyticsRevenueService {
   /** Daily order count trend */
   async getOrderTrend(start: Date, end: Date): Promise<DailyTrendDto[]> {
     const rows = await this.prisma.$queryRaw<
-      Array<{ day: Date; count: bigint }>
+      Array<{ date: string; count: bigint }>
     >`
-      SELECT DATE_TRUNC('day', "createdAt") AS day,
+      SELECT TO_CHAR(
+               DATE_TRUNC('day', ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+               'YYYY-MM-DD'
+             ) AS date,
              COUNT(*) AS count
       FROM   "orders"
       WHERE  "createdAt" >= ${start}
         AND  "createdAt" <= ${end}
-      GROUP  BY DATE_TRUNC('day', "createdAt")
-      ORDER  BY day ASC
+      GROUP  BY 1
+      ORDER  BY 1 ASC
     `;
 
-    return this.fillDateGaps(
+    return fillAnalyticsDateGaps(
       rows.map((r) => ({
-        date: r.day.toISOString().slice(0, 10),
+        date: r.date,
         value: Number(r.count ?? 0),
       })),
       start,
@@ -112,6 +130,7 @@ export class AdminAnalyticsRevenueService {
   async getAverageOrderValue(start?: Date, end?: Date): Promise<number> {
     const where: Parameters<typeof this.prisma.order.aggregate>[0]['where'] = {
       status: { not: OrderStatus.CANCELLED },
+      payment: { is: { status: { in: REVENUE_PAYMENT_STATUSES } } },
     };
     if (start || end) {
       where.createdAt = {};
@@ -135,22 +154,5 @@ export class AdminAnalyticsRevenueService {
     return this.prisma.order.count({
       where: { createdAt: { gte: start, lte: end } },
     });
-  }
-
-  /** Fills in zero-value days for missing dates */
-  private fillDateGaps(
-    data: DailyTrendDto[],
-    start: Date,
-    end: Date,
-  ): DailyTrendDto[] {
-    const map = new Map(data.map((d) => [d.date, d.value]));
-    const result: DailyTrendDto[] = [];
-    const current = new Date(start);
-    while (current <= end) {
-      const key = current.toISOString().slice(0, 10);
-      result.push({ date: key, value: map.get(key) ?? 0 });
-      current.setDate(current.getDate() + 1);
-    }
-    return result;
   }
 }

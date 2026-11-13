@@ -9,7 +9,8 @@ export type AuthEvent =
   | { type: 'LOGOUT'; role?: string }
   | { type: 'SESSION_EXPIRED'; role?: string }
   | { type: 'LOGIN'; role: string }
-  | { type: 'SESSION_REFRESHED'; role: string; user?: unknown };
+  | { type: 'SESSION_REFRESHED'; role: string; user?: unknown }
+  | { type: 'VENDOR_FOLLOW_CHANGED'; userId: string; vendorId: string; vendorSlug: string; following: boolean };
 
 type AuthEventListener = (event: AuthEvent) => void;
 

@@ -2,6 +2,8 @@ export * from "./core/client";
 export * from "./core/error";
 export * from "./core/types";
 
+export * from "./modules/admin-governance";
+export * from "./modules/admin-announcements";
 export * from "./modules/analytics";
 export * from "./modules/auth";
 export * from "./modules/cart";
@@ -12,6 +14,7 @@ export * from "./modules/order";
 export * from "./modules/payment";
 export * from "./modules/product";
 export * from "./modules/referral";
+export * from "./modules/recommendations";
 export * from "./modules/review";
 export * from "./modules/search";
 export * from "./modules/system";

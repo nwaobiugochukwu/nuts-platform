@@ -9,6 +9,10 @@ import { FormInput } from "@/component/form/FormInput";
 import { FormTextarea } from "@/component/form/FormTextarea";
 import { Button } from "@/component/ui/button";
 import { SegmentedOtpInput } from "@/component/ui/SegmentedOtpInput";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { parseGoogleAuthError } from "@/lib/google-auth-error";
+import { safeInternalPath } from "@/lib/safe-internal-path";
+import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AxiosError } from "axios";
 import {
@@ -21,13 +25,14 @@ import {
   Mail,
   MapPin,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
   UserPlus,
   XCircle,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -70,14 +75,25 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 
 type Step = 1 | 2 | 3;
 
-export default function RegisterPage() {
+interface SuspendedAccountInfo {
+  email: string;
+  reason: string;
+  suspendedUntil: string | null;
+  message: string;
+}
+
+function RegisterContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const redirectUrl = safeInternalPath(searchParams.get("redirect"), "/");
+  const googleAuthenticate = useAuthStore((s) => s.googleAuthenticate);
 
   const [activeStep, setActiveStep] = useState<Step>(1);
   const [resendTimer, setResendTimer] = useState(0);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [suspendedInfo, setSuspendedInfo] = useState<SuspendedAccountInfo | null>(null);
 
   // Referral code live-validation state
   const [referralValid, setReferralValid] = useState<boolean | null>(null);
@@ -223,6 +239,16 @@ export default function RegisterPage() {
         (err as AxiosError<{ message: string }>)?.response?.data?.message ??
         "Failed to send verification code. Please check your email or try again.";
 
+      const authError = parseGoogleAuthError(err);
+      if (authError.isAccountAlreadyExists) {
+        toast.info("You already have an account with this email. Please sign in instead.");
+        const loginUrl = searchParams.get("redirect")
+          ? `/auth/login?redirect=${encodeURIComponent(redirectUrl)}`
+          : "/auth/login";
+        router.replace(loginUrl);
+        return false;
+      }
+
       if (retryAfter && retryAfter > 0) {
         setResendTimer(retryAfter);
         toast.info(msg);
@@ -318,6 +344,15 @@ export default function RegisterPage() {
       toast.success("Account created successfully! Please sign in.");
       router.push("/auth/login");
     } catch (err: unknown) {
+      const authError = parseGoogleAuthError(err);
+      if (authError.isAccountAlreadyExists) {
+        toast.info("You already have an account with this email. Please sign in instead.");
+        const loginUrl = searchParams.get("redirect")
+          ? `/auth/login?redirect=${encodeURIComponent(redirectUrl)}`
+          : "/auth/login";
+        router.replace(loginUrl);
+        return;
+      }
       const msg =
         (err as AxiosError<{ message: string }>)?.response?.data?.message ??
         "Registration failed. Please check your details and verification code.";
@@ -329,8 +364,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <PublicOnlyLayout>
-      <div className="w-full space-y-6">
+    <div className="w-full space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-xs">
@@ -353,20 +387,133 @@ export default function RegisterPage() {
               ───────────────────────────────────────────────────────────── */}
               {activeStep === 1 && (
                 <div className="space-y-4 animate-in fade-in-50 duration-200">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
-                    <FormInput
-                      name="firstName"
-                      label="First Name"
-                      placeholder="Jane"
-                      autoComplete="given-name"
-                    />
-                    <FormInput
-                      name="lastName"
-                      label="Last Name"
-                      placeholder="Doe"
-                      autoComplete="family-name"
-                    />
-                  </div>
+                  {suspendedInfo ? (
+                    <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 space-y-4 animate-in fade-in-0 duration-300">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                          <ShieldAlert className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <h3 className="text-sm font-bold text-foreground">
+                            Account Suspended
+                          </h3>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            Access for <strong className="text-foreground">{suspendedInfo.email}</strong> is temporarily suspended by platform administration.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-rose-500/20 bg-background/50 p-3.5 space-y-2 text-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="text-muted-foreground font-medium">Suspension Reason:</span>
+                          <span className="font-semibold text-foreground text-right">{suspendedInfo.reason}</span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="text-muted-foreground font-medium">Duration:</span>
+                          <span className="font-semibold text-rose-600 dark:text-rose-400 text-right">
+                            {suspendedInfo.suspendedUntil
+                              ? `Suspended until ${new Date(suspendedInfo.suspendedUntil).toLocaleString(undefined, {
+                                  dateStyle: "medium",
+                                  timeStyle: "short",
+                                })}`
+                              : "Indefinite (Subject to manual review)"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        If your suspension has an expiration date, your account will be restored automatically when the period concludes. For appeals, please contact support.
+                      </p>
+
+                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full text-xs font-semibold rounded-xl h-9"
+                          onClick={() => setSuspendedInfo(null)}
+                        >
+                          Dismiss & Try Another Account
+                        </Button>
+                        <Button
+                          type="button"
+                          asChild
+                          className="w-full text-xs font-semibold rounded-xl h-9 bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          <a href="mailto:support@nutscommerce.com?subject=Account%20Suspension%20Inquiry">
+                            Contact Support
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Google Sign-Up Button */}
+                      <div className="space-y-4">
+                        <GoogleSignInButton
+                          mode="signup"
+                          loading={isGoogleSubmitting}
+                          onSuccess={async (idToken) => {
+                            try {
+                              setIsGoogleSubmitting(true);
+                              const referralCode = watchedReferralCode?.trim() || undefined;
+                              await googleAuthenticate(idToken, "user", "signup", {
+                                referralCode,
+                              });
+                              toast.success("Welcome to NUTS! Your account is ready.");
+                              router.push(redirectUrl);
+                            } catch (err: unknown) {
+                              const parsed = parseGoogleAuthError(err);
+                              if (parsed.isAccountAlreadyExists) {
+                                toast.info("You already have an account with this Google email. Please sign in instead.");
+                                const loginUrl = searchParams.get("redirect")
+                                  ? `/auth/login?redirect=${encodeURIComponent(redirectUrl)}`
+                                  : "/auth/login";
+                                router.replace(loginUrl);
+                                return;
+                              }
+                              if (parsed.isSuspended) {
+                                setSuspendedInfo({
+                                  email: "Your Google Account",
+                                  reason: parsed.suspensionInfo?.reason || "Policy violation.",
+                                  suspendedUntil: parsed.suspensionInfo?.suspendedUntil || null,
+                                  message: parsed.message,
+                                });
+                                return;
+                              }
+                              toast.error(parsed.message);
+                            } finally {
+                              setIsGoogleSubmitting(false);
+                            }
+                          }}
+                          onError={(msg) => toast.error(msg)}
+                        />
+
+                        <div className="relative">
+                          <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-border/60" />
+                          </div>
+                          <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">or register with email</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+                        <FormInput
+                          name="firstName"
+                          label="First Name"
+                          placeholder="Jane"
+                          autoComplete="given-name"
+                        />
+                        <FormInput
+                          name="lastName"
+                          label="Last Name"
+                          placeholder="Doe"
+                          autoComplete="family-name"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <FormInput
                     name="email"
@@ -654,6 +801,21 @@ export default function RegisterPage() {
           </Link>
         </p>
       </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <PublicOnlyLayout>
+      <Suspense
+        fallback={
+          <div className="w-full max-w-md mx-auto p-8 text-center">
+            <div className="h-10 w-32 mx-auto animate-pulse rounded bg-muted/60" />
+          </div>
+        }
+      >
+        <RegisterContent />
+      </Suspense>
     </PublicOnlyLayout>
   );
 }

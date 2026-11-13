@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { SECURITY } from '@api/modules/shared/constants';
+﻿import Redis from 'ioredis';
+import { SECURITY } from '@api/common/constants';
 import { AccountLockService } from './account-lock.service';
 
 describe('AccountLockService', () => {
