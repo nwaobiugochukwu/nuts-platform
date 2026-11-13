@@ -7,10 +7,12 @@ import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Store } from "lucide-react";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import Link from "@/components/navigation/AppLink";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { FormProvider,useForm } from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -29,6 +31,7 @@ function VendorLoginForm() {
     "/vendor/analytic",
   );
   const login = useAuthStore((s) => s.login);
+  const googleAuthenticate = useAuthStore((s) => s.googleAuthenticate);
 
   const methods = useForm<VendorLoginFormData>({
     resolver: zodResolver(vendorLoginSchema),
@@ -61,6 +64,38 @@ function VendorLoginForm() {
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Vendor Sign In</h1>
         <p className="text-xs sm:text-sm text-muted-foreground">Sign in to manage your storefront &amp; sales</p>
+      </div>
+
+      <div className="space-y-4">
+        <GoogleSignInButton
+          onSuccess={async (idToken) => {
+            try {
+              await googleAuthenticate(idToken, "vendor", "login");
+              toast.success("Welcome to your vendor dashboard!");
+              router.push(redirectUrl);
+            } catch (err: unknown) {
+              const parsed = parseGoogleAuthError(err);
+              if (parsed.isGoogleAccountNotFound) {
+                toast.info("No vendor account is associated with this Google account. Please sign up first.");
+                const signupUrl = searchParams.get("redirect")
+                  ? `/auth/vendor/register?redirect=${encodeURIComponent(redirectUrl)}`
+                  : "/auth/vendor/register";
+                router.replace(signupUrl);
+                return;
+              }
+              toast.error(parsed.message);
+            }
+          }}
+          onError={(msg) => toast.error(msg)}
+        />
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border/60" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">or sign in with email</span>
+          </div>
+        </div>
       </div>
 
       <FormProvider {...methods}>

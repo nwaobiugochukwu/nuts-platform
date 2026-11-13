@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { OrderDetailsModal } from "@/component/order/OrderDetailsModal";
 import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
 import { Button } from "@/component/ui/button";
-import { useDebouncedValue } from "@/hook/use-debounced-value";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
@@ -183,6 +183,8 @@ export default function DashboardOrderPage() {
           { value: "SHIPPED", label: "Shipped" },
           { value: "DELIVERED", label: "Delivered" },
           { value: "CANCELLED", label: "Cancelled" },
+          { value: "REFUND_PENDING", label: "Refund pending" },
+          { value: "REFUNDED", label: "Refunded" },
         ]}
         onRefresh={() => qc.invalidateQueries({ queryKey: queryKey.vendor.order })}
         isLoading={isLoading || isFetching}

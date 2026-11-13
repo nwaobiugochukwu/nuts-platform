@@ -1,4 +1,5 @@
 import type { WalletTransactionType } from "../core/types";
+import type { ProductCardDto } from "./product";
 
 export interface WalletTransactionResponseDto {
   id: string;
@@ -46,13 +47,47 @@ export interface VendorResponseDto {
 export type VendorProfileDto = VendorResponseDto;
 
 export interface VendorStoreDto {
+  id: string;
   storeName: string;
   storeSlug: string;
-  storeDescription: string;
+  storeDescription: string | null;
   storeLogoUrl: string | null;
   storeLogoAltText: string | null;
   isVerified: boolean;
   categories?: Array<{ id: string; name: string; slug: string }>;
+}
+
+export interface FeaturedVendorDto {
+  id: string;
+  storeName: string;
+  storeSlug: string;
+  storeDescription: string | null;
+  storeLogoUrl: string | null;
+  isVerified: boolean;
+  createdAt: Date;
+  featuredProducts: ProductCardDto[];
+}
+
+export interface FollowedVendorDto {
+  createdAt: Date;
+  vendor: Pick<FeaturedVendorDto, "id" | "storeName" | "storeSlug" | "storeDescription" | "storeLogoUrl" | "isVerified">;
+}
+
+export interface FollowedVendorsPageDto {
+  data: FollowedVendorDto[];
+  meta: FollowedVendorsMetaDto;
+}
+
+export interface FollowedVendorsMetaDto {
+  followingCount: number;
+  matchingCount: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface VendorFollowerCountDto {
+  count: number;
 }
 
 export interface VendorLoginResponseDto {

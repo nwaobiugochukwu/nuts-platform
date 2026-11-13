@@ -1,7 +1,8 @@
 "use client";
 
 import { RemoteImage } from "@/component/ui/RemoteImage";
-import { productService } from "@/api";
+import { analyticsEventService, productService, recommendationService } from "@/api";
+import type { RecommendationAttribution } from "@/api/modules/analytics";
 import type { AddedFromType } from "@/api/dto/cart";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type {
@@ -10,18 +11,21 @@ import type {
 } from "@/api/dto/product";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
 import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ProductCard } from "@/component/product/ProductCard";
+import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
 import { ProductReviews } from "@/component/review/ProductReviews";
 import { Button } from "@/component/ui/button";
-import { useCart } from "@/hook/use-cart";
-import { useWishlist } from "@/hook/use-wishlist";
+import { useCart } from "@/hooks/use-cart";
+import { useWishlist } from "@/hooks/use-wishlist";
 import { findCategoryBreadcrumbs } from "@/lib/category-tree";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { createRecommendationRequestId, getRecommendationSessionId, getRecommendationVisitorId } from "@/lib/recommendation-session";
+import { clearRecommendationAttribution, readRecommendationAttribution } from "@/lib/recommendation-attribution";
 import { formatPrice } from "@/lib/util";
 import { usePublicCategories } from "@/hooks/use-public-categories";
+import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 ChevronDown,
 ChevronRight,
@@ -36,7 +40,7 @@ ShoppingBag,
 Truck
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useMemo,useState } from "react";
+import { useEffect,useMemo,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -68,9 +72,12 @@ export function ProductDetailView({
   noLayout = false,
 }: ProductDetailViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: cachedCategories } = usePublicCategories(categories);
   const productCategories = cachedCategories ?? categories;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthInitialized = useAuthStore((state) => state.isInitialized);
+  const userId = useAuthStore((state) => state.user?.id);
   const capabilities = useAuthStore((state) => state.capabilities);
   const canPurchase = capabilities ? capabilities.canPurchase : !isAuthenticated;
   const canSell = capabilities?.canSell ?? false;
@@ -83,8 +90,16 @@ export function ProductDetailView({
   const { addItem: addToCart } = useCart();
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const recommendationSessionId = useRecommendationSessionId();
+  const [relatedRequestId, setRelatedRequestId] = useState("");
+  const [recommendationContext, setRecommendationContext] = useState<RecommendationAttribution>();
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
+  const trackedProductViewRef = useRef<{
+    productId: string;
+    eventId: string;
+    status: "idle" | "pending" | "failed" | "accepted";
+  } | null>(null);
 
   // Accordion state (default closed per user requirement)
   const [aboutVendorOpen, setAboutVendorOpen] = useState(false);
@@ -101,37 +116,90 @@ export function ProductDetailView({
     enabled: !!slug,
   });
 
-  const recommendationCategoryId =
-    product?.subcategory?.id ||
-    product?.parentSubcategory?.id ||
-    product?.category?.id;
-  const recommendationCategorySlug =
-    product?.subcategory?.slug ||
-    product?.parentSubcategory?.slug ||
-    product?.category?.slug;
-  const recommendationKey =
-    recommendationCategoryId ??
-    (product?.vendor?.id ? `vendor:${product.vendor.id}` : "");
   const relatedProductsQuery = useQuery({
-    queryKey: queryKey.product.related(product?.id ?? "", recommendationKey),
-    queryFn: async ({ signal }) => {
-      if (!product) {
-        throw new Error("Cannot load related products without a product");
-      }
-
-      const params = {
-        ...(recommendationCategoryId
-          ? { categoryId: recommendationCategoryId }
-          : { vendorId: product.vendor.id }),
-        limit: 9,
-        sort: "newest",
-      };
-      const { data } = await productService.getCards(params, signal);
-      return data.filter((item) => item.id !== product.id).slice(0, 8);
-    },
-    enabled: Boolean(product && recommendationKey),
+    queryKey: queryKey.product.related(product?.id ?? ""),
+    queryFn: async ({ signal }) => product
+      ? (await recommendationService.related(product.id, signal)).data
+      : [],
+    enabled: Boolean(product?.id),
     staleTime: 1000 * 60 * 5,
   });
+  const relatedProducts = relatedProductsQuery.data ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    const nextContext = product?.id
+      ? readRecommendationAttribution(product.id)
+      : undefined;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setRelatedRequestId(createRecommendationRequestId());
+      setRecommendationContext(nextContext);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [product?.id]);
+
+  useEffect(() => {
+    if (!product?.id || !isAuthInitialized || (isAuthenticated && !canPurchase)) return;
+    let trackedView = trackedProductViewRef.current;
+    if (!trackedView || trackedView.productId !== product.id) {
+      trackedView = {
+        productId: product.id,
+        eventId: createRecommendationRequestId(),
+        status: "idle",
+      };
+      trackedProductViewRef.current = trackedView;
+    }
+    if (!trackedView.eventId || trackedView.status === "pending" || trackedView.status === "accepted") return;
+
+    const visitorId = getRecommendationVisitorId();
+    const sessionId = getRecommendationSessionId();
+    if (!sessionId) return;
+
+    trackedView.status = "pending";
+    const productId = product.id;
+    const eventId = trackedView.eventId;
+    void (async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await analyticsEventService.trackProductView(
+            productId,
+            eventId,
+            sessionId,
+            isAuthenticated && canPurchase,
+            visitorId,
+          );
+          trackedView.status = "accepted";
+          // RecentProductView is persisted before the API acknowledges, so
+          // refresh cached recommendation shelves after a successful visit.
+          void Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
+              refetchType: "all",
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId],
+              refetchType: "all",
+            }),
+            queryClient.invalidateQueries({
+              queryKey: ["recommendations", "stores", userId ?? null, sessionId],
+              refetchType: "all",
+            }),
+          ]);
+          return;
+        } catch {
+          if (attempt === 2) {
+            trackedView.status = "failed";
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+        }
+      }
+    })();
+  }, [product?.id, isAuthInitialized, isAuthenticated, canPurchase, queryClient, userId]);
 
   const getVariantLabel = (v?: PublicVariantSummaryDto | null) => {
     if (!v) return "";
@@ -373,10 +441,13 @@ export function ProductDetailView({
         variantId: selectedVariant?.id,
         variantName,
         addedFrom,
+        recommendationContext,
         path: currentPath,
       },
       {
         onSuccess: () => {
+          clearRecommendationAttribution(p.id);
+          setRecommendationContext(undefined);
           toast.success(
             `Added ${quantity} × "${p.name}" to cart!`,
             {
@@ -464,17 +535,7 @@ export function ProductDetailView({
               </Link>
             </span>
           ))
-        ) : (
-          <span className="flex items-center gap-2 sm:gap-2.5">
-            <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
-            <Link
-              href="/product"
-              className="text-muted-foreground hover:text-foreground transition-colors font-medium hover:underline underline-offset-4"
-            >
-              Products
-            </Link>
-          </span>
-        )}
+        ) : null}
 
         <span className="flex items-center gap-2 sm:gap-2.5">
           <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400 dark:text-neutral-500" />
@@ -488,7 +549,7 @@ export function ProductDetailView({
       <div className="grid grid-cols-1 gap-6 sm:gap-10 lg:grid-cols-2 lg:gap-16">
         {/* Left Column: Image Viewport & Thumbnails */}
         <div className="flex flex-col gap-4">
-          <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-[#f7f7f8] flex items-center justify-center">
+          <div className="relative aspect-square w-full overflow-hidden rounded-2xl flex items-center justify-center">
             {activeImage ? (
               <RemoteImage
                 src={activeImage}
@@ -536,13 +597,13 @@ export function ProductDetailView({
                         type="button"
                         onClick={() => setSelectedImageIndex(idx)}
                         aria-label={`View image ${idx + 1}`}
-                        className={`relative h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-xl bg-[#f7f7f8] dark:bg-neutral-900 p-1 border transition-all ${
+                        className={`relative h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-xl p-1 border transition-all ${
                           isActive
                             ? "border-black dark:border-white shadow-xs"
                             : "border-border/60 opacity-60 hover:opacity-100"
                         }`}
                       >
-                        
+
                         <RemoteImage
                           src={img}
                           alt={`${p.name} view ${idx + 1}`}
@@ -848,17 +909,9 @@ export function ProductDetailView({
                 You may also like
               </h2>
             </div>
-            {recommendationCategorySlug && (
-              <Link
-                href={`/category/${recommendationCategorySlug}`}
-                className="shrink-0 text-sm font-semibold text-primary hover:underline"
-              >
-                Browse category
-              </Link>
-            )}
           </div>
 
-          {recommendationKey && relatedProductsQuery.isPending && (
+          {product?.id && relatedProductsQuery.isPending && (
             <div
               className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4"
               role="status"
@@ -891,22 +944,24 @@ export function ProductDetailView({
             </div>
           )}
 
-          {relatedProductsQuery.isSuccess && relatedProductsQuery.data.length > 0 && (
+          {relatedProductsQuery.isSuccess && relatedProducts.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
-              {relatedProductsQuery.data.map((relatedProduct) => (
-                <ProductCard
+              {relatedProducts.map((relatedProduct, position) => (
+                <RecommendationProductCard
                   key={relatedProduct.id}
                   product={relatedProduct}
-                  aspectRatio="portrait"
+                  surface="PRODUCT_RELATED"
+                  requestId={relatedRequestId}
+                  sessionId={recommendationSessionId}
+                  position={position}
                   size="default"
-                  addedFrom="PRODUCT_PAGE"
                 />
               ))}
             </div>
           )}
 
-          {(relatedProductsQuery.isSuccess && relatedProductsQuery.data.length === 0) ||
-          !recommendationKey ? (
+          {(relatedProductsQuery.isSuccess && relatedProducts.length === 0) ||
+          !product?.id ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
               No similar products are available right now.
             </p>

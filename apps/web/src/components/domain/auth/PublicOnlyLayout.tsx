@@ -92,7 +92,7 @@ export function PublicOnlyLayout({
   }
 
   return (
-    <CustomerLayout>
+    <CustomerLayout showCategoryNavigation={false}>
       <div className="mx-auto w-full max-w-xl px-3 py-6 sm:px-6 sm:py-10">
         {roleNoticeBanner}
         {children}

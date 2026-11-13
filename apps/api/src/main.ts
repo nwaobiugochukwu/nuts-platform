@@ -1,4 +1,4 @@
-import 'reflect-metadata';
+﻿import 'reflect-metadata';
 import './instrument';
 
 import { ValidationPipe } from '@nestjs/common';
@@ -10,12 +10,13 @@ import express, { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
+import { BotDetectionMiddleware } from './modules/security/middleware/bot-detection.middleware';
 import { CsrfMiddleware } from './modules/security/middleware/csrf.middleware';
 import { SecurityHeadersMiddleware } from './modules/security/middleware/security-headers.middleware';
-import { GlobalExceptionFilter } from './modules/shared/filters/global-exception.filter';
-import { ResponseInterceptor } from './modules/shared/interceptors/response.interceptor';
-import { NormalizeInputPipe } from './modules/shared/pipes/normalize-input.pipe';
-import { SanitizeHtmlPipe } from './modules/shared/pipes/sanitize-html.pipe';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { NormalizeInputPipe } from './common/pipes/normalize-input.pipe';
+import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
 import { setupSwagger } from './swagger.setup';
 
 async function bootstrap() {
@@ -50,7 +51,7 @@ async function bootstrap() {
   // Raise the per-response listener ceiling before any middleware attaches its
   // own 'finish' handlers. The default of 10 is a leak-detection heuristic that
   // is too low for a production middleware stack (pino-http + OTel HTTP/Express
-  // instrumentation + NestJS platform adapter + compression + end-of-stream ×2
+  // instrumentation + NestJS platform adapter + compression + end-of-stream Ã—2
   // + Express internals already reaches ~12). We use 25 rather than 0 so that
   // a real listener leak (e.g., a handler that keeps attaching listeners across
   // retries without ever removing them) will still surface as a warning.
@@ -157,6 +158,12 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
+
+  // Apply bot detection as the outermost guard (runs before body parsers and CSRF)
+  const botDetection = new BotDetectionMiddleware();
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    botDetection.use(req, res, next);
+  });
 
   // Apply security headers middleware
   const securityHeadersMiddleware = new SecurityHeadersMiddleware();

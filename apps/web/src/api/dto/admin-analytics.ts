@@ -79,6 +79,40 @@ export interface FunnelAnalyticsDto {
   checkoutConversionRate: number;
 }
 
+export interface AdminMarketplaceAnalyticsSummaryDto {
+  storeViews: number;
+  uniqueStoreVisitors: number;
+  productViews: number;
+  uniqueProductViewers: number;
+  cartAdds: number;
+  uniqueCartAdders: number;
+  cartRemovals: number;
+  wishlistAdds: number;
+  uniqueWishlistSavers: number;
+  wishlistRemovals: number;
+  cartLinesAdded: number;
+  cartLinesPurchased: number;
+  cartToPurchaseRate: number;
+  identifiedProductViewers: number;
+  viewersToCart: number;
+  viewersToPurchase: number;
+  productViewToCartRate: number;
+  productViewToPurchaseRate: number;
+  currentFollowers: number;
+  uniqueFollowers: number;
+  newFollowers: number;
+  unfollows: number;
+  netFollowerGrowth: number;
+  topFollowerStores: Array<{
+    vendorId: string;
+    storeName: string;
+    followerCount: number;
+  }>;
+  paidOrders: number;
+  paidUnits: number;
+  paidRevenue: string;
+}
+
 export interface ActivityAnalyticsDto {
   totalActions: number;
   uniqueAdmins: number;

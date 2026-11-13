@@ -8,12 +8,23 @@ PublicProductResponseDto,
 VendorProductResponseDto,
 } from "@/api/dto/product";
 import type { VendorVariantResponseDto } from "@/api/dto/variant";
+import type { CursorPaginationMeta } from "@/api/core/types";
+
+export interface CategoryProductPreview {
+  items: ProductCardDto[];
+  totalItems: number;
+  totalPages: number;
+}
 
 export interface ProductQueryParams {
   page?: number;
   limit?: number;
+  cursor?: string;
   search?: string;
   category?: string;
+  categoryId?: string;
+  categoryPath?: string;
+  vendorId?: string;
   slug?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -60,6 +71,22 @@ export const productService = {
   },
   getCards(params: ProductQueryParams, signal?: AbortSignal) {
     return publicApi.get<ProductCardDto[]>("/products", { params, signal });
+  },
+  getTrending(params: {
+    limit?: number;
+    days?: number;
+    categoryId?: string;
+    search?: string;
+    minPrice?: number;
+    maxPrice?: number;
+  }) {
+    return publicApi.get<ProductCardDto[]>("/products/trending", { params });
+  },
+  getDiscovery(params: ProductQueryParams, signal?: AbortSignal) {
+    return publicApi.get<ProductCardDto[], CursorPaginationMeta>(
+      "/discover",
+      { params, signal },
+    );
   },
   query(body: CursorQueryBody) {
     return publicApi.post<{ items: ProductCardDto[]; nextCursor?: string | null }>(

@@ -139,3 +139,20 @@ export interface VendorLoginPayload {
 
 /** Auth role — single source of truth used by interceptors and stores. */
 export type AuthRole = "user" | "admin" | "vendor";
+
+/** Payload for Google Sign-In via ID token (Google Identity Services). */
+export interface GoogleAuthPayload {
+  /** The ID token returned by Google Identity Services (credential). */
+  idToken: string;
+  /** Optional referral code applied when registering a new account. */
+  referralCode?: string;
+}
+
+/** Payload for Vendor Google Sign-In via ID token. */
+export interface VendorGoogleAuthPayload {
+  idToken: string;
+  storeName?: string;
+  storeDescription?: string;
+  businessPhone?: string;
+  businessEmail?: string;
+}

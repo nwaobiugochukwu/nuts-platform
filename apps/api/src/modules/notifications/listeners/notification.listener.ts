@@ -1,17 +1,18 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+﻿import { Injectable, Logger, Optional } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
   EmailOrderItem,
   EmailTemplatesService,
-} from '@api/modules/infrastructure/mail/email-templates.service';
-import { EmailService } from '@api/modules/infrastructure/mail/email.service';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/modules/infrastructure/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '@api/modules/infrastructure/rabbitmq/rabbitmq.service';
+} from '@api/infrastructure/mail/email-templates.service';
+import { EmailService } from '@api/infrastructure/mail/email.service';
+import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../notifications.service';
-import { DomainEvents } from '@api/modules/shared/events/domain-events';
-import { getErrorMessage } from '@api/modules/shared/utils/error-details.util';
+import { DomainEvents } from '@api/common/events/domain-events';
+import { getErrorMessage } from '@api/common/utils/error-details.util';
 import {
   NotificationPreferencesService,
   NotificationCategory,
@@ -24,7 +25,7 @@ import type {
   PaymentConfirmedPayload,
   PaymentFailedPayload,
   ReferralRewardCreditedPayload,
-} from '@api/modules/shared/events/event-payloads';
+} from '@api/common/events/event-payloads';
 
 @Injectable()
 export class NotificationListener {
@@ -32,6 +33,7 @@ export class NotificationListener {
 
   constructor(
     private readonly rabbitmq: RabbitMQService,
+    private readonly outbox: OutboxService,
     private readonly emailService: EmailService,
     private readonly emailTemplates: EmailTemplatesService,
     private readonly prisma: PrismaService,
@@ -106,29 +108,26 @@ export class NotificationListener {
     metadata?: Record<string, unknown>;
     dedupeKey?: string;
   }): Promise<void> {
-    // 1. Asynchronous event dispatch over RabbitMQ to NotificationsConsumer
-    const published = await this.rabbitmq.publish(
-      RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-      data,
-    );
-
-    // 2. Direct persistence & broadcast fallback only if RabbitMQ is unavailable
-    if (!published) {
+    try {
+      await this.prisma.$transaction((tx) =>
+        this.outbox.appendEvent(
+          tx,
+          'notification',
+          data.dedupeKey || data.userId,
+          RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
+          data,
+        ),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Durable notification enqueue failed for user ${data.userId}: ${getErrorMessage(error)}`,
+      );
+      // Preserve the database-backed fallback if the outbox table itself is unavailable.
       try {
-        await this.notificationsService.create({
-          userId: data.userId,
-          role: data.role,
-          type: data.type,
-          title: data.title,
-          message: data.message,
-          priority: data.priority,
-          link: data.link,
-          metadata: data.metadata,
-          dedupeKey: data.dedupeKey,
-        });
-      } catch (error) {
+        await this.notificationsService.create(data);
+      } catch (fallbackError) {
         this.logger.error(
-          `Fallback direct notification persistence failed for user ${data.userId}: ${getErrorMessage(error)}`,
+          `Fallback notification persistence failed for user ${data.userId}: ${getErrorMessage(fallbackError)}`,
         );
       }
     }

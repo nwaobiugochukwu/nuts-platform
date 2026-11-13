@@ -114,8 +114,8 @@ export default function DashboardWalletPage() {
       </div>
 
       {/* Transaction Ledger Table */}
-      <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+      <div className="rounded-3xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-[#121214] p-4 shadow-sm sm:p-6">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-sm font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-indigo-500" />
@@ -130,7 +130,44 @@ export default function DashboardWalletPage() {
           </Badge>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="space-y-3 md:hidden">
+          {transactions.map((tx) => {
+            const isCredit = tx.type === "CREDIT";
+            return (
+              <article key={tx.id} className="min-w-0 rounded-2xl border border-neutral-200 p-4 dark:border-neutral-800">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-900 dark:text-white">
+                      {tx.reason?.replace(/_/g, " ") || "Sale Settlement"}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-neutral-500">{tx.id.slice(0, 8)}...</p>
+                  </div>
+                  <Badge
+                    variant={isCredit ? "success" : "destructive"}
+                    className="shrink-0 text-xs font-semibold"
+                  >
+                    {tx.type}
+                  </Badge>
+                </div>
+                <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
+                  <time className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {new Date(tx.createdAt).toLocaleString()}
+                  </time>
+                  <span className={`text-sm font-bold ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500"}`}>
+                    {isCredit ? "+" : "-"}{formatPrice(tx.amount)}
+                  </span>
+                </div>
+              </article>
+            );
+          })}
+          {transactions.length === 0 && (
+            <p className="py-10 text-center text-sm text-neutral-500">
+              No transactions recorded in your wallet yet.
+            </p>
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-neutral-200 dark:border-neutral-800 text-xs uppercase font-semibold text-neutral-400">
@@ -206,7 +243,7 @@ export default function DashboardWalletPage() {
 
         {/* Pagination controls if meta exists */}
         {meta && meta.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-neutral-200 dark:border-neutral-800 pt-4 mt-4">
+          <div className="mt-4 flex flex-col gap-3 border-t border-neutral-200 pt-4 dark:border-neutral-800 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-xs text-neutral-400">
               Page {meta.page} of {meta.totalPages} ({meta.total} records)
             </span>

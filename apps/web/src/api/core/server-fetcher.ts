@@ -26,6 +26,7 @@ export interface ServerFetchOptions {
   tags?: string[];
   cookiesHeader?: string;
   forwardCookies?: boolean;
+  includeHttpErrorStatus?: boolean;
 }
 
 function isTransientNetworkError(error: unknown): boolean {
@@ -57,7 +58,7 @@ async function sleep(ms: number): Promise<void> {
 export async function serverFetchEnvelope<T>(
   endpoint: string,
   options: ServerFetchOptions = {}
-): Promise<{ data: T; meta?: unknown } | null> {
+): Promise<{ data: T; meta?: unknown; statusCode?: number } | null> {
   // Storefront API data must be read at request time. This keeps production
   // builds independent of a live API and lets Next's fetch revalidation cache
   // public responses after the first real request.
@@ -92,6 +93,8 @@ export async function serverFetchEnvelope<T>(
       const res = await fetch(url, {
         headers: {
           Accept: "application/json",
+          "Accept-Language": "en-NG,en;q=0.9",
+          "User-Agent": "NUTS-Commerce-Web-Server/1.0",
           ...(cookieHeader ? { Cookie: cookieHeader } : {}),
         },
         cache: revalidate === 0 || revalidate === false ? "no-store" : undefined,
@@ -106,6 +109,12 @@ export async function serverFetchEnvelope<T>(
       });
 
       if (!res.ok) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(`[serverFetch] Upstream ${endpointPath} returned HTTP ${res.status}`);
+        }
+        if (options.includeHttpErrorStatus) {
+          return { data: null as T, meta: undefined, statusCode: res.status };
+        }
         if (res.status === 404) return null;
         return null;
       }

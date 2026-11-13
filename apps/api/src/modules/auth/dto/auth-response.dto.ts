@@ -1,5 +1,5 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserIdentitySummaryDto } from '@api/modules/shared/dto/user-identity-summary.dto';
+﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { UserIdentitySummaryDto } from '@api/common/dto/user-identity-summary.dto';
 
 export { UserIdentitySummaryDto as AuthUserDto };
 

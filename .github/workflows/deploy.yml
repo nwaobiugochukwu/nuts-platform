@@ -27,23 +27,36 @@ jobs:
   resolve-environment:
     name: Determine Target Environment
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' && (inputs.target_env != 'production' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     outputs:
       env_name: ${{ steps.set-env.outputs.env_name }}
       docker_tag: ${{ steps.set-env.outputs.docker_tag }}
       image_repository: ${{ steps.set-env.outputs.image_repository }}
     steps:
       - id: set-env
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          INPUT_TARGET_ENV: ${{ inputs.target_env }}
         run: |
           image_repository="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
           echo "image_repository=$image_repository" >> "$GITHUB_OUTPUT"
-          TARGET_BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
-          if [ "$TARGET_BRANCH" = "main" ] || [ "${{ inputs.target_env }}" = "production" ]; then
-            echo "env_name=production" >> $GITHUB_OUTPUT
-            echo "docker_tag=latest" >> $GITHUB_OUTPUT
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TARGET_ENV="$INPUT_TARGET_ENV"
           else
-            echo "env_name=staging" >> $GITHUB_OUTPUT
-            echo "docker_tag=staging" >> $GITHUB_OUTPUT
+            if [ "$TARGET_BRANCH" = "main" ]; then
+              TARGET_ENV="production"
+            else
+              TARGET_ENV="staging"
+            fi
+          fi
+          if [ "$TARGET_ENV" = "production" ]; then
+            echo "env_name=production" >> "$GITHUB_OUTPUT"
+            echo "docker_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "env_name=staging" >> "$GITHUB_OUTPUT"
+            echo "docker_tag=staging" >> "$GITHUB_OUTPUT"
           fi
 
   deploy:

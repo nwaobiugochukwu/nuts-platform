@@ -1,9 +1,9 @@
 "use client";
 
-import { useHydrated } from "../../hook/use-hydrated";
-import { useCart } from "@/hook/use-cart";
-import { useWishlist } from "@/hook/use-wishlist";
-import { Heart, Home, LayoutDashboard, Package, Shield, ShoppingBag, Store } from "lucide-react";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useCart } from "@/hooks/use-cart";
+import { useWishlist } from "@/hooks/use-wishlist";
+import { Compass, Heart, Home, LayoutDashboard, Shield, ShoppingBag, Store } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { usePathname } from "next/navigation";
 import { NotificationBell } from "@/component/notification/NotificationBell";
@@ -23,7 +23,7 @@ export function BottomNav() {
   const { count: wishlistCount } = useWishlist();
 
   const isHome = pathname === "/";
-  const isProducts = pathname.startsWith("/product");
+  const isDiscover = pathname === "/discover";
   const isVendors = pathname === "/vendor" && !pathname.startsWith("/vendor/");
   const isWishlist = pathname.startsWith("/wishlist");
   const isCart = pathname.startsWith("/cart");
@@ -33,13 +33,8 @@ export function BottomNav() {
     ? pathname.startsWith("/admin")
     : false;
 
-  const gridColsClass = canPurchase
-    ? isMounted && isAuthenticated
-      ? "grid-cols-6"
-      : "grid-cols-5"
-    : isMounted && isAuthenticated
-    ? "grid-cols-5"
-    : "grid-cols-4";
+  const gridColsClass =
+    isMounted && isAuthenticated && canPurchase ? "grid-cols-6" : "grid-cols-5";
 
   return (
     <nav
@@ -60,17 +55,16 @@ export function BottomNav() {
           <span className="text-[10px] tracking-tight mt-1">Home</span>
         </Link>
 
-        {/* Products */}
+        {/* Product discovery */}
         <Link
-          href="/product"
+          href="/discover"
+          aria-current={isDiscover ? "page" : undefined}
           className={`flex min-h-11 flex-col items-center justify-center py-1 transition-colors ${
-            isProducts ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+            isDiscover ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <div className="relative">
-            <Package className={`h-5 w-5 ${isProducts ? "stroke-[2.2]" : "stroke-[1.6]"}`} />
-          </div>
-          <span className="text-[10px] tracking-tight mt-1">Products</span>
+          <Compass className={`h-5 w-5 ${isDiscover ? "stroke-[2.2]" : "stroke-[1.6]"}`} />
+          <span className="mt-1 text-[10px] tracking-tight">Discover</span>
         </Link>
 
         {/* Vendors */}

@@ -1,4 +1,4 @@
-import { PaginationMetaDto } from '@api/modules/shared/dto/pagination-meta.dto';
+﻿import { PaginationMetaDto } from '@api/common/dto/pagination-meta.dto';
 
 /**
  * Build pagination metadata from raw query results.

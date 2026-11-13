@@ -17,6 +17,7 @@
     "prestart:debug": "npm run build",
     "start:debug": "concurrently -k -n tsc,api \"node ../../node_modules/@typescript/native/lib/tsc.js -p tsconfig.build.json --watch --preserveWatchOutput\" \"cross-env NODE_OPTIONS=--inspect node scripts/dev-runner.mjs\"",
     "start:prod": "cross-env NODE_ENV=production TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/main",
+    "prestart:staging": "cross-env NODE_ENV=staging npm run migrate:deploy",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "lint:ci": "eslint \"{src,apps,libs,test}/**/*.ts\"",
@@ -60,6 +61,7 @@
     "cockatiel": "^4.0.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
+    "google-auth-library": "^11.3.3",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.0",
     "multer": "^2.3.0",
@@ -149,66 +151,47 @@
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@api/modules/users/(.*)$": [
-        "<rootDir>/modules/identity/users/$1",
-        "<rootDir>/modules/users/$1"
-      ],
-      "^@api/modules/creators/(.*)$": [
-        "<rootDir>/modules/identity/creators/$1",
-        "<rootDir>/modules/creators/$1"
-      ],
-      "^@api/modules/admin/(.*)$": [
-        "<rootDir>/modules/identity/admin/$1",
-        "<rootDir>/modules/admin/$1"
-      ],
-      "^@api/modules/products/(.*)$": [
-        "<rootDir>/modules/catalog/products/$1",
-        "<rootDir>/modules/products/$1"
-      ],
-      "^@api/modules/category/(.*)$": [
-        "<rootDir>/modules/catalog/categories/$1",
-        "<rootDir>/modules/catalog/category/$1",
-        "<rootDir>/modules/category/$1"
-      ],
-      "^@api/modules/product-variants/(.*)$": [
-        "<rootDir>/modules/catalog/variants/$1",
-        "<rootDir>/modules/catalog/product-variants/$1",
-        "<rootDir>/modules/product-variants/$1"
-      ],
-      "^@api/modules/cart/(.*)$": [
-        "<rootDir>/modules/checkout/cart/$1",
-        "<rootDir>/modules/cart/$1"
-      ],
-      "^@api/modules/orders/(.*)$": [
-        "<rootDir>/modules/checkout/orders/$1",
-        "<rootDir>/modules/orders/$1"
-      ],
-      "^@api/modules/promotions/(.*)$": [
-        "<rootDir>/modules/checkout/discounts/$1",
-        "<rootDir>/modules/checkout/promotions/$1",
-        "<rootDir>/modules/promotions/$1"
-      ],
-      "^@api/modules/payments/(.*)$": [
-        "<rootDir>/modules/billing/payments/$1",
-        "<rootDir>/modules/payments/$1"
-      ],
-      "^@api/modules/wallet/(.*)$": [
-        "<rootDir>/modules/billing/wallets/$1",
-        "<rootDir>/modules/billing/wallet/$1",
-        "<rootDir>/modules/wallet/$1"
-      ],
-      "^@api/modules/reviews/(.*)$": [
-        "<rootDir>/modules/engagement/reviews/$1",
-        "<rootDir>/modules/reviews/$1"
-      ],
-      "^@api/modules/wishlist/(.*)$": [
-        "<rootDir>/modules/engagement/wishlist/$1",
-        "<rootDir>/modules/wishlist/$1"
-      ],
-      "^@api/modules/referral/(.*)$": [
-        "<rootDir>/modules/engagement/referral/$1",
-        "<rootDir>/modules/referral/$1"
-      ],
+      "^@common/(.*)$": "<rootDir>/common/$1",
+      "^@infra/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@infrastructure/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@modules/(.*)$": "<rootDir>/modules/$1",
+      "^@api/common/search/(.*)$": "<rootDir>/modules/search/$1",
+      "^@api/common/audit-log/(.*)$": "<rootDir>/common/audit-log/$1",
+      "^@api/common/(.*)$": "<rootDir>/common/$1",
+      "^@api/infrastructure/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@api/modules/shared/(.*)$": "<rootDir>/common/$1",
+      "^@api/modules/infrastructure/(.*)$": "<rootDir>/infrastructure/$1",
+      "^@api/modules/auth/(.*)$": "<rootDir>/modules/auth/$1",
+      "^@api/modules/users/(.*)$": "<rootDir>/modules/users/$1",
+      "^@api/modules/vendors/(.*)$": "<rootDir>/modules/vendors/$1",
+      "^@api/modules/creators/(.*)$": "<rootDir>/modules/vendors/$1",
+      "^@api/modules/admin/(.*)$": "<rootDir>/modules/users/$1",
+      "^@api/modules/products/(.*)$": "<rootDir>/modules/products/$1",
+      "^@api/modules/categories/(.*)$": "<rootDir>/modules/categories/$1",
+      "^@api/modules/category/(.*)$": "<rootDir>/modules/categories/$1",
+      "^@api/modules/product-variants/(.*)$": "<rootDir>/modules/products/$1",
+      "^@api/modules/cart/(.*)$": "<rootDir>/modules/cart/$1",
+      "^@api/modules/checkout/cart/(.*)$": "<rootDir>/modules/cart/$1",
+      "^@api/modules/checkout/orders/(.*)$": "<rootDir>/modules/orders/$1",
+      "^@api/modules/checkout/(.*)$": "<rootDir>/modules/cart/$1",
+      "^@api/modules/orders/(.*)$": "<rootDir>/modules/orders/$1",
+      "^@api/modules/discounts/(.*)$": "<rootDir>/modules/discounts/$1",
+      "^@api/modules/promotions/(.*)$": "<rootDir>/modules/discounts/$1",
+      "^@api/modules/payments/(.*)$": "<rootDir>/modules/payments/$1",
+      "^@api/modules/wallets/(.*)$": "<rootDir>/modules/wallets/$1",
+      "^@api/modules/wallet/(.*)$": "<rootDir>/modules/wallets/$1",
+      "^@api/modules/reviews/(.*)$": "<rootDir>/modules/reviews/$1",
+      "^@api/modules/wishlists/(.*)$": "<rootDir>/modules/wishlists/$1",
+      "^@api/modules/wishlist/(.*)$": "<rootDir>/modules/wishlists/$1",
+      "^@api/modules/referrals/(.*)$": "<rootDir>/modules/referrals/$1",
+      "^@api/modules/referral/(.*)$": "<rootDir>/modules/referrals/$1",
+      "^@api/modules/analytics/(.*)$": "<rootDir>/modules/analytics/$1",
+      "^@api/modules/search/(.*)$": "<rootDir>/modules/search/$1",
+      "^@api/modules/upload/(.*)$": "<rootDir>/modules/upload/$1",
+      "^@api/modules/notifications/(.*)$": "<rootDir>/modules/notifications/$1",
+      "^@api/modules/security/(.*)$": "<rootDir>/modules/security/$1",
+      "^@api/modules/health/(.*)$": "<rootDir>/modules/health/$1",
+      "^@api/modules/(.*)$": "<rootDir>/modules/$1",
       "^@api/(.*)$": "<rootDir>/$1"
     }
   }

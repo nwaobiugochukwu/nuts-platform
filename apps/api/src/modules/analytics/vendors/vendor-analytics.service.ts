@@ -1,21 +1,30 @@
-import { Injectable, Optional } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
-import { CacheService } from '@api/modules/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
-import { parseDateRange } from '@api/modules/shared/utils/date-range.util';
+﻿import { Injectable, Optional } from '@nestjs/common';
+import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { CacheService } from '@api/infrastructure/cache/cache.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import {
+  fillAnalyticsDateGaps,
+  parseDateRange,
+} from '@api/common/utils/date-range.util';
+import { MarketplaceAnalyticsService } from '../marketplace-analytics.service';
+import { VendorProductAnalyticsQueryDto } from './dto/vendor-product-analytics-query.dto';
 import {
   RANGE_DAYS,
   VendorAnalyticsQueryDto,
 } from './dto/vendor-analytics-query.dto';
-import {
-  VendorAnalyticsSummaryDto,
-  VendorDailyTrendDto,
-} from './dto/vendor-analytics-summary.dto';
+import { VendorAnalyticsSummaryDto } from './dto/vendor-analytics-summary.dto';
+
+const PAID_PAYMENT_STATUSES = [
+  PaymentStatus.SUCCESS,
+  PaymentStatus.REFUND_PENDING,
+  PaymentStatus.REFUNDED,
+];
 
 @Injectable()
 export class VendorAnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly marketplaceAnalytics: MarketplaceAnalyticsService,
     @Optional() private readonly cache?: CacheService,
   ) {}
 
@@ -34,8 +43,12 @@ export class VendorAnalyticsService {
 
     const compute = async (): Promise<VendorAnalyticsSummaryDto> => {
       const notCancelled = { status: { not: OrderStatus.CANCELLED } };
+      const paidOrder = {
+        ...notCancelled,
+        payment: { is: { status: { in: PAID_PAYMENT_STATUSES } } },
+      };
 
-      // All aggregates run DB-side — the previous implementation pulled EVERY
+      // All aggregates run DB-side â€” the previous implementation pulled EVERY
       // order item for the vendor into memory to sum/trend in JavaScript,
       // which degrades linearly (and unboundedly) with sales volume.
       // Independent read queries run in parallel on the connection pool.
@@ -52,6 +65,7 @@ export class VendorAnalyticsService {
         orderTrendRows,
         distinctOrders,
         variantProducts,
+        engagement,
       ] = await Promise.all([
         this.prisma.product.count({
           where: { vendorId, isDeleted: false },
@@ -85,32 +99,40 @@ export class VendorAnalyticsService {
         }),
         // Lifetime revenue
         this.prisma.orderItem.aggregate({
-          where: { vendorId, order: notCancelled },
+          where: { vendorId, order: paidOrder },
           _sum: { totalPrice: true },
         }),
         // Revenue within the requested period
         this.prisma.orderItem.aggregate({
           where: {
             vendorId,
-            order: { ...notCancelled, createdAt: { gte: start, lte: end } },
+            order: { ...paidOrder, createdAt: { gte: start, lte: end } },
           },
           _sum: { totalPrice: true },
         }),
-        // Daily revenue trend — DATE_TRUNC buckets computed in the database
+        // Daily revenue trend â€” DATE_TRUNC buckets computed in the database
         this.prisma.$queryRaw<{ date: string; value: string | number }[]>`
-        SELECT to_char(DATE_TRUNC('day', o."createdAt"), 'YYYY-MM-DD') AS date,
+        SELECT to_char(
+                 DATE_TRUNC('day', (o."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+                 'YYYY-MM-DD'
+               ) AS date,
                SUM(oi."totalPrice") AS value
         FROM "order_items" oi
         JOIN "orders" o ON o.id = oi."orderId"
+        JOIN "payments" pay ON pay."orderId" = o.id
+          AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
         WHERE oi."vendorId" = ${vendorId}
           AND o.status != 'CANCELLED'
           AND o."createdAt" BETWEEN ${start} AND ${end}
         GROUP BY 1
         ORDER BY 1
       `,
-        // Daily order-count trend — distinct orders per day bucket
+        // Daily order-count trend â€” distinct orders per day bucket
         this.prisma.$queryRaw<{ date: string; value: string | number }[]>`
-        SELECT to_char(DATE_TRUNC('day', o."createdAt"), 'YYYY-MM-DD') AS date,
+        SELECT to_char(
+                 DATE_TRUNC('day', (o."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+                 'YYYY-MM-DD'
+               ) AS date,
                COUNT(DISTINCT o.id) AS value
         FROM "order_items" oi
         JOIN "orders" o ON o.id = oi."orderId"
@@ -122,7 +144,7 @@ export class VendorAnalyticsService {
       `,
         // Distinct non-cancelled orders (for AOV)
         this.prisma.order.count({
-          where: { orderItems: { some: { vendorId } }, ...notCancelled },
+          where: { orderItems: { some: { vendorId } }, ...paidOrder },
         }),
         this.prisma.product.findMany({
           where: { vendorId, isDeleted: false, hasVariants: true },
@@ -134,6 +156,7 @@ export class VendorAnalyticsService {
             },
           },
         }),
+        this.marketplaceAnalytics.getSummary(start, end, vendorId),
       ]);
 
       const totalRevenue = Number(totalRevenueAgg._sum.totalPrice ?? 0);
@@ -143,7 +166,7 @@ export class VendorAnalyticsService {
           this.getTopProducts(vendorId, top),
           this.getCustomerSummary(vendorId, totalRevenue, distinctOrders),
           this.prisma.orderItem.aggregate({
-            where: { vendorId, order: notCancelled },
+            where: { vendorId, order: paidOrder },
             _sum: { quantity: true },
           }),
           this.prisma.order.findMany({
@@ -179,7 +202,7 @@ export class VendorAnalyticsService {
       const adjustedOutOfStockProducts =
         outOfStockProducts + variantOutOfStockCount;
 
-      // ── Derive total orders from status breakdown ──
+      // â”€â”€ Derive total orders from status breakdown â”€â”€
       const totalOrders = orderStatusCountsRaw.reduce(
         (s, r) =>
           s +
@@ -189,12 +212,12 @@ export class VendorAnalyticsService {
         0,
       );
 
-      // ── Revenue calculations (DB-side aggregates) ──
+      // â”€â”€ Revenue calculations (DB-side aggregates) â”€â”€
       const revenueInPeriod = Number(revenueInPeriodAgg._sum.totalPrice ?? 0);
 
-      // ── Trends (day buckets come pre-aggregated from the database — the
-      // previous in-memory grouping overwrote same-day keys, under-counting) ──
-      const revenueTrend = this.fillDateGaps(
+      // â”€â”€ Trends (day buckets come pre-aggregated from the database â€” the
+      // previous in-memory grouping overwrote same-day keys, under-counting) â”€â”€
+      const revenueTrend = fillAnalyticsDateGaps(
         revenueTrendRows.map((r) => ({ date: r.date, value: Number(r.value) })),
         start,
         end,
@@ -204,13 +227,13 @@ export class VendorAnalyticsService {
         (s, r) => s + Number(r.value),
         0,
       );
-      const orderTrend = this.fillDateGaps(
+      const orderTrend = fillAnalyticsDateGaps(
         orderTrendRows.map((r) => ({ date: r.date, value: Number(r.value) })),
         start,
         end,
       );
 
-      // ── Order status breakdown ──
+      // â”€â”€ Order status breakdown â”€â”€
       const orderStatusCounts = orderStatusCountsRaw.map((entry) => ({
         status: entry.status,
         count:
@@ -219,21 +242,11 @@ export class VendorAnalyticsService {
             : 0,
       }));
 
-      // ── Products sold (total units across all order items) ──
+      // â”€â”€ Products sold (total units across all order items) â”€â”€
       const productsSold = productsSoldAgg._sum.quantity ?? 0;
 
-      // ── Conversion rate ──
-      const conversionRate =
-        totalProducts > 0
-          ? Math.min(
-              100,
-              Number(
-                ((distinctOrders / Math.max(totalProducts, 1)) * 100).toFixed(
-                  1,
-                ),
-              ),
-            )
-          : 0;
+      // â”€â”€ Conversion rate â”€â”€
+      const conversionRate = engagement.productViewToPurchaseRate;
 
       return {
         totalProducts,
@@ -278,15 +291,43 @@ export class VendorAnalyticsService {
           }),
         ),
         conversionRate,
+        engagement,
       };
     };
 
     if (this.cache) {
       const cacheKey = `vendor:analytics:${vendorId}:${query.range ?? 'custom'}:${start.toISOString()}:${end.toISOString()}:${top}`;
-      return this.cache.wrap(cacheKey, 60, compute);
+      return this.cache.wrapWithLock(cacheKey, 20, compute);
     }
 
     return compute();
+  }
+
+  async getProductPerformance(
+    vendorId: string,
+    query: VendorProductAnalyticsQueryDto,
+  ) {
+    const defaultDaysAgo = query.range ? RANGE_DAYS[query.range] : 30;
+    const { start, end } = parseDateRange(
+      query.startDate,
+      query.endDate,
+      defaultDaysAgo,
+    );
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const loadProducts = () =>
+      this.marketplaceAnalytics.getVendorProducts(
+        vendorId,
+        start,
+        end,
+        page,
+        limit,
+      );
+
+    if (!this.cache) return loadProducts();
+
+    const cacheKey = `vendor:analytics:products:v1:${vendorId}:${start.toISOString()}:${end.toISOString()}:${page}:${limit}`;
+    return this.cache.wrapWithLock(cacheKey, 20, loadProducts);
   }
 
   private async getTopProducts(vendorId: string, limit: number) {
@@ -294,7 +335,10 @@ export class VendorAnalyticsService {
       by: ['productId'],
       where: {
         vendorId,
-        order: { status: { not: OrderStatus.CANCELLED } },
+        order: {
+          status: { not: OrderStatus.CANCELLED },
+          payment: { is: { status: { in: PAID_PAYMENT_STATUSES } } },
+        },
       },
       _sum: { totalPrice: true, quantity: true },
       orderBy: { _sum: { totalPrice: 'desc' } },
@@ -340,19 +384,23 @@ export class VendorAnalyticsService {
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(DISTINCT o."userId") as count FROM "order_items" oi
         JOIN "orders" o ON o.id = oi."orderId"
+        JOIN "payments" pay ON pay."orderId" = o.id
+          AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
         WHERE oi."vendorId" = ${vendorId} AND o.status != 'CANCELLED'
       `,
       this.prisma.$queryRaw<{ count: bigint }[]>`
         SELECT COUNT(*) as count FROM (
           SELECT o."userId" FROM "order_items" oi
           JOIN "orders" o ON o.id = oi."orderId"
+          JOIN "payments" pay ON pay."orderId" = o.id
+            AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
           WHERE oi."vendorId" = ${vendorId} AND o.status != 'CANCELLED'
           GROUP BY o."userId" HAVING COUNT(DISTINCT o.id) > 1
         ) AS repeaters
       `,
     ]);
 
-    // AOV = lifetime revenue / distinct non-cancelled orders
+    // AOV = gross paid lifetime revenue / distinct non-cancelled paid orders.
     const aov = distinctOrders > 0 ? totalRevenue / distinctOrders : 0;
 
     return {
@@ -360,21 +408,5 @@ export class VendorAnalyticsService {
       repeatBuyers: Number(repeaters[0]?.count ?? 0),
       averageOrderValue: aov.toFixed(2),
     };
-  }
-
-  private fillDateGaps(
-    data: VendorDailyTrendDto[],
-    start: Date,
-    end: Date,
-  ): VendorDailyTrendDto[] {
-    const map = new Map(data.map((d) => [d.date, d.value]));
-    const result: VendorDailyTrendDto[] = [];
-    const current = new Date(start);
-    while (current <= end) {
-      const key = current.toISOString().slice(0, 10);
-      result.push({ date: key, value: map.get(key) ?? 0 });
-      current.setDate(current.getDate() + 1);
-    }
-    return result;
   }
 }

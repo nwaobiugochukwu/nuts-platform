@@ -2,7 +2,7 @@
 
 import type { AppNotification,NotificationType } from "@/api/notifications";
 import { Button } from "@/component/ui/button";
-import { useNotifications } from "@/hook/use-notifications";
+import { useNotifications } from "@/hooks/use-notifications";
 import {
   notificationDetailPath,
   resolveNotificationTargetUrl,
@@ -22,6 +22,7 @@ Package,
 Search,
 SlidersHorizontal,
 Trash2,
+Users,
 X,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
@@ -44,7 +45,11 @@ function getNotificationIcon(type: NotificationType) {
     case "ORDER_DELIVERED":
     case "ORDER_CANCELLED":
       return <Package className="h-5 w-5 text-blue-500" />;
+    case "VENDOR_FOLLOWED":
+      return <Users className="h-5 w-5 text-indigo-500" />;
     case "PAYMENT_RECEIVED":
+      return <CreditCard className="h-5 w-5 text-emerald-500" />;
+    case "PAYMENT_REFUNDED":
       return <CreditCard className="h-5 w-5 text-emerald-500" />;
     case "PAYMENT_FAILED":
       return <CreditCard className="h-5 w-5 text-rose-500" />;
@@ -65,8 +70,10 @@ const notificationTypeLabels: Record<NotificationType, string> = {
   ORDER_CANCELLED: "Order cancelled",
   PAYMENT_RECEIVED: "Payment received",
   PAYMENT_FAILED: "Payment failed",
+  PAYMENT_REFUNDED: "Refund processed",
   PAYOUT_PROCESSED: "Payout processed",
   LOW_STOCK_ALERT: "Low stock",
+  VENDOR_FOLLOWED: "New follower",
   SYSTEM_ANNOUNCEMENT: "System announcement",
 };
 
@@ -81,6 +88,7 @@ const categoryNotificationTypes = {
   payments: new Set<NotificationType>([
     "PAYMENT_RECEIVED",
     "PAYMENT_FAILED",
+    "PAYMENT_REFUNDED",
     "PAYOUT_PROCESSED",
   ]),
 };

@@ -23,6 +23,10 @@ import type { ShippingInformation, UserResponseDto } from "@/api/dto/user";
 import axios from "axios";
 import { authBroadcast, type AuthEvent } from "@/lib/auth-events";
 import { clearBrowserQueryClient } from "@/lib/query-client";
+import {
+  rotateRecommendationSessionId,
+  rotateRecommendationVisitorId,
+} from "@/lib/recommendation-session";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { create } from "zustand";
 import { clearWishlistOnLogout } from "./wishlist";
@@ -103,6 +107,8 @@ export interface LogoutOptions {
   redirectTo?: string;
 }
 
+export type GoogleAuthIntent = "login" | "signup";
+
 interface LoginPayload {
   email: string;
   password: string;
@@ -126,6 +132,17 @@ export interface AuthState {
 
   // Auth Operations
   login: (payload: LoginPayload) => Promise<void>;
+  googleAuthenticate: (
+    idToken: string,
+    role: 'user' | 'vendor',
+    intent: GoogleAuthIntent,
+    options?: {
+      referralCode?: string;
+      storeName?: string;
+      storeDescription?: string;
+      businessPhone?: string;
+    },
+  ) => Promise<void>;
   logout: (options?: LogoutOptions & { role?: AuthRole }) => Promise<void>;
   hydrateRole: (role: AuthRole) => void;
   hydrateFromCookies: () => Promise<void>;
@@ -134,6 +151,26 @@ export interface AuthState {
 
 let pendingHydrationPromise: Promise<void> | null = null;
 let broadcastSubscribed = false;
+
+function disableGoogleAutoSelectOnSignOut(): void {
+  if (typeof window === "undefined") return;
+
+  const googleId = (
+    window as Window & {
+      google?: {
+        accounts?: {
+          id?: { disableAutoSelect?: () => void };
+        };
+      };
+    }
+  ).google?.accounts?.id;
+
+  try {
+    googleId?.disableAutoSelect?.();
+  } catch {
+    // Google UI state must never prevent the app session from being cleared.
+  }
+}
 
 export const resetAuthBootstrap = () => {
   pendingHydrationPromise = null;
@@ -166,6 +203,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       return;
     }
 
+    const currentUser = get().user;
+    if (currentUser && (currentUser.id !== rawUser.id || currentUser.role !== userRole)) {
+      rotateRecommendationSessionId();
+      rotateRecommendationVisitorId();
+    }
+
     markSessionAuthenticated(userRole);
 
     const capabilities =
@@ -194,6 +237,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   clearSession: () => {
+    if (get().role === "user") {
+      rotateRecommendationSessionId();
+      rotateRecommendationVisitorId();
+    }
     clearAuthTokens();
     markSessionUnauthenticated();
     set({
@@ -257,6 +304,64 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
+  googleAuthenticate: async (idToken, role, intent, options) => {
+    set({ status: 'hydrating', isLoading: true, isInitialized: false });
+    try {
+      let responseData: AuthResponseDto | VendorAuthSessionDto;
+      if (role === 'vendor') {
+        responseData = (
+          intent === 'signup'
+            ? await vendorAuthService.googleRegister({
+                idToken,
+                storeName: options?.storeName,
+                storeDescription: options?.storeDescription,
+                businessPhone: options?.businessPhone,
+              })
+            : await vendorAuthService.googleLogin({ idToken })
+        ).data;
+      } else {
+        responseData = (
+          intent === 'signup'
+            ? await authService.googleRegister({
+                idToken,
+                referralCode: options?.referralCode,
+              })
+            : await authService.googleLogin({ idToken })
+        ).data;
+      }
+
+      const rawUser =
+        'vendor' in responseData ? responseData.vendor : responseData.user;
+      if (!rawUser) {
+        throw new Error('Google authentication response did not include a user profile');
+      }
+
+      if (role === 'vendor' && !responseData.accessToken) {
+        set({ status: 'unauthenticated', isLoading: false, isInitialized: true });
+        const err = Object.assign(
+          new Error(
+            'Vendor account is under review and awaiting administrative approval.',
+          ),
+          { isPendingApproval: true as const, vendor: rawUser },
+        );
+        throw err;
+      }
+
+      if (responseData?.accessToken) {
+        clearAuthTokens();
+        setAuthTokens(role, { accessToken: responseData.accessToken });
+      }
+
+      resetAuthBootstrap();
+
+      clearBrowserQueryClient();
+      get().setSession(rawUser, role);
+      authBroadcast.publish({ type: 'LOGIN', role });
+    } catch (err) {
+      set({ status: 'unauthenticated', isLoading: false, isInitialized: true });
+      throw err;
+    }
+  },
   logout: async (options) => {
     const currentRole = options?.role || get().role || "user";
     const skipApi = options?.skipApi ?? false;
@@ -283,6 +388,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       }
     }
 
+    disableGoogleAutoSelectOnSignOut();
     clearAuthTokens();
     resetAuthBootstrap();
     if (currentRole === "user") {

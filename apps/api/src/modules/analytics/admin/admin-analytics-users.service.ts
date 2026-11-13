@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@api/modules/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { fillAnalyticsDateGaps } from '@api/common/utils/date-range.util';
 import { DailyTrendDto } from './dto/admin-analytics-summary.dto';
 
 @Injectable()
@@ -27,7 +28,11 @@ export class AdminAnalyticsUsersService {
   /** Users who have placed at least one order */
   async getUsersWithOrders(): Promise<number> {
     const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
-      SELECT COUNT(DISTINCT "userId") AS count FROM "orders"
+      SELECT COUNT(DISTINCT o."userId") AS count
+      FROM "orders" o
+      JOIN "payments" pay ON pay."orderId" = o.id
+        AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
+      WHERE o.status != 'CANCELLED'
     `;
     return Number(count);
   }
@@ -37,8 +42,11 @@ export class AdminAnalyticsUsersService {
     const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
       SELECT COUNT(*) AS count
       FROM (
-        SELECT "userId" FROM "orders"
-        GROUP BY "userId"
+        SELECT o."userId" FROM "orders" o
+        JOIN "payments" pay ON pay."orderId" = o.id
+          AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
+        WHERE o.status != 'CANCELLED'
+        GROUP BY o."userId"
         HAVING COUNT(*) > 1
       ) AS repeaters
     `;
@@ -47,22 +55,24 @@ export class AdminAnalyticsUsersService {
 
   /** Daily registration trend */
   async getRegistrationTrend(start: Date, end: Date): Promise<DailyTrendDto[]> {
-    // DATE_TRUNC correctly buckets each registration into calendar days
     const rows = await this.prisma.$queryRaw<
-      Array<{ day: Date; count: bigint }>
+      Array<{ date: string; count: bigint }>
     >`
-      SELECT DATE_TRUNC('day', "createdAt") AS day,
+      SELECT TO_CHAR(
+               DATE_TRUNC('day', ("createdAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Lagos'),
+               'YYYY-MM-DD'
+             ) AS date,
              COUNT(*) AS count
       FROM   "users"
       WHERE  "createdAt" >= ${start}
         AND  "createdAt" <= ${end}
-      GROUP  BY DATE_TRUNC('day', "createdAt")
-      ORDER  BY day ASC
+      GROUP  BY 1
+      ORDER  BY 1 ASC
     `;
 
-    return this.fillDateGaps(
+    return fillAnalyticsDateGaps(
       rows.map((r) => ({
-        date: r.day.toISOString().slice(0, 10),
+        date: r.date,
         value: Number(r.count ?? 0),
       })),
       start,
@@ -80,9 +90,17 @@ export class AdminAnalyticsUsersService {
       }>
     >`
       SELECT
-        (SELECT COUNT(*) FROM "carts" WHERE "createdAt" >= $1 AND "createdAt" <= $2) as total_carts,
-        (SELECT COUNT(*) FROM "carts" WHERE "checkedOut" = true AND "createdAt" >= $1 AND "createdAt" <= $2) as checked_out_carts,
-        (SELECT COUNT(*) FROM "orders" WHERE "status" != 'CANCELLED' AND "createdAt" >= ${start} AND "createdAt" <= ${end}) as completed_orders
+        (SELECT COUNT(*) FROM "carts" c WHERE c."createdAt" >= ${start} AND c."createdAt" <= ${end}) as total_carts,
+        (SELECT COUNT(*) FROM "carts" c WHERE c."checkedOut" = true AND c."createdAt" >= ${start} AND c."createdAt" <= ${end}) as checked_out_carts,
+        (SELECT COUNT(DISTINCT o."cartId")
+          FROM "orders" o
+          JOIN "payments" pay ON pay."orderId" = o.id
+            AND pay.status IN ('SUCCESS', 'REFUND_PENDING', 'REFUNDED')
+          JOIN "carts" c ON c.id = o."cartId"
+          WHERE c."checkedOut" = true
+            AND o.status != 'CANCELLED'
+            AND c."createdAt" >= ${start}
+            AND c."createdAt" <= ${end}) as completed_orders
     `;
 
     const totalCartsCreated = Number(row.total_carts);
@@ -107,21 +125,5 @@ export class AdminAnalyticsUsersService {
           ? Number(((ordersCompleted / cartsCheckedOut) * 100).toFixed(1))
           : 0,
     };
-  }
-
-  private fillDateGaps(
-    data: DailyTrendDto[],
-    start: Date,
-    end: Date,
-  ): DailyTrendDto[] {
-    const map = new Map(data.map((d) => [d.date, d.value]));
-    const result: DailyTrendDto[] = [];
-    const current = new Date(start);
-    while (current <= end) {
-      const key = current.toISOString().slice(0, 10);
-      result.push({ date: key, value: map.get(key) ?? 0 });
-      current.setDate(current.getDate() + 1);
-    }
-    return result;
   }
 }

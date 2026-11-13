@@ -41,7 +41,18 @@ export default function RootLayout({
       <head>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
       </head>
-      <body className={`${inter.variable} font-sans antialiased text-foreground bg-background`}>
+      {/*
+       * suppressHydrationWarning on <body> silences false-positive hydration
+       * mismatches caused by browser extensions (Grammarly, 1Password, etc.)
+       * that inject their own data-* attributes into the <body> element before
+       * React has a chance to hydrate. This is a React-blessed pattern for
+       * exactly this scenario — it only suppresses warnings one level deep and
+       * does NOT affect child component hydration checks.
+       */}
+      <body
+        className={`${inter.variable} font-sans antialiased text-foreground bg-background`}
+        suppressHydrationWarning
+      >
         <Suspense fallback={null}>
           <RouteProgressBar />
         </Suspense>

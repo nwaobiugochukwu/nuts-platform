@@ -32,11 +32,11 @@ import {
   buildCursorWhere,
   getCursorPagination,
   type CursorPaginationMetaDto,
-} from '@api/modules/shared/utils/cursor-pagination.util';
-import { REDIS_CLIENT } from '../infrastructure/redis/redis.constants';
-import { PrismaService } from '../infrastructure/prisma/prisma.service';
+} from '@api/common/utils/cursor-pagination.util';
+import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { AuthSessionService } from '../auth/sessions/auth-session.service';
-import { getErrorMessage } from '@api/modules/shared/utils/error-details.util';
+import { getErrorMessage } from '@api/common/utils/error-details.util';
 
 import { randomUUID } from 'node:crypto';
 import { WebPushService } from './push/push.service';
@@ -77,10 +77,15 @@ function mapTypeToCategory(type: NotificationType): NotificationCategory {
       return 'orderUpdates';
     case NotificationType.PAYMENT_RECEIVED:
     case NotificationType.PAYMENT_FAILED:
+    case NotificationType.PAYMENT_REFUNDED:
     case NotificationType.PAYOUT_PROCESSED:
       return 'paymentAlerts';
     case NotificationType.LOW_STOCK_ALERT:
+    case NotificationType.PRICE_DROP:
+    case NotificationType.RESTOCKED:
       return 'inventoryAlerts';
+    case NotificationType.VENDOR_FOLLOWED:
+      return 'socialUpdates';
     case NotificationType.SYSTEM_ANNOUNCEMENT:
     default:
       return 'marketingPromos';
@@ -376,6 +381,67 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
       .map((r) => r.value);
   }
 
+  /**
+   * Delivers an official announcement to one bounded recipient batch.
+   * In-app system announcements bypass marketing preferences, use a stable
+   * per-recipient dedupe key, and publish only newly inserted rows to SSE.
+   */
+  async createAnnouncementBatch(input: {
+    announcementId: string;
+    recipients: string[];
+    role: Extract<ROLE, 'USER' | 'ADMIN' | 'VENDOR'>;
+    title: string;
+    message: string;
+    priority: NotificationPriority;
+    link?: string | null;
+  }): Promise<number> {
+    if (input.recipients.length === 0) return 0;
+
+    let createdCount = 0;
+    const chunkSize = 200;
+
+    for (
+      let offset = 0;
+      offset < input.recipients.length;
+      offset += chunkSize
+    ) {
+      const recipientChunk = input.recipients.slice(offset, offset + chunkSize);
+      const created = await this.prisma.notification.createManyAndReturn({
+        data: recipientChunk.map((userId) => ({
+          userId,
+          role: input.role,
+          type: NotificationType.SYSTEM_ANNOUNCEMENT,
+          title: input.title,
+          message: input.message,
+          priority: input.priority,
+          link: input.link ?? undefined,
+          metadata: {
+            announcementId: input.announcementId,
+            audience:
+              input.role === ROLE.ADMIN
+                ? 'ADMINISTRATORS'
+                : input.role === ROLE.VENDOR
+                  ? 'VENDORS'
+                  : 'CUSTOMERS',
+          },
+          dedupeKey: `announcement:${input.announcementId}:${input.role}:${userId}`,
+        })),
+        skipDuplicates: true,
+      });
+
+      for (const notification of created) {
+        this.broadcastNotification(
+          notification.userId,
+          notification.role,
+          notification,
+        );
+      }
+      createdCount += created.length;
+    }
+
+    return createdCount;
+  }
+
   async list(
     userId: string,
     role: ROLE = ROLE.USER,
@@ -414,6 +480,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           in: [
             NotificationType.PAYMENT_RECEIVED,
             NotificationType.PAYMENT_FAILED,
+            NotificationType.PAYMENT_REFUNDED,
             NotificationType.PAYOUT_PROCESSED,
           ],
         },

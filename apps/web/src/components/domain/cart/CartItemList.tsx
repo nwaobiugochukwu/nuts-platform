@@ -4,7 +4,7 @@ import { RemoteImage } from "@/component/ui/RemoteImage";
 import type { CartItemResponseDto } from "@/api/dto/cart";
 import { Button } from "@/component/ui/button";
 import { Card,CardContent } from "@/component/ui/card";
-import { useCart } from "@/hook/use-cart";
+import { useCart } from "@/hooks/use-cart";
 import { formatPrice } from "@/lib/util";
 import { Minus,Plus,ShoppingBag,Trash2 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";

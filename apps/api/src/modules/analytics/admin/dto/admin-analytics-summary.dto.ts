@@ -390,14 +390,15 @@ export class AdminAnalyticsSummaryDto {
   totalOrders!: number;
 
   @ApiProperty({
-    description: 'Total platform revenue across all time (formatted decimal)',
+    description:
+      'Gross platform revenue from successful, refund-pending, or refunded payments, before refunds (formatted decimal)',
     example: '285000.00',
   })
   totalRevenue!: string;
 
   @ApiProperty({
     description:
-      'Revenue generated within the selected date range (formatted decimal)',
+      'Gross platform revenue from paid orders created in the selected date range, before refunds (formatted decimal)',
     example: '15250.75',
   })
   revenueInPeriod!: string;

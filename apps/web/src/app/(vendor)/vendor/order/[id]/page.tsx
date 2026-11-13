@@ -220,6 +220,8 @@ export default function VendorOrderDetailPage() {
                           src={item.productSnapshot.images[0]}
                           alt={item.productSnapshot.name ?? "Item"}
                           fill
+                          sizes="64px"
+                          priority={idx < 4}
                           className="object-cover"
                         />
                       ) : (

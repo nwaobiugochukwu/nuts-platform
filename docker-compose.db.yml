@@ -44,6 +44,25 @@ services:
       redis:
         condition: service_healthy
 
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: nuts_dev_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: nuts
+      RABBITMQ_DEFAULT_PASS: nuts_local_dev
+    volumes:
+      - nuts_dev_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
 volumes:
   nuts_dev_postgres_data:
     name: nuts_dev_postgres_data
@@ -51,3 +70,5 @@ volumes:
     name: nuts_dev_redis_data
   nuts_dev_redisinsight_data:
     name: nuts_dev_redisinsight_data
+  nuts_dev_rabbitmq_data:
+    name: nuts_dev_rabbitmq_data

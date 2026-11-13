@@ -8,10 +8,12 @@ import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, LogIn, ShieldAlert } from "lucide-react";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import Link from "@/components/navigation/AppLink";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { FormProvider,useForm } from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -34,6 +36,7 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirectUrl = safeInternalPath(searchParams.get("redirect"), "/");
   const login = useAuthStore((s) => s.login);
+  const googleAuthenticate = useAuthStore((s) => s.googleAuthenticate);
 
   const [deactivatedCredentials, setDeactivatedCredentials] = useState<LoginFormData | null>(null);
   const [suspendedInfo, setSuspendedInfo] = useState<SuspendedAccountInfo | null>(null);
@@ -237,32 +240,78 @@ function LoginForm() {
             </div>
           </div>
         ) : (
-          <FormProvider {...methods}>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <FormInput
-                name="email"
-                label="Email Address"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
-              <FormInput
-                name="password"
-                label="Password"
-                type="password"
-                placeholder="Enter your password"
-                autoComplete="current-password"
-              />
+          <div className="space-y-4">
+            <GoogleSignInButton
+              onSuccess={async (idToken) => {
+                try {
+                  await googleAuthenticate(idToken, "user", "login");
+                  toast.success("Welcome back!");
+                  router.push(redirectUrl);
+                } catch (err: unknown) {
+                  const parsed = parseGoogleAuthError(err);
+                  if (parsed.isGoogleAccountNotFound) {
+                    toast.info("No customer account is associated with this Google account. Please sign up first.");
+                    const signupUrl = searchParams.get("redirect")
+                      ? `/auth/register?redirect=${encodeURIComponent(redirectUrl)}`
+                      : "/auth/register";
+                    router.replace(signupUrl);
+                    return;
+                  }
+                  if (parsed.isSuspended) {
+                    setSuspendedInfo({
+                      email: "Your Google Account",
+                      reason:
+                        parsed.suspensionInfo?.reason ||
+                        "Administrative review or policy violation.",
+                      suspendedUntil:
+                        parsed.suspensionInfo?.suspendedUntil || null,
+                      message: parsed.message,
+                    });
+                    setDeactivatedCredentials(null);
+                    return;
+                  }
+                  toast.error(parsed.message);
+                }
+              }}
+              onError={(msg) => toast.error(msg)}
+            />
 
-              <Button
-                type="submit"
-                className="w-full rounded-2xl h-12 text-sm font-bold shadow-sm"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-          </FormProvider>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border/60" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">or sign in with email</span>
+              </div>
+            </div>
+
+            <FormProvider {...methods}>
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <FormInput
+                  name="email"
+                  label="Email Address"
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                />
+                <FormInput
+                  name="password"
+                  label="Password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full rounded-2xl h-12 text-sm font-bold shadow-sm"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Signing in..." : "Sign In"}
+                </Button>
+              </form>
+            </FormProvider>
+          </div>
         )}
 
         <div className="flex items-center justify-between text-xs sm:text-sm pt-2">

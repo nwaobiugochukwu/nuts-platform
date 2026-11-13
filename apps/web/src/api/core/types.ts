@@ -66,7 +66,9 @@ export type OrderStatus =
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "REFUND_PENDING"
+  | "REFUNDED";
 
 export type PaymentStatus =
   | "PENDING"

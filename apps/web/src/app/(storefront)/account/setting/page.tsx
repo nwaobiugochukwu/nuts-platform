@@ -98,9 +98,9 @@ export default function AccountSettingPage() {
 
   // Referral stats — fetched only when the referral tab is active
   const { data: referralStats, isLoading: referralStatsLoading } = useQuery({
-    queryKey: ["referral", "stats"],
+    queryKey: ["referral", user?.id, "stats"],
     queryFn: async () => (await referralService.getStats()).data,
-    enabled: activeTab === "referral",
+    enabled: activeTab === "referral" && Boolean(user?.id),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
@@ -224,11 +224,11 @@ export default function AccountSettingPage() {
   });
 
   // Referral copy helpers — prefer live stats code, fallback to profile
-  const referralCode = referralStats?.code ?? user?.referralCode ?? "NUTS-MEMBER";
+  const referralCode = referralStats?.code ?? null;
   const referralLink =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/auth/register?ref=${referralCode}`
-      : `https://nuts.com/auth/register?ref=${referralCode}`;
+    typeof window !== "undefined" && referralCode
+      ? `${window.location.origin}/auth/register?ref=${encodeURIComponent(referralCode)}`
+      : "";
 
   const copyToClipboard = (text: string, type: "code" | "link") => {
     if (navigator.clipboard) {
@@ -450,12 +450,12 @@ export default function AccountSettingPage() {
                 <span className="text-sm font-medium text-foreground block">Your Unique Referral Code</span>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-4 py-3 font-mono font-bold tracking-widest text-lg text-foreground select-all">
-                    {referralCode}
+                    {referralCode ?? "Referral code unavailable"}
                   </div>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => copyToClipboard(referralCode, "code")}
+                    onClick={() => referralCode ? copyToClipboard(referralCode, "code") : toast.error("Your referral code is not available yet")}
                     className="rounded-xl h-12 px-4 text-sm font-medium shrink-0"
                   >
                     {copiedCode ? (

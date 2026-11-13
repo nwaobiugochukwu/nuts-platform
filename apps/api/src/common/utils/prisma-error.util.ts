@@ -45,6 +45,14 @@ export function getPrismaErrorDetail(
         message,
       };
     }
+    case 'P2021':
+    case 'P2022':
+      // Missing tables/columns are deployment or schema drift errors, not
+      // invalid client input. Keep the response generic and report a 500.
+      return {
+        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: 'Database request failed',
+      };
     default:
       return {
         status: HttpStatus.BAD_REQUEST,

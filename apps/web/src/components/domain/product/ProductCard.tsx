@@ -2,11 +2,14 @@
 
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AddedFromType } from "@/api/dto/cart";
+import type { RecommendationAttribution } from "@/api/modules/analytics";
+import { analyticsEventService } from "@/api/modules/analytics";
 import type { ProductCardDto,PublicProductResponseDto } from "@/api/dto/product";
-import { useCart } from "@/hook/use-cart";
-import { useWishlist } from "@/hook/use-wishlist";
+import { useCart } from "@/hooks/use-cart";
+import { useWishlist } from "@/hooks/use-wishlist";
 import { formatPrice } from "@/lib/util";
 import { resolveProductDetailPath } from "@/lib/product-path";
+import { storeRecommendationAttribution } from "@/lib/recommendation-attribution";
 import { useAuthStore } from "@/zustand/auth";
 import { Heart,Plus,ShoppingBag } from "lucide-react";
 import Image from "next/image";
@@ -28,6 +31,8 @@ interface ProductCardProps {
   titleClassName?: string;
   priceClassName?: string;
   priority?: boolean;
+  hideVendor?: boolean;
+  recommendationContext?: RecommendationAttribution;
 }
 
 type WishlistProductShape = {
@@ -71,6 +76,8 @@ export function ProductCard({
   titleClassName,
   priceClassName,
   priority = false,
+  hideVendor = false,
+  recommendationContext,
 }: ProductCardProps) {
   const router = useRouter();
   const targetHref = resolveProductDetailPath(product.slug, categoryPath, href);
@@ -85,6 +92,16 @@ export function ProductCard({
   const { addItem: addToCart } = useCart();
   const [isWishlistPending, setIsWishlistPending] = useState(false);
   const isLiked = isInWishlist(product.id);
+  const trackRecommendationClick = () => {
+    if (!recommendationContext || (isAuthenticated && !canPurchase)) return;
+    storeRecommendationAttribution(product.id, recommendationContext);
+    void analyticsEventService.trackRecommendation(
+      recommendationContext,
+      "CLICK",
+      { productId: product.id },
+      isAuthenticated && canPurchase,
+    ).catch(() => undefined);
+  };
 
   const isCard = !("stock" in product);
 
@@ -120,6 +137,7 @@ export function ProductCard({
       ? product.images[0].url
       : thumbnail;
   const store = product.vendor;
+  const recommendationReason = "recommendationReason" in product ? product.recommendationReason : undefined;
   const stock = isCard ? 0 : (product.stock ?? 0);
   const stockStatus = isCard ? product.stockStatus : undefined;
   const isOutOfStock = isCard
@@ -127,7 +145,7 @@ export function ProductCard({
     : stock <= 0;
   const isLowStock = isCard ? stockStatus === "Few items left" : stock > 0 && stock <= 5;
   const hasVariants =
-    isCard ? false : !!product.hasVariants || (product.variants?.length ?? 0) > 0;
+    Boolean(product.hasVariants) || (!isCard && (product.variants?.length ?? 0) > 0);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -143,7 +161,7 @@ export function ProductCard({
       return;
     }
     if (hasVariants) {
-      toast.info("Choose an option on the product page before adding this item");
+      router.push(targetHref);
       return;
     }
     if (isOutOfStock) {
@@ -157,6 +175,7 @@ export function ProductCard({
       productName: product.name,
       productSlug: product.slug,
       addedFrom: effectiveAddedFrom,
+      recommendationContext,
       path: targetHref,
     }, {
       onSuccess: () => {
@@ -214,7 +233,7 @@ export function ProductCard({
           aspectRatio === "square" ? "aspect-square" : "aspect-[3/4]"
         }`}
       >
-        <Link href={targetHref} className="block relative h-full w-full">
+        <Link href={targetHref} className="block relative h-full w-full" onClick={trackRecommendationClick}>
           {img ? (
             <Image
               src={img}
@@ -252,7 +271,7 @@ export function ProductCard({
             type="button"
             onClick={handleAdd}
             disabled={isOutOfStock || addToCart.isPending}
-            aria-label="Quick add to cart"
+            aria-label={hasVariants ? `Choose options for ${product.name}` : `Quick add ${product.name} to cart`}
             className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-card text-foreground border border-border shadow-md transition-all duration-200 hover:scale-110 hover:bg-secondary active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 z-10"
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
@@ -264,7 +283,7 @@ export function ProductCard({
       <div className="pt-2.5 pb-1 flex flex-col gap-0.5">
         {/* Title & Wishlist Row */}
         <div className="flex items-start justify-between gap-2">
-          <Link href={targetHref} className="flex-1 min-w-0">
+          <Link href={targetHref} className="flex-1 min-w-0" onClick={trackRecommendationClick}>
             <h3
               className={
                 titleClassName ||
@@ -295,7 +314,7 @@ export function ProductCard({
         </div>
 
         {/* Vendor Store Name */}
-        {store?.storeName && (
+        {!hideVendor && store?.storeName && (
           <Link
             href={`/vendor/${store.storeSlug || ""}`}
             className={`${
@@ -305,6 +324,12 @@ export function ProductCard({
           >
             {store.storeName}
           </Link>
+        )}
+
+        {recommendationReason && (
+          <p className="line-clamp-1 text-[11px] leading-4 text-muted-foreground">
+            {recommendationReason}
+          </p>
         )}
 
         {/* Price Row */}

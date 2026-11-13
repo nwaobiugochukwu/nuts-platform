@@ -9,11 +9,17 @@ import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 
 @Injectable()
-export class DatabaseQueryLoggerInterceptor implements NestInterceptor {
+export class DatabaseQueryLoggerInterceptor implements NestInterceptor<
+  unknown,
+  unknown
+> {
   private readonly logger = new Logger(DatabaseQueryLoggerInterceptor.name);
   private readonly SLOW_QUERY_THRESHOLD = 500; // 500ms
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler<unknown>,
+  ): Observable<unknown> {
     const start = Date.now();
 
     return next.handle().pipe(

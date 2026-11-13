@@ -1,11 +1,11 @@
-import {
+﻿import {
   Injectable,
   Logger,
   NestMiddleware,
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { NextFunction, Request, Response } from 'express';
-import { SECURITY } from '@api/modules/shared/constants';
+import { SECURITY } from '@api/common/constants';
 
 /**
  * Middleware to enforce a maximum request body size (10mb).

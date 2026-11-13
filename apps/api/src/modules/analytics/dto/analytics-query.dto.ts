@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 /** Preset ranges accepted by admin and vendor analytics endpoints. */
 export const ANALYTICS_RANGES = ['7d', '30d', '90d', '1y'] as const;
@@ -25,14 +32,20 @@ export class AnalyticsQueryDto {
   @IsIn(ANALYTICS_RANGES)
   range?: AnalyticsRange;
 
-  @ApiPropertyOptional({ description: 'Start date (ISO string)' })
+  @ApiPropertyOptional({
+    description:
+      'Start date (ISO timestamp). Dashboard calendar periods use Africa/Lagos boundaries; the maximum accepted range is 730 days.',
+  })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'End date (ISO string)' })
+  @ApiPropertyOptional({
+    description:
+      'End date (ISO timestamp). Dashboard calendar periods use Africa/Lagos boundaries; the maximum accepted range is 730 days.',
+  })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
 
   @ApiPropertyOptional({

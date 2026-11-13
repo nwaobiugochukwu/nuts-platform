@@ -1,5 +1,6 @@
 "use client";
 
+import type { AppNotification, NotificationType } from "@/api/notifications";
 import { notificationsApiForRole } from "@/api/notifications";
 import { Button } from "@/component/ui/button";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
@@ -16,13 +17,12 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bell,
-  Calendar,
+  CalendarDays,
   Check,
   Copy,
   CreditCard,
   ExternalLink,
   Package,
-  ShoppingBag,
   Trash2,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
@@ -30,15 +30,104 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+function getNotificationPresentation(type: NotificationType) {
+  switch (type) {
+    case "ORDER_PLACED":
+    case "ORDER_CONFIRMED":
+    case "ORDER_SHIPPED":
+    case "ORDER_DELIVERED":
+    case "ORDER_CANCELLED":
+      return {
+        label: "Order update",
+        Icon: Package,
+        iconClass: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+      };
+    case "PAYMENT_RECEIVED":
+    case "PAYMENT_FAILED":
+    case "PAYMENT_REFUNDED":
+    case "PAYOUT_PROCESSED":
+      return {
+        label: type === "PAYOUT_PROCESSED" ? "Payout update" : "Payment update",
+        Icon: CreditCard,
+        iconClass: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      };
+    case "LOW_STOCK_ALERT":
+      return {
+        label: "Inventory alert",
+        Icon: AlertTriangle,
+        iconClass: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      };
+    case "SYSTEM_ANNOUNCEMENT":
+      return {
+        label: "Announcement",
+        Icon: Bell,
+        iconClass: "bg-primary/10 text-primary",
+      };
+    case "VENDOR_FOLLOWED":
+      return {
+        label: "Store update",
+        Icon: Bell,
+        iconClass: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+      };
+    default:
+      return {
+        label: "Notification",
+        Icon: Bell,
+        iconClass: "bg-primary/10 text-primary",
+      };
+  }
+}
+
+function getMetadataString(
+  metadata: AppNotification["metadata"],
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function formatNotificationDate(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleString(undefined, {
+    dateStyle: "long",
+    timeStyle: "short",
+  });
+}
+
+function NotificationDetailSkeleton() {
+  return (
+    <main
+      aria-busy="true"
+      aria-label="Loading notification"
+      className="mx-auto w-full max-w-3xl space-y-5 py-4 sm:py-8"
+    >
+      <div className="h-9 w-36 animate-pulse rounded-lg bg-muted" />
+      <div className="space-y-6 rounded-2xl border border-border bg-card p-5 sm:p-8">
+        <div className="h-10 w-10 animate-pulse rounded-xl bg-muted" />
+        <div className="h-8 w-3/4 animate-pulse rounded-lg bg-muted" />
+        <div className="space-y-2">
+          <div className="h-4 w-full animate-pulse rounded bg-muted" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export function NotificationDetail({ id }: { id: string }) {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const rawRole = useAuthStore((state) => state.role ?? state.user?.role);
   const role = normalizeRole(rawRole) ?? "user";
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const notification = useQuery({
     queryKey: [...queryKey.notification.detail(`${role}:${user?.id ?? ""}`, id)],
@@ -55,7 +144,6 @@ export function NotificationDetail({ id }: { id: string }) {
   const item = notification.data;
   const markRequested = useRef<string | null>(null);
 
-  // Auto-mark as read on open
   useEffect(() => {
     if (
       notification.data &&
@@ -67,6 +155,13 @@ export function NotificationDetail({ id }: { id: string }) {
     }
   }, [notification.data, markAsRead]);
 
+  useEffect(
+    () => () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    },
+    [],
+  );
+
   const deleteMutation = useMutation({
     mutationFn: () => notificationsApiForRole(role).delete(id),
     onSuccess: () => {
@@ -74,250 +169,184 @@ export function NotificationDetail({ id }: { id: string }) {
       toast.success("Notification deleted");
       router.push(backHref);
     },
-    onError: () => {
-      toast.error("Failed to delete notification");
-    },
+    onError: () => toast.error("Could not delete this notification. Please try again."),
   });
 
-  const handleCopy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    toast.success("Copied to clipboard");
-    setTimeout(() => setCopiedKey(null), 2000);
+  const handleCopy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      toast.success("Reference copied");
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedKey(null), 1800);
+    } catch {
+      toast.error("Could not copy the reference");
+    }
   };
 
-  if (notification.isPending) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10 space-y-6">
-        <div className="h-6 w-36 animate-pulse rounded bg-muted" />
-        <div className="h-64 animate-pulse rounded-3xl bg-muted" />
-      </div>
-    );
-  }
+  if (notification.isPending) return <NotificationDetailSkeleton />;
 
   if (notification.isError || !item) {
     return (
-      <main className="mx-auto max-w-3xl px-4 py-12 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive mb-4">
-          <AlertCircle className="h-7 w-7" />
-        </div>
-        <h1 className="text-xl font-bold text-foreground">
-          Notification Not Found
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This notification could not be found or may have been deleted.
-        </p>
-        <Button asChild variant="outline" className="mt-6">
-          <Link href={backHref}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Link>
-        </Button>
+      <main className="mx-auto w-full max-w-3xl py-8 sm:py-12">
+        <section className="rounded-2xl border border-border bg-card px-5 py-12 text-center sm:px-8">
+          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <AlertCircle className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">
+            We couldn’t load this notification
+          </h1>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+            It may have been removed, or there may be a temporary connection issue.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <Button asChild variant="outline">
+              <Link href={backHref}>
+                <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
+                Back to notifications
+              </Link>
+            </Button>
+            {notification.isError && (
+              <Button type="button" onClick={() => void notification.refetch()}>
+                Try again
+              </Button>
+            )}
+          </div>
+        </section>
       </main>
     );
   }
 
-  // Resolve the true related target URL
+  const presentation = getNotificationPresentation(item.type);
+  const Icon = presentation.Icon;
   const actionPath = resolveNotificationTargetUrl(item, role);
-
-  // Type-specific icon and accent styling
-  const getTypeBadge = (type: string) => {
-    if (type.includes("ORDER")) {
-      return {
-        icon: <ShoppingBag className="h-5 w-5 text-blue-500" />,
-        bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-        label: type.replaceAll("_", " "),
-      };
-    }
-    if (type.includes("PAYMENT") || type.includes("PAYOUT")) {
-      return {
-        icon: <CreditCard className="h-5 w-5 text-emerald-500" />,
-        bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-        label: type.replaceAll("_", " "),
-      };
-    }
-    if (type.includes("ALERT") || type.includes("LOW_STOCK")) {
-      return {
-        icon: <AlertTriangle className="h-5 w-5 text-amber-500" />,
-        bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-        label: type.replaceAll("_", " "),
-      };
-    }
-    return {
-      icon: <Bell className="h-5 w-5 text-primary" />,
-      bg: "bg-primary/10 text-primary border-primary/20",
-      label: type.replaceAll("_", " "),
-    };
-  };
-
-  const badgeInfo = getTypeBadge(item.type);
-
-  const orderId =
-    (item.metadata?.orderId as string | undefined) ??
-    (item.metadata?.order_id as string | undefined);
-  const orderNumber = item.metadata?.orderNumber as string | undefined;
-  const paymentId =
-    (item.metadata?.paymentId as string | undefined) ??
-    (item.metadata?.payment_id as string | undefined);
+  const orderId = getMetadataString(item.metadata, "orderId", "order_id");
+  const orderNumber = getMetadataString(item.metadata, "orderNumber", "order_number");
+  const paymentId = getMetadataString(item.metadata, "paymentId", "payment_id");
+  const referenceId = orderId ?? paymentId;
+  const referenceLabel = orderId ? "Order reference" : paymentId ? "Payment reference" : "Related item";
+  const actionLabel = orderId
+    ? "View order"
+    : paymentId
+      ? "View payment"
+      : "Open related page";
+  const isUrgent = item.priority === "HIGH" || item.priority === "URGENT";
 
   return (
-    <main className="mx-auto max-w-3xl px-3 sm:px-6 py-6 sm:py-10 space-y-6">
-      {/* Breadcrumb & Navigation */}
-      <div className="flex items-center justify-between gap-3">
-        <Button asChild variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+    <main className="mx-auto w-full max-w-3xl space-y-4 py-3 sm:space-y-5 sm:py-8">
+      <div className="flex min-h-10 items-center justify-between gap-3">
+        <Button
+          asChild
+          variant="ghost"
+          size="sm"
+          className="-ml-2 gap-2 px-2 text-muted-foreground hover:text-foreground"
+        >
           <Link href={backHref}>
-            <ArrowLeft className="h-4 w-4" />
-            Back
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>All notifications</span>
           </Link>
         </Button>
         <Button
+          type="button"
           variant="ghost"
           size="icon"
+          aria-label="Delete notification"
+          title="Delete notification"
           onClick={() => setIsDeleteOpen(true)}
-          className="text-muted-foreground hover:text-destructive h-8 w-8"
-          title="Delete Notification"
+          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
-      {/* Main Notification Card */}
-      <article className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8 space-y-6">
-        {/* Top Badges & Meta */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-5">
-          <div className="flex flex-wrap items-center gap-2">
+      <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs">
+        <div className="space-y-6 p-5 sm:p-8">
+          <header className="flex items-start gap-3 sm:gap-4">
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${badgeInfo.bg}`}
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${presentation.iconClass}`}
             >
-              {badgeInfo.icon}
-              {badgeInfo.label}
+              <Icon className="h-5 w-5" aria-hidden="true" />
             </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
-            <time dateTime={item.createdAt}>
-              {new Date(item.createdAt).toLocaleString(undefined, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
-            </time>
-          </div>
-        </div>
-
-        {/* Title & Body Message */}
-        <div className="space-y-3">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            {item.title}
-          </h1>
-          <p className="whitespace-pre-wrap text-base text-foreground/85 leading-relaxed">
-            {item.message}
-          </p>
-        </div>
-
-        {/* Related Resource Action Card (Order / Payment) */}
-        {(actionPath || orderId || paymentId) && (
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 sm:p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Package className="h-4 w-4" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  {presentation.label}
+                </span>
+                {isUrgent && (
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    {item.priority === "URGENT" ? "Urgent" : "High priority"}
                   </span>
-                  <span className="font-semibold text-sm text-foreground">
-                    Associated {orderId ? "Order" : "Resource"}
-                  </span>
-                </div>
-                {orderNumber && (
-                  <p className="text-xs text-muted-foreground">
-                    Order Reference:{" "}
-                    <span className="font-mono font-bold text-foreground">
-                      #{orderNumber}
-                    </span>
-                  </p>
                 )}
               </div>
-
-              {actionPath && (
-                <Button asChild size="default" className="gap-2 font-semibold shadow-xs">
-                  <Link href={actionPath}>
-                    View {orderId ? "Order" : "Resource"} Details
-                    <ExternalLink className="h-4 w-4" />
-                  </Link>
-                </Button>
-              )}
-            </div>
-
-            {/* Quick Reference Copy Grid */}
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-primary/10 text-xs">
-              {orderId && (
-                <button
-                  type="button"
-                  onClick={() => handleCopy(orderId, "orderId")}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/80 px-2.5 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                  title="Click to copy ID"
-                >
-                  {copiedKey === "orderId" ? (
-                    <Check className="h-3 w-3 text-emerald-500" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  ID: {orderId.slice(0, 8)}...
-                </button>
-              )}
-              {paymentId && (
-                <button
-                  type="button"
-                  onClick={() => handleCopy(paymentId, "paymentId")}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-background/80 px-2.5 py-1 font-mono text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                  title="Click to copy payment ID"
-                >
-                  {copiedKey === "paymentId" ? (
-                    <Check className="h-3 w-3 text-emerald-500" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  Payment: {paymentId.slice(0, 8)}...
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Additional Metadata Inspector (if available) */}
-        {item.metadata &&
-          Object.keys(item.metadata).filter(
-            (k) => !["orderId", "order_id", "orderNumber", "paymentId"].includes(k),
-          ).length > 0 && (
-            <div className="rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Event Metadata
+              <p className="flex flex-wrap items-center gap-1.5 text-xs leading-5 text-muted-foreground">
+                <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <time dateTime={item.createdAt}>{formatNotificationDate(item.createdAt)}</time>
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                {Object.entries(item.metadata)
-                  .filter(
-                    ([k]) =>
-                      !["orderId", "order_id", "orderNumber", "paymentId"].includes(k),
-                  )
-                  .map(([key, val]) => (
-                    <div key={key} className="flex justify-between gap-2 p-1.5 rounded bg-background/60">
-                      <span className="text-muted-foreground font-mono">{key}:</span>
-                      <span className="font-medium text-foreground truncate">
-                        {typeof val === "object" ? JSON.stringify(val) : String(val)}
-                      </span>
-                    </div>
-                  ))}
-              </div>
             </div>
-          )}
+          </header>
+
+          <div className="space-y-3 border-t border-border/70 pt-6">
+            <h1 className="break-words text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
+              {item.title}
+            </h1>
+            <p className="whitespace-pre-wrap break-words text-sm leading-7 text-muted-foreground sm:text-base sm:leading-8">
+              {item.message}
+            </p>
+          </div>
+        </div>
+
+        {(actionPath || referenceId || orderNumber) && (
+          <section
+            aria-label="Related information"
+            className="flex flex-col gap-4 border-t border-border bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8"
+          >
+            <div className="min-w-0 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                {orderId ? "Related order" : paymentId ? "Related payment" : "Related item"}
+              </p>
+              {orderNumber && (
+                <p className="break-all text-sm font-semibold text-foreground">
+                  Order #{orderNumber}
+                </p>
+              )}
+              {referenceId && (
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-mono text-xs text-muted-foreground">
+                    {referenceLabel}: {referenceId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(referenceId, referenceId)}
+                    aria-label={`Copy ${referenceLabel.toLowerCase()}`}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {copiedKey === referenceId ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+            {actionPath && (
+              <Button asChild className="w-full shrink-0 gap-2 sm:w-auto">
+                <Link href={actionPath}>
+                  {actionLabel}
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            )}
+          </section>
+        )}
       </article>
 
-      {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={isDeleteOpen}
         onOpenChange={setIsDeleteOpen}
-        title="Delete Notification"
-        description="Are you sure you want to remove this notification from your inbox? This cannot be undone."
-        confirmText="Delete"
+        title="Delete notification?"
+        description="This removes the notification from your inbox. This action cannot be undone."
+        confirmText="Delete notification"
         isLoading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
       />

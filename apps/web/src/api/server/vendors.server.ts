@@ -1,6 +1,6 @@
 import { serverFetch } from "@/api/core/server-fetcher";
 import type { PublicProductResponseDto } from "@/api/dto/product";
-import type { VendorResponseDto, VendorStoreDto } from "@/api/dto/vendor";
+import type { FeaturedVendorDto, VendorResponseDto, VendorStoreDto } from "@/api/dto/vendor";
 
 /**
  * Server-side vendor directory fetch.
@@ -21,6 +21,14 @@ export async function serverGetVendors(params: {
     revalidate: 300,
     tags: ["vendors"],
   });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function serverGetFeaturedVendors(limit = 8): Promise<FeaturedVendorDto[]> {
+  const data = await serverFetch<FeaturedVendorDto[]>(
+    `/vendors/store/featured?limit=${Math.min(12, Math.max(1, limit))}`,
+    { revalidate: 120, tags: ["vendors", "featured-vendors"] },
+  );
   return Array.isArray(data) ? data : [];
 }
 

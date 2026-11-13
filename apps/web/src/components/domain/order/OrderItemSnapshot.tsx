@@ -6,6 +6,8 @@ const STATUS: Record<string, { label: string; className: string }> = {
   SHIPPED: { label: "Shipped", className: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20" },
   DELIVERED: { label: "Delivered", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20" },
   CANCELLED: { label: "Cancelled", className: "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/20" },
+  REFUND_PENDING: { label: "Refund pending", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20" },
+  REFUNDED: { label: "Refunded", className: "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/20" },
 };
 
 export function OrderStatusBadge({ status }: { status: string }) {
@@ -24,6 +26,13 @@ export function OrderStatusBadge({ status }: { status: string }) {
 
 export function PaymentStatusBadge({ status }: { status: string }) {
   const paid = status.toLowerCase().includes("paid") || status === "SUCCESS";
+  const label = status === "REFUND_PENDING"
+    ? "Refund pending"
+    : status === "REFUNDED"
+      ? "Refunded"
+      : paid
+        ? "Paid"
+        : status;
   return (
     <span
       className={cn(
@@ -33,7 +42,7 @@ export function PaymentStatusBadge({ status }: { status: string }) {
           : "bg-amber-100 text-amber-800",
       )}
     >
-      {paid ? "Paid" : status}
+      {label}
     </span>
   );
 }
