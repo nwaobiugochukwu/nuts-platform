@@ -1,4 +1,4 @@
-﻿// vendor-product-variants.controller.ts
+// vendor-product-variants.controller.ts
 
 import {
   BadRequestException,
@@ -285,6 +285,57 @@ export class VendorProductVariantsController {
       id,
       dto.quantity,
       dto.description,
+    );
+  }
+}
+
+@ApiTags('VENDOR - PRODUCT VARIANTS')
+@Controller('vendors/products/:productId/variants')
+@Roles(ROLE.VENDOR)
+@ApiBearerAuth('JWT-auth')
+export class VendorProductVariantsCanonicalController {
+  constructor(
+    private readonly productVariantsService: ProductVariantsService,
+  ) {}
+
+  @Get()
+  @Message('Product variants retrieved successfully')
+  @ApiOperation({
+    summary: 'List all variants for your product (Canonical)',
+    description:
+      'Retrieve all variants belonging to a specific product owned by the vendor.',
+  })
+  @ApiResponse({
+    status: 200,
+    type: ApiResponseDto<ProductVariantListResponseDto>,
+  })
+  findAll(
+    @GetVendor('id') vendorId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+  ): Promise<ProductVariantListResponseDto> {
+    return this.productVariantsService.findAllForVendor(vendorId, productId);
+  }
+
+  @Post()
+  @Message('Product variant created successfully')
+  @ApiOperation({
+    summary: 'Create a variant for your product (Canonical)',
+    description:
+      'Add a new variant to one of your own products using the canonical hierarchy.',
+  })
+  @ApiResponse({
+    status: 201,
+    type: ApiResponseDto<VendorVariantResponseDto>,
+  })
+  create(
+    @GetVendor('id') vendorId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: CreateVariantDto,
+  ): Promise<VendorVariantResponseDto> {
+    return this.productVariantsService.createForVendor(
+      vendorId,
+      productId,
+      dto,
     );
   }
 }

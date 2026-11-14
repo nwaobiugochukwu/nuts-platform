@@ -8,6 +8,7 @@
 import { Reflector } from '@nestjs/core';
 import { ROLE } from '@prisma/client';
 import { IS_PUBLIC_KEY } from '@api/common/decorators/public.decorator';
+import { IS_OPTIONAL_AUTH_KEY } from '@api/common/decorators/optional-auth.decorator';
 import { ROLES_KEY } from '@api/common/decorators/role.decorator';
 
 type AuthUser = {
@@ -27,6 +28,10 @@ export class RolesGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const isOptional = this.reflector.getAllAndOverride<boolean>(
+      IS_OPTIONAL_AUTH_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     const request = context
       .switchToHttp()
@@ -67,7 +72,7 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       // Global guards run before route-scoped auth guards, including on public
       // refresh routes. Defer their role check until request.user is available.
-      if (isPublic) {
+      if (isPublic || isOptional) {
         return true;
       }
 

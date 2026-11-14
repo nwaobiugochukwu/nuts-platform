@@ -92,12 +92,24 @@ An old `PENDING` outbox row with `attempts: 0` has not been claimed by the relay
 - Product-view and marketplace-action events are retained for 730 days. Recommendation events are retained for 180 days, except follow/unfollow history used for follower-change reporting. Raw views count events; unique viewers count account or anonymous browser/session identities without merging them across login or device changes.
 - View-to-cart and view-to-paid-purchase are identified account/product cohorts with a seven-day attribution window. Cart-to-paid-purchase matches cart/product/variant lines within seven days. Recent cohorts can mature after the selected date range. Revenue is gross before refunds. See [analytics definitions](docs/domains/analytics-and-measurement.md) and [scaling guidance](docs/scaling/analytics-at-scale.md).
 - `/discover` is the product discovery feed and uses keyset cursors. The recommendation ranker is deterministic API business logic using available activity signals, not a trained machine-learning service. Cold-start marketplace discovery is separate from personalized recommendations.
+- Client-side telemetry impression events are buffered with a 5,000ms collection window and capped at 25 events per batch. Deduplication keys (`${sessionId}:${surface}:${entityId}`) avoid redundant requests for already-seen items, and a `pagehide` listener guarantees event delivery upon tab closure or page exit.
+
+### Canonical REST routing and optional auth
+
+- Nested resources strictly follow canonical parent-child REST hierarchies with backward-compatible aliases:
+  - Product Reviews: `GET /api/v1/products/:productId/reviews` (canonical) and `/api/v1/reviews/product/:productId` (legacy alias).
+  - Order Payments: `GET /api/v1/orders/:orderId/payment` (canonical) and `/api/v1/payments/order/:orderId` (legacy alias).
+  - Product Variants: `POST` & `GET /api/v1/vendors/products/:productId/variants` and `POST` & `GET /api/v1/admin/products/:productId/variants`.
+  - Vendor Engagement: `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, alongside public store profile and catalog routes (`/api/v1/vendors/:storeSlug`, `/products`, `/followers/count`).
+- Recommendation endpoints (`/api/v1/recommendations/for-you`, `/trending`, `/daily-mix`, `/by-category`) use `@OptionalAuth()`. This unifies authenticated accounts and guest visitors under single endpoints without throwing `401 Unauthorized` or `403 Forbidden` for anonymous shoppers. Array route mappings preserve legacy `/session` paths for backward compatibility.
 
 ### Authentication, Swagger, and deployment
 
 Browser authentication uses short-lived access and rotating refresh cookies with CSRF protection on cookie-authenticated writes. The web client also keeps an access token in memory for bearer requests. The web server needs the API's matching JWT verification secret for server-side session checks.
 
-Swagger is enabled with `SWAGGER_ENABLED=true` in development or when staging is explicitly selected with `NODE_ENV=staging` or `APP_ENV=staging`. A staging hostname by itself does not enable it. Production disables Swagger even when the flag is true. The UI is at `/api/docs`; the JSON document is at `/api/docs-json` when enabled.
+Google Identity Services (GIS) sign-in is available across customer and vendor portals. The frontend `<GoogleSignInButton>` renders official branded iconography immediately, mounts a transparent gesture overlay (`opacity-[0.0001]`) to comply with browser pop-up policies, and avoids React #418 SSR hydration mismatches. Because Next.js inlines public environment variables at build time, `apps/web/Dockerfile` and the GitHub Actions deployment workflow declare `ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID` passed via `build-args`.
+
+Swagger is enabled with `SWAGGER_ENABLED=true` in development or when staging is explicitly selected with `NODE_ENV=staging` or `APP_ENV=staging`. A staging hostname by itself does not enable it. Production disables Swagger even when the flag is true. The UI is at `/api/docs`; the JSON document is at `/api/docs-json` when enabled. The API documentation is categorized into 5 enterprise domain groups (Customer Commerce, Merchant & Vendor Operations, Platform Administration & Governance, Identity & Security, System & Infrastructure) with alphabetical tag sorting disabled to preserve natural domain workflows.
 
 GitHub Actions runs lockfile validation, lint, typecheck, API and web authentication tests, and production builds. The workflow named `deploy` publishes API and web images to GitHub Container Registry; it does not perform a host rollout or post-deployment health verification.
 

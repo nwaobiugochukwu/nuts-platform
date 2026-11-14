@@ -7,7 +7,7 @@ ReviewResponseDto,
 
 export const reviewService = {
   listByProduct(productId: string, signal?: AbortSignal) {
-    return publicApi.get<ReviewResponseDto[], ProductReviewsMetaDto>(`/reviews/product/${productId}`, { signal });
+    return publicApi.get<ReviewResponseDto[], ProductReviewsMetaDto>(`/products/${encodeURIComponent(productId)}/reviews`, { signal });
   },
   create(payload: CreateReviewDto) {
     return userApi.post<ReviewResponseDto>("/reviews", payload);
