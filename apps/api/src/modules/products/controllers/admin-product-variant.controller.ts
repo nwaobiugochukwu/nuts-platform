@@ -1,7 +1,8 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -163,5 +164,47 @@ export class AdminProductVariantsController {
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<null> {
     await this.productVariantsService.permanentRemove(id);
     return null;
+  }
+}
+
+@ApiTags('ADMIN - PRODUCT VARIANTS')
+@ApiBearerAuth('JWT-auth')
+@Controller('admin/products/:productId/variants')
+@Roles(ROLE.ADMIN)
+export class AdminProductVariantsCanonicalController {
+  constructor(
+    private readonly productVariantsService: ProductVariantsService,
+  ) {}
+
+  @Get()
+  @Message('Product variants retrieved successfully')
+  @ApiOperation({
+    summary: 'List all variants for a product (Admin Canonical)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized — no valid JWT session.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden — user does not have ADMIN role.',
+  })
+  async findAll(@Param('productId', ParseUUIDPipe) productId: string) {
+    return this.productVariantsService.findAll(productId);
+  }
+
+  @Post()
+  @Message('Product variant created successfully')
+  @ApiOperation({ summary: 'Create a variant for a product (Admin Canonical)' })
+  @ApiResponse({ status: 201, type: ApiResponseDto<AdminVariantResponseDto> })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized — no valid JWT session.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden — user does not have ADMIN role.',
+  })
+  async create(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: CreateVariantDto,
+  ): Promise<AdminVariantResponseDto> {
+    return this.productVariantsService.create(productId, dto);
   }
 }

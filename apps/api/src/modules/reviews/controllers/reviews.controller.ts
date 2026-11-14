@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -106,5 +106,30 @@ export class ReviewsController {
   ): Promise<null> {
     await this.reviewsService.remove(userId, id);
     return null;
+  }
+}
+
+@ApiTags('REVIEWS')
+@Public()
+@Controller('products/:productId/reviews')
+export class ProductReviewsCanonicalController {
+  constructor(private readonly reviewsService: ReviewsService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Get review summary and items for a product (Canonical)',
+    description:
+      'Returns active reviews, aggregate rating, and distribution breakdown for a product.',
+  })
+  @ApiParam({ name: 'productId', description: 'Product ID' })
+  @ApiOkResponse({
+    description: 'Product reviews summary and list',
+    type: ApiResponseDto<ProductReviewsResponseDto>,
+  })
+  @ApiNotFoundResponse({ description: 'Product not found' })
+  findByProduct(
+    @Param('productId') productId: string,
+  ): Promise<ProductReviewsResponseDto> {
+    return this.reviewsService.findByProduct(productId);
   }
 }

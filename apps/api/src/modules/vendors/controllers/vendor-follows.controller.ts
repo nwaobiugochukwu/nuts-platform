@@ -16,7 +16,7 @@ import { VendorFollowsService } from '../vendor-follows.service';
 
 @ApiTags('VENDOR FOLLOWS')
 @ApiBearerAuth('JWT-auth')
-@Controller('vendors/follows')
+@Controller(['vendors/follows', 'vendors'])
 @Roles(ROLE.USER)
 export class VendorFollowsController {
   constructor(private readonly follows: VendorFollowsService) {}
@@ -46,7 +46,7 @@ export class VendorFollowsController {
     return this.follows.count(userId);
   }
 
-  @Post(':vendorId')
+  @Post([':vendorId', ':vendorId/follow'])
   @Message('Vendor followed successfully')
   @ApiOperation({ summary: 'Follow an active public vendor store' })
   async follow(
@@ -56,7 +56,7 @@ export class VendorFollowsController {
     return this.follows.follow(userId, vendorId);
   }
 
-  @Delete(':vendorId')
+  @Delete([':vendorId', ':vendorId/follow'])
   @Message('Vendor unfollowed successfully')
   @ApiOperation({ summary: 'Unfollow a vendor store' })
   async unfollow(

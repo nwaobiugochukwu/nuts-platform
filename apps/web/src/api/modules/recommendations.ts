@@ -12,32 +12,31 @@ export const recommendationService = {
   },
   forYou(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    const path = authenticated ? "/recommendations/for-you" : "/recommendations/for-you/session";
-    return client.get<ProductCardDto[]>(path, {
+    return client.get<ProductCardDto[]>("/recommendations/for-you", {
       params: { sessionId, ...(visitorId ? { visitorId } : {}) },
       signal,
     });
   },
   marketplaceMix(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    const path = authenticated ? "/recommendations/marketplace-mix" : "/recommendations/marketplace-mix/session";
-    return client.get<MarketplaceMixResponseDto>(path, {
+    return client.get<MarketplaceMixResponseDto>("/recommendations/marketplace-mix", {
       params: { sessionId, ...(visitorId ? { visitorId } : {}) },
       signal,
     });
   },
   searchDiscover(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    const path = authenticated ? "/recommendations/search-discover" : "/recommendations/search-discover/session";
-    return client.get<SearchDiscoveryResponseDto>(path, {
+    return client.get<SearchDiscoveryResponseDto>("/recommendations/search-discover", {
       params: { sessionId, ...(visitorId ? { visitorId } : {}) },
       signal,
     });
   },
   recentlyViewed(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    const path = authenticated ? "/recommendations/recently-viewed" : "/recommendations/recently-viewed/session";
-    return client.get<ProductCardDto[]>(path, { params: { sessionId, visitorId }, signal });
+    return client.get<ProductCardDto[]>("/recommendations/recently-viewed", {
+      params: { sessionId, ...(visitorId ? { visitorId } : {}) },
+      signal,
+    });
   },
   claimRecentlyViewed(visitorId: string) {
     return userApi.post<{ claimed: number }>("/recommendations/recently-viewed/claim", { visitorId });
@@ -47,9 +46,8 @@ export const recommendationService = {
   },
   stores(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    const path = authenticated ? "/recommendations/stores" : "/recommendations/stores/session";
-    return client.get<FeaturedVendorDto[]>(path, {
-      params: { sessionId, visitorId },
+    return client.get<FeaturedVendorDto[]>("/recommendations/stores", {
+      params: { sessionId, ...(visitorId ? { visitorId } : {}) },
       signal,
     });
   },

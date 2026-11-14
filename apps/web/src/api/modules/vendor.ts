@@ -18,21 +18,21 @@ import type { ProductQueryParams } from "./product";
 
 export const publicVendorService = {
   list(params?: ProductQueryParams, signal?: AbortSignal) {
-    return publicApi.get<VendorResponseDto[]>("/vendors/store", { params, signal });
+    return publicApi.get<VendorResponseDto[]>("/vendors", { params, signal });
   },
   getStore(slug: string) {
-    return publicApi.get<VendorStoreDto>(`/vendors/store/${slug}`);
+    return publicApi.get<VendorStoreDto>(`/vendors/${encodeURIComponent(slug)}`);
   },
   getProducts(slug: string, params?: ProductQueryParams) {
-    return publicApi.get<{ store: VendorStoreDto; products: PublicProductResponseDto[] }>(`/vendors/store/${slug}/products`, {
+    return publicApi.get<{ store: VendorStoreDto; products: PublicProductResponseDto[] }>(`/vendors/${encodeURIComponent(slug)}/products`, {
       params,
     });
   },
   featured(limit = 8, signal?: AbortSignal) {
-    return publicApi.get<FeaturedVendorDto[]>("/vendors/store/featured", { params: { limit }, signal });
+    return publicApi.get<FeaturedVendorDto[]>("/vendors/featured", { params: { limit }, signal });
   },
   followerCount(slug: string, signal?: AbortSignal) {
-    return publicApi.get<VendorFollowerCountDto>(`/vendors/store/${encodeURIComponent(slug)}/follower-count`, { signal });
+    return publicApi.get<VendorFollowerCountDto>(`/vendors/${encodeURIComponent(slug)}/followers/count`, { signal });
   },
 };
 
@@ -73,10 +73,10 @@ export const vendorFollowingService = {
     return userApi.get<{ count: number }>("/vendors/follows/count", { signal });
   },
   follow(vendorId: string) {
-    return userApi.post<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/follows/${encodeURIComponent(vendorId)}`);
+    return userApi.post<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/${encodeURIComponent(vendorId)}/follow`);
   },
   unfollow(vendorId: string) {
-    return userApi.delete<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/follows/${encodeURIComponent(vendorId)}`);
+    return userApi.delete<{ following: boolean; changed: boolean; followerCount: number }>(`/vendors/${encodeURIComponent(vendorId)}/follow`);
   },
 };
 

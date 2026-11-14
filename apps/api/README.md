@@ -17,6 +17,13 @@ The API is not a microservice per module and does not implement system-wide CQRS
 - Base path: `/api/v1`.
 - Successful responses use `{ success, message, data, meta?, timestamp }`; pagination metadata varies by endpoint. Follow the endpoint's Swagger contract.
 - Customer, vendor, and admin routes have separate authorization boundaries. Vendor access additionally depends on account activation and approval.
+- **Canonical RESTful Resource Hierarchy:** Resources follow standard parent-child REST hierarchies with backward-compatible aliases for legacy routes:
+  - Product Reviews: Canonical `GET /api/v1/products/:productId/reviews` (aliased to legacy `/api/v1/reviews/product/:productId`).
+  - Order Payments: Canonical `GET /api/v1/orders/:orderId/payment` (aliased to legacy `/api/v1/payments/order/:orderId`).
+  - Vendor Product Variants: Canonical `POST` & `GET /api/v1/vendors/products/:productId/variants` (aliased to `/api/v1/vendors/products/variants`).
+  - Admin Product Variants: Canonical `POST` & `GET /api/v1/admin/products/:productId/variants` (aliased to `/api/v1/admin/products/variants`).
+  - Vendor Follows & Public Storefront: Canonical `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, and public store endpoints `GET /api/v1/vendors/:storeSlug`, `/products`, `/followers/count`.
+- **Unified Endpoints via `@OptionalAuth()`:** The recommendation engine (`/api/v1/recommendations/for-you`, `/trending`, `/daily-mix`, `/by-category`) uses the custom `@OptionalAuth()` decorator. It transparently attaches authenticated user context if valid JWT credentials exist, but permits anonymous guests without throwing `401 Unauthorized` or `403 Forbidden`. Legacy `/session` endpoints (e.g. `/for-you/session`) are retained via array route decorators for zero-downtime backwards compatibility.
 - Product discovery uses `GET /api/v1/discover` and keyset cursors. Search and some administrative lists use page-based pagination; do not assume a single pagination shape.
 - Paystack webhooks are verified against the raw request body and provider signature. Full refunds create a durable attempt and settle local order, stock, and vendor-earning changes only after provider confirmation. Partial refunds and post-shipment returns are not currently supported.
 - Customer and vendor Google sign-in accept verified Google Identity Services ID tokens, then issue the normal role-scoped session. Sign-in routes (`POST /api/v1/auth/google` and `POST /api/v1/vendors/auth/google`) never create accounts; explicit registration routes (`POST /api/v1/auth/google/register` and `POST /api/v1/vendors/auth/google/register`) handle Google signup. API `GOOGLE_CLIENT_ID` must match the web `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
@@ -41,6 +48,15 @@ Analytics definitions, current ingestion mechanisms, failure cases, and reportin
 ## Swagger
 
 Swagger UI is available at `http://localhost:3001/api/docs` when enabled. `SWAGGER_ENABLED=true` works in development and explicitly selected staging; production disables Swagger even if the flag is set. JSON and YAML documents are available at `/api/docs-json` and `/api/docs-yaml` when Swagger is enabled.
+
+The Swagger documentation taxonomy is structured into 5 enterprise domain groups:
+1. **Customer Commerce:** Catalog, Cart, Checkout, Orders, Payments, Customer Wallet, Reviews, Wishlist, Recommendations, and Analytics.
+2. **Merchant & Vendor Operations:** Vendor Auth, Store Profile, Products, Variants, Inventory, Fulfillment, Escrow Wallet, Discounts, and Metrics.
+3. **Platform Administration & Governance:** Platform Settings, Staff Lifecycle, Vendor Approvals, Global Taxonomy, Order Management, and Platform Announcements.
+4. **Identity & Security:** Customer & Staff Auth, Google OIDC Integration, OTP Lifecycle, Multi-Session Management, and Tokens.
+5. **System & Infrastructure:** Health, Outbox, Distributed Locks, and System Metrics.
+
+Tag alphabetical sorting is disabled (`tagsSorter: 'alpha'` removed) to preserve business domain hierarchy and natural operational workflows.
 
 ## Local development
 

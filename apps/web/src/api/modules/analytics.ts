@@ -101,11 +101,21 @@ interface QueuedRecommendationImpression {
 
 const queuedRecommendationImpressions: QueuedRecommendationImpression[] = [];
 const recommendationImpressionKeys = new Set<string>();
-const IMPRESSION_BATCH_WINDOW_MS = 750;
-const IMPRESSION_BATCH_MAX_WAIT_MS = 3_000;
+const IMPRESSION_BATCH_WINDOW_MS = 5_000;
+const IMPRESSION_BATCH_MAX_WAIT_MS = 10_000;
+const IMPRESSION_BATCH_THRESHOLD = 25;
 const MAX_TRACKED_IMPRESSIONS = 5_000;
 let recommendationImpressionTimer: ReturnType<typeof setTimeout> | undefined;
 let recommendationImpressionFirstQueuedAt: number | undefined;
+
+// Production-grade lifecycle listener: flush remaining queued telemetry on page exit
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    if (queuedRecommendationImpressions.length > 0) {
+      void flushRecommendationImpressions();
+    }
+  });
+}
 
 function scheduleRecommendationImpressionFlush() {
   if (recommendationImpressionTimer) clearTimeout(recommendationImpressionTimer);
@@ -113,7 +123,7 @@ function scheduleRecommendationImpressionFlush() {
     recommendationImpressionFirstQueuedAt = Date.now();
   }
   const elapsed = Date.now() - recommendationImpressionFirstQueuedAt;
-  const delay = queuedRecommendationImpressions.length >= 100
+  const delay = queuedRecommendationImpressions.length >= IMPRESSION_BATCH_THRESHOLD
     ? 0
     : Math.min(IMPRESSION_BATCH_WINDOW_MS, Math.max(0, IMPRESSION_BATCH_MAX_WAIT_MS - elapsed));
   recommendationImpressionTimer = setTimeout(() => {
@@ -216,7 +226,7 @@ export const analyticsEventService = {
         : item.categoryId
           ? `category:${item.categoryId}`
           : "unknown";
-    const dedupeKey = `${attribution.surface}:${attribution.requestId}:${entity}`;
+    const dedupeKey = `${attribution.sessionId}:${attribution.surface}:${entity}`;
     if (eventType === "IMPRESSION" && recommendationImpressionKeys.has(dedupeKey)) {
       return Promise.resolve({ accepted: true });
     }

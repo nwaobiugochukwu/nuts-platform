@@ -4,7 +4,10 @@ import { MailModule } from '@api/infrastructure/mail/mail.module';
 import { ReferralsModule } from '@api/modules/referrals/referral.module';
 import { UsersModule } from '@api/modules/users/users.module';
 import { WalletsModule } from '@api/modules/wallets/wallets.module';
-import { PaymentsController } from './controllers/payments.controller';
+import {
+  OrderPaymentCanonicalController,
+  PaymentsController,
+} from './controllers/payments.controller';
 import { PaymentsService } from './payments.service';
 
 @Module({
@@ -15,7 +18,7 @@ import { PaymentsService } from './payments.service';
     forwardRef(() => ReferralsModule),
     MailModule,
   ],
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, OrderPaymentCanonicalController],
   providers: [PaymentsService],
   exports: [PaymentsService],
 })

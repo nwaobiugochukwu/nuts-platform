@@ -15,7 +15,7 @@ export const paymentService = {
     );
   },
   getByOrderId(orderId: string) {
-    return userApi.get<PaymentResponseDto>(`/payments/order/${orderId}`);
+    return userApi.get<PaymentResponseDto>(`/orders/${encodeURIComponent(orderId)}/payment`);
   },
   verify(reference: string) {
     return userApi.get<PaymentResponseDto>(

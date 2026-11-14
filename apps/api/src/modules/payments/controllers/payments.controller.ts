@@ -232,3 +232,38 @@ export class PaymentsController {
     return this.paymentsService.refund(dto.paymentId, adminId, dto.amount);
   }
 }
+
+@ApiTags('PAYMENTS')
+@Controller('orders/:orderId/payment')
+export class OrderPaymentCanonicalController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get()
+  @HttpCode(HttpStatus.OK)
+  @Message('Order payment details retrieved successfully')
+  @Roles(ROLE.USER)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get payment for an order (Canonical)',
+  })
+  @ApiParam({
+    name: 'orderId',
+    description: 'Order UUID',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    type: PaymentResponseDto,
+  })
+  async findByOrder(
+    @GetUser('id') userId: string,
+    @Param(
+      'orderId',
+      new ParseUUIDPipe({
+        version: '4',
+      }),
+    )
+    orderId: string,
+  ): Promise<PaymentResponseDto> {
+    return this.paymentsService.findByOrder(userId, orderId);
+  }
+}
