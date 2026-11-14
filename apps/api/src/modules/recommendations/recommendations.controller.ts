@@ -15,6 +15,7 @@ import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { RecommendationsService } from './recommendations.service';
 import { Public } from '@api/common/decorators/public.decorator';
+import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { ClaimRecentHistoryDto } from './dto/claim-recent-history.dto';
 import { MarketplaceMixResponseDto } from './dto/marketplace-mix-response.dto';
 
@@ -23,15 +24,16 @@ import { MarketplaceMixResponseDto } from './dto/marketplace-mix-response.dto';
 export class RecommendationsController {
   constructor(private readonly recommendations: RecommendationsService) {}
 
-  @Get('for-you')
+  @Get(['for-you', 'for-you/session'])
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
-  @Roles(ROLE.USER)
   @Message('Personalized recommendations retrieved successfully')
   @ApiOperation({
-    summary: 'Get recommendations personalized for the current user',
+    summary:
+      'Get recommendations personalized for the current user or browser session',
   })
   forYou(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId?: string,
     @Query('sessionId', new ParseUUIDPipe({ optional: true }))
     sessionId?: string,
     @Query('visitorId', new ParseUUIDPipe({ optional: true }))
@@ -40,30 +42,16 @@ export class RecommendationsController {
     return this.recommendations.forYou(userId, sessionId, visitorId);
   }
 
-  @Get('for-you/session')
-  @Public()
-  @Message('Session recommendations retrieved successfully')
-  @ApiOperation({
-    summary: 'Get recommendations based on this browser session',
-  })
-  forYouForSession(
-    @Query('sessionId', ParseUUIDPipe) sessionId: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.forYou(undefined, sessionId, visitorId);
-  }
-
-  @Get('search-discover')
+  @Get(['search-discover', 'search-discover/session'])
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
-  @Roles(ROLE.USER)
   @Message('Personalized search discovery retrieved successfully')
   @ApiOperation({
     summary:
       'Get personalized product and store recommendations for search discovery',
   })
   searchDiscover(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId?: string,
     @Query('sessionId', new ParseUUIDPipe({ optional: true }))
     sessionId?: string,
     @Query('visitorId', new ParseUUIDPipe({ optional: true }))
@@ -72,25 +60,9 @@ export class RecommendationsController {
     return this.recommendations.searchDiscover(userId, sessionId, visitorId);
   }
 
-  @Get('search-discover/session')
-  @Public()
-  @Message('Personalized search discovery retrieved successfully')
-  @ApiOperation({
-    summary:
-      'Get personalized product and store recommendations for this browser',
-  })
-  searchDiscoverForSession(
-    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
-    sessionId?: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.searchDiscover(undefined, sessionId, visitorId);
-  }
-
-  @Get('marketplace-mix')
+  @Get(['marketplace-mix', 'marketplace-mix/session'])
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
-  @Roles(ROLE.USER)
   @Message('Marketplace mix retrieved successfully')
   @ApiOperation({
     summary:
@@ -102,7 +74,7 @@ export class RecommendationsController {
     description: 'Up to twelve distinct active vendors, each with one product.',
   })
   marketplaceMix(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId?: string,
     @Query('sessionId', new ParseUUIDPipe({ optional: true }))
     sessionId?: string,
     @Query('visitorId', new ParseUUIDPipe({ optional: true }))
@@ -111,33 +83,12 @@ export class RecommendationsController {
     return this.recommendations.marketplaceMix(userId, sessionId, visitorId);
   }
 
-  @Get('marketplace-mix/session')
-  @Public()
-  @Message('Marketplace mix retrieved successfully')
-  @ApiOperation({
-    summary:
-      'Get a daily rotating selection of purchasable products from distinct vendors',
-    description:
-      'Returns up to 12 active vendors, with one in-stock product with an image from each. Vendor selection balances category variety and freshness. Product selection rotates among each vendor’s eight most recent eligible listings and is stable per visitor identity for the UTC day.',
-  })
-  @ApiEnvelopeResponse(MarketplaceMixResponseDto, {
-    description: 'Up to twelve distinct active vendors, each with one product.',
-  })
-  marketplaceMixForSession(
-    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
-    sessionId?: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.marketplaceMix(undefined, sessionId, visitorId);
-  }
-
-  @Get('recently-viewed')
+  @Get(['recently-viewed', 'recently-viewed/session'])
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
-  @Roles(ROLE.USER)
   @Message('Recently viewed products retrieved successfully')
   recentlyViewed(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId?: string,
     @Query('sessionId', new ParseUUIDPipe({ optional: true }))
     sessionId?: string,
     @Query('visitorId', new ParseUUIDPipe({ optional: true }))
@@ -160,18 +111,6 @@ export class RecommendationsController {
     return this.recommendations.claimRecentlyViewed(userId, body.visitorId);
   }
 
-  @Get('recently-viewed/session')
-  @Public()
-  @Message('Recently viewed products retrieved successfully')
-  recentlyViewedForSession(
-    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
-    sessionId?: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.recentlyViewed(undefined, sessionId, visitorId);
-  }
-
   @Get('following')
   @ApiBearerAuth('JWT-auth')
   @Roles(ROLE.USER)
@@ -180,30 +119,20 @@ export class RecommendationsController {
     return this.recommendations.following(userId);
   }
 
-  @Get('stores')
+  @Get(['stores', 'stores/session'])
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
-  @Roles(ROLE.USER)
-  @Message('Stores recommended for the current customer retrieved successfully')
+  @Message(
+    'Stores recommended for the customer or browser session retrieved successfully',
+  )
   discoverStores(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId?: string,
     @Query('sessionId', new ParseUUIDPipe({ optional: true }))
     sessionId?: string,
     @Query('visitorId', new ParseUUIDPipe({ optional: true }))
     visitorId?: string,
   ) {
     return this.recommendations.discoverStores(userId, sessionId, visitorId);
-  }
-
-  @Get('stores/session')
-  @Public()
-  @Message('Stores recommended for this browser retrieved successfully')
-  discoverStoresForSession(
-    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
-    sessionId?: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.discoverStores(undefined, sessionId, visitorId);
   }
 
   @Get('discover')

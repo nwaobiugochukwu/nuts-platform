@@ -16,7 +16,7 @@ export async function serverGetVendors(params: {
   if (params.limit) query.set("limit", String(params.limit));
 
   const qs = query.toString();
-  const endpoint = `/vendors/store${qs ? `?${qs}` : ""}`;
+  const endpoint = `/vendors${qs ? `?${qs}` : ""}`;
   const data = await serverFetch<VendorResponseDto[]>(endpoint, {
     revalidate: 300,
     tags: ["vendors"],
@@ -26,7 +26,7 @@ export async function serverGetVendors(params: {
 
 export async function serverGetFeaturedVendors(limit = 8): Promise<FeaturedVendorDto[]> {
   const data = await serverFetch<FeaturedVendorDto[]>(
-    `/vendors/store/featured?limit=${Math.min(12, Math.max(1, limit))}`,
+    `/vendors/featured?limit=${Math.min(12, Math.max(1, limit))}`,
     { revalidate: 120, tags: ["vendors", "featured-vendors"] },
   );
   return Array.isArray(data) ? data : [];
@@ -40,11 +40,11 @@ export async function serverGetVendorStore(
 ): Promise<{ store: VendorStoreDto | null; products: PublicProductResponseDto[] }> {
   if (!slug) return { store: null, products: [] };
   const [store, productResult] = await Promise.all([
-    serverFetch<VendorStoreDto>(`/vendors/store/${encodeURIComponent(slug)}`, {
+    serverFetch<VendorStoreDto>(`/vendors/${encodeURIComponent(slug)}`, {
       revalidate: 120,
       tags: ["vendors", `vendor:${slug}`],
     }),
-    serverFetch<PublicProductResponseDto[] | { products: PublicProductResponseDto[] }>(`/vendors/store/${encodeURIComponent(slug)}/products`, {
+    serverFetch<PublicProductResponseDto[] | { products: PublicProductResponseDto[] }>(`/vendors/${encodeURIComponent(slug)}/products`, {
       revalidate: 60,
       tags: ["products", `vendor:${slug}:products`],
     }),

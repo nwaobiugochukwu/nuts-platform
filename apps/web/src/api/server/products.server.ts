@@ -190,7 +190,7 @@ export const serverGetProductReviews = cache(async function serverGetProductRevi
       meta: { total: 0, averageRating: 0, ratingBreakdown: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } },
     };
   }
-  const res = await serverFetchEnvelope<ReviewResponseDto[]>(`/reviews/product/${encodeURIComponent(productId)}`, {
+  const res = await serverFetchEnvelope<ReviewResponseDto[]>(`/products/${encodeURIComponent(productId)}/reviews`, {
     revalidate: 60,
     tags: ["reviews", `product-reviews:${productId}`],
   });

@@ -1,4 +1,4 @@
-﻿// public-store.controller.ts
+// public-store.controller.ts
 
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
@@ -26,7 +26,7 @@ import { VendorFollowsService } from '../vendor-follows.service';
 @ApiTags('VENDORS - ACCOUNT')
 @ApiExtraModels(ApiResponseDto, FeaturedVendorDto, ProductCardDto)
 @Public()
-@Controller('vendors/store')
+@Controller(['vendors/store', 'vendors'])
 export class PublicStoreController {
   constructor(
     private readonly vendorsService: VendorsService,
@@ -121,7 +121,7 @@ export class PublicStoreController {
     );
   }
 
-  @Get(':storeSlug/follower-count')
+  @Get([':storeSlug/follower-count', ':storeSlug/followers/count'])
   @Message('Store follower count retrieved successfully')
   @ApiOperation({
     summary: 'Get the public follower count for an active store',

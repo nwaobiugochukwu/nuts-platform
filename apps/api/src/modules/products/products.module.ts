@@ -7,8 +7,14 @@ import { DiscoverController } from './controllers/discover.controller';
 import { AdminProductsController } from './controllers/admin-product.controller';
 import { VendorProductsController } from './controllers/vendor-products.controller';
 import { ProductVariantsController } from './controllers/product-variants.controller';
-import { AdminProductVariantsController } from './controllers/admin-product-variant.controller';
-import { VendorProductVariantsController } from './controllers/vendor-product-variants.controller';
+import {
+  AdminProductVariantsCanonicalController,
+  AdminProductVariantsController,
+} from './controllers/admin-product-variant.controller';
+import {
+  VendorProductVariantsCanonicalController,
+  VendorProductVariantsController,
+} from './controllers/vendor-product-variants.controller';
 import { ProductsService } from './products.service';
 import { ProductVariantsService } from './product-variants.service';
 import { LowStockCron } from './jobs/low-stock.cron';
@@ -22,7 +28,9 @@ import { LowStockCron } from './jobs/low-stock.cron';
     VendorProductsController,
     ProductVariantsController,
     AdminProductVariantsController,
+    AdminProductVariantsCanonicalController,
     VendorProductVariantsController,
+    VendorProductVariantsCanonicalController,
   ],
   providers: [ProductsService, ProductVariantsService, LowStockCron],
   exports: [ProductsService, ProductVariantsService],
