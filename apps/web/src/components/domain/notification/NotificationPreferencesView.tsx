@@ -2,8 +2,9 @@
 
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
-import { useAuthStore } from "@/zustand/auth";
+import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import { Button } from "@/component/ui/button";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,6 @@ import {
 } from "@/component/ui/dialog";
 import {
   Bell,
-  Check,
   CreditCard,
   Info,
   Mail,
@@ -32,6 +32,11 @@ interface SwitchToggleProps {
   disabled?: boolean;
 }
 
+const isDevelopmentEnv =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_APP_ENV !== "staging" &&
+  process.env.NEXT_PUBLIC_APP_ENV !== "production";
+
 export function SwitchToggle({ id, checked, onChange, disabled }: SwitchToggleProps) {
   return (
     <button
@@ -46,12 +51,14 @@ export function SwitchToggle({ id, checked, onChange, disabled }: SwitchTogglePr
           ? "cursor-not-allowed opacity-50 bg-muted"
           : checked
           ? "bg-primary cursor-pointer"
-          : "bg-muted cursor-pointer"
+          : "bg-neutral-200 dark:bg-neutral-700 cursor-pointer"
       }`}
     >
       <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-md transition duration-200 ease-in-out ${
-          checked ? "translate-x-5" : "translate-x-0"
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full shadow-sm transition duration-200 ease-in-out ${
+          checked
+            ? "translate-x-5 bg-background dark:bg-neutral-950"
+            : "translate-x-0 bg-white"
         }`}
       />
     </button>
@@ -59,13 +66,15 @@ export function SwitchToggle({ id, checked, onChange, disabled }: SwitchTogglePr
 }
 
 export function NotificationPreferencesContent() {
-  const role = useAuthStore((s) => s.role);
-  const isMerchant = role === "vendor" || role === "admin";
-  const { preferences, isLoading, isUpdating, updatePreferences, fetchPreferences } =
+  const user = useAuthStore((s) => s.user);
+  const rawRole = useAuthStore((s) => s.role);
+  const activeRole = normalizeRole(rawRole ?? user?.role) ?? "user";
+  const isMerchant = activeRole === "vendor" || activeRole === "admin";
+  const isVendor = activeRole === "vendor";
+  const { preferences, isLoading, isUpdating, updatePreferences } =
     useNotificationPreferences();
   const {
     isSupported: isPushSupported,
-    isSubscribed,
     permission: pushPermission,
     isLoading: isPushLoading,
     subscribe: subscribePush,
@@ -161,19 +170,12 @@ export function NotificationPreferencesContent() {
                 <Smartphone className="h-4 w-4" />
               </div>
               <div className="space-y-0.5">
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <label
-                    htmlFor="push-toggle"
-                    className="text-xs sm:text-sm font-semibold cursor-pointer block"
-                  >
-                    Push Notifications
-                  </label>
-                  {isSubscribed && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                      <Check className="h-3 w-3" /> Active on Device
-                    </span>
-                  )}
-                </div>
+                <label
+                  htmlFor="push-toggle"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                >
+                  Push Notifications
+                </label>
                 <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Receive real-time push alerts on your device for incoming orders, payments, and account activity.
                 </p>
@@ -181,21 +183,18 @@ export function NotificationPreferencesContent() {
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-              {process.env.NODE_ENV === "development" &&
-                process.env.NEXT_PUBLIC_APP_ENV !== "staging" &&
-                process.env.NEXT_PUBLIC_APP_ENV !== "production" &&
-                isSubscribed && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isPushLoading}
-                    onClick={() => sendTestPush()}
-                    className="h-8 px-2.5 text-xs font-semibold rounded-lg border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
-                  >
-                    Send Test Alert
-                  </Button>
-                )}
+              {isDevelopmentEnv && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isPushLoading}
+                  onClick={() => sendTestPush()}
+                  className="h-8 px-2.5 text-xs font-semibold rounded-lg border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
+                >
+                  Send Test Alert
+                </Button>
+              )}
 
               {!isPushSupported ? (
                 <span className="text-[11px] text-muted-foreground font-medium">
@@ -204,15 +203,24 @@ export function NotificationPreferencesContent() {
               ) : (
                 <SwitchToggle
                   id="push-toggle"
-                  checked={isSubscribed && pushPermission === "granted"}
-                  disabled={isUpdating || isPushLoading}
-                  onChange={async (checked) => {
+                  checked={Boolean(prefs.pushEnabled && pushPermission !== "denied")}
+                  disabled={isUpdating}
+                  onChange={(checked) => {
                     if (checked) {
-                      await subscribePush();
+                      if (pushPermission === "denied") {
+                        toast.error(
+                          "Push notifications are blocked in your browser settings. Please allow notifications in your browser address bar.",
+                        );
+                        return;
+                      }
+                      updatePreferences({ pushEnabled: true });
+                      if (isPushSupported) {
+                        void subscribePush({ silent: true });
+                      }
                     } else {
-                      await unsubscribePush();
+                      updatePreferences({ pushEnabled: false });
+                      void unsubscribePush();
                     }
-                    await fetchPreferences();
                   }}
                 />
               )}
@@ -226,15 +234,6 @@ export function NotificationPreferencesContent() {
             <p>
               Push notifications are blocked in your browser settings. To enable them, click the lock/settings icon in your browser address bar and set Notifications to &quot;Allow&quot;.
             </p>
-          </div>
-        )}
-
-        {isPushSupported && prefs.pushEnabled && pushPermission === "granted" && !isSubscribed && (
-          <div className="flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>This browser has permission, but its push subscription is inactive. Reconnect this device to receive alerts.</p>
-            <Button type="button" size="sm" variant="outline" disabled={isPushLoading} onClick={async () => { await subscribePush(); await fetchPreferences(); }}>
-              Reconnect device
-            </Button>
           </div>
         )}
       </section>
@@ -271,7 +270,7 @@ export function NotificationPreferencesContent() {
             />
           </div>
 
-          {role === "vendor" && (
+          {isVendor && (
             <div className="flex items-center justify-between p-4 sm:p-5">
               <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mt-0.5">

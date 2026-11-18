@@ -29,6 +29,7 @@ import { useAuthStore } from "@/zustand/auth";
 import { logoutWithFeedback } from "@/lib/logout";
 
 import { SearchDrawer } from "@/components/search/SearchDrawer";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function Navbar({
   categories = [],
@@ -209,6 +210,9 @@ export function Navbar({
               <NotificationBell />
             </div>
           )}
+
+          {/* Theme Quick Toggle */}
+          <ThemeToggle />
 
 
           {!isMounted ? (

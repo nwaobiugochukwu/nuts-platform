@@ -55,6 +55,7 @@ export function RecommendationProductCard({
         recommendationContext={attribution}
         priority={priority}
         size={size}
+        hideRecommendationReason={surface === "HOME_MARKETPLACE_MIX"}
       />
     </div>
   );

@@ -19,16 +19,54 @@ function applyThemeToDOM(resolved: "light" | "dark") {
   const root = document.documentElement;
   if (resolved === "dark") {
     root.classList.add("dark");
+    root.classList.remove("light");
     root.style.colorScheme = "dark";
   } else {
     root.classList.remove("dark");
+    root.classList.add("light");
     root.style.colorScheme = "light";
   }
 }
 
+function syncCookie(mode: ThemeMode) {
+  if (typeof document === "undefined") return;
+  try {
+    document.cookie = `nuts_theme=${encodeURIComponent(mode)}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch {
+    // Ignore cookie errors
+  }
+}
+
+function getInitialTheme(): { theme: ThemeMode; resolvedTheme: "light" | "dark" } {
+  if (typeof window === "undefined") {
+    return { theme: "system", resolvedTheme: "light" };
+  }
+  let savedTheme: ThemeMode = "system";
+  try {
+    const stored = localStorage.getItem("nuts_theme") as ThemeMode | null;
+    if (stored && ["light", "dark", "system"].includes(stored)) {
+      savedTheme = stored;
+    }
+  } catch {
+    // Fallback
+  }
+
+  const isDark =
+    document.documentElement.classList.contains("dark") ||
+    savedTheme === "dark" ||
+    (savedTheme === "system" && getSystemTheme() === "dark");
+
+  return {
+    theme: savedTheme,
+    resolvedTheme: isDark ? "dark" : "light",
+  };
+}
+
+const initial = getInitialTheme();
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  theme: "light",
-  resolvedTheme: "light",
+  theme: initial.theme,
+  resolvedTheme: initial.resolvedTheme,
 
   setTheme: (newTheme: ThemeMode) => {
     const resolved = newTheme === "system" ? getSystemTheme() : newTheme;
@@ -38,6 +76,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
       } catch {
         // Ignore localStorage quota errors
       }
+      syncCookie(newTheme);
     }
     applyThemeToDOM(resolved);
     set({ theme: newTheme, resolvedTheme: resolved });
@@ -46,7 +85,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   initTheme: () => {
     if (typeof window === "undefined") return;
 
-    let savedTheme: ThemeMode = "light";
+    let savedTheme: ThemeMode = "system";
     try {
       const stored = localStorage.getItem("nuts_theme") as ThemeMode | null;
       if (stored && ["light", "dark", "system"].includes(stored)) {
@@ -58,12 +97,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
 
     const resolved = savedTheme === "system" ? getSystemTheme() : savedTheme;
     applyThemeToDOM(resolved);
+    syncCookie(savedTheme);
     set({ theme: savedTheme, resolvedTheme: resolved });
 
     // Listen to OS system theme changes if set to system
     try {
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      const handler = (e: MediaQueryListEvent) => {
+      const handler = (e: MediaQueryListEvent | MediaQueryList) => {
         if (get().theme === "system") {
           const sysResolved = e.matches ? "dark" : "light";
           applyThemeToDOM(sysResolved);
@@ -71,7 +111,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
         }
       };
 
-      mediaQuery.addEventListener("change", handler);
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener("change", handler);
+      } else if ("addListener" in mediaQuery) {
+        // Legacy Safari/WebKit
+        (mediaQuery as unknown as { addListener: (cb: typeof handler) => void }).addListener(handler);
+      }
     } catch {
       // Ignore
     }

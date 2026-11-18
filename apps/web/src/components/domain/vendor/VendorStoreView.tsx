@@ -68,7 +68,7 @@ export function VendorStoreView({
   const slug = (params?.slug as string) || propSlug;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isCustomer = useAuthStore((state) => state.isAuthenticated && (state.capabilities?.canPurchase ?? false));
-  const { followedIds, isLoading: isLoadingFollows, isPending: isFollowPending, setFollowing } = useVendorFollowing();
+  const { followedIds, isPending: isFollowPending, setFollowing } = useVendorFollowing();
 
   // State
   const [searchInput, setSearchInput] = useState("");
@@ -501,16 +501,12 @@ export function VendorStoreView({
                   <button
                     type="button"
                     onClick={() => void handleFollowStore()}
-                    disabled={isCustomer && (isLoadingFollows || isFollowPending(store.id))}
+                    disabled={isCustomer && isFollowPending(store.id)}
                     className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-50"
                   >
-                    {isCustomer && isLoadingFollows
-                      ? "Checking…"
-                      : isCustomer && isFollowPending(store.id)
-                        ? (followedIds.has(store.id) ? "Following…" : "Unfollowing…")
-                        : isCustomer && followedIds.has(store.id)
-                          ? "Following"
-                          : "Follow store"}
+                    {isCustomer && followedIds.has(store.id)
+                      ? "Following"
+                      : "Follow store"}
                   </button>
                 )}
               </div>

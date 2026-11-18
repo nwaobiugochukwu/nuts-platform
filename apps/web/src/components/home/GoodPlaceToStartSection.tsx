@@ -71,12 +71,14 @@ export function GoodPlaceToStartSection({
 
   return (
     <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8" aria-labelledby="good-place-to-start-heading">
-      <div className="mb-6 flex items-end justify-between gap-4">
+      <div className="mb-6 flex items-start sm:items-end justify-between gap-4">
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Picked for you, with something new to discover</p>
           <h2 id="good-place-to-start-heading" className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             A good place to start
           </h2>
+          <Link href="/discover" className="mt-1.5 inline-flex text-sm font-semibold text-foreground underline-offset-4 hover:underline sm:hidden">
+            Browse all finds
+          </Link>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Link href="/discover" className="hidden text-sm font-semibold text-foreground underline-offset-4 hover:underline sm:inline">Browse all finds</Link>
@@ -112,7 +114,6 @@ export function GoodPlaceToStartSection({
           </div>
         ))}
       </div>
-      <Link href="/discover" className="mt-1 inline-flex text-sm font-semibold text-foreground underline-offset-4 hover:underline sm:hidden">Browse all finds</Link>
     </section>
   );
 }

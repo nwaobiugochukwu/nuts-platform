@@ -96,7 +96,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-28 rounded-2xl bg-neutral-100 animate-pulse" />
+              <div key={i} className="h-28 rounded-2xl bg-neutral-100 dark:bg-neutral-800 animate-pulse" />
             ))}
           </div>
         ) : items.length === 0 ? (

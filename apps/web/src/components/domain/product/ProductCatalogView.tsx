@@ -22,6 +22,7 @@ import Link from "@/components/navigation/AppLink";
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/zustand/auth";
 import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
+import { useRecentSearches } from "@/hooks/use-recent-searches";
 
 const EMPTY_CATEGORIES: CategoryResponseDto[] = [];
 
@@ -85,6 +86,13 @@ export function ProductCatalogView({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const sessionId = useRecommendationSessionId();
+  const { addSearch } = useRecentSearches();
+
+  useEffect(() => {
+    if (search.trim()) {
+      addSearch(search.trim());
+    }
+  }, [search, addSearch]);
 
   const allCategories = initialCategories ?? EMPTY_CATEGORIES;
   const categoryOptions = flattenActiveCategories(allCategories);

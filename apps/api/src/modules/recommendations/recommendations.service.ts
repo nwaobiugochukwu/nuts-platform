@@ -212,7 +212,7 @@ function explainRecommendation(
   }
   if (vendorWeights.has(candidate.vendorId))
     return 'From a store you have explored';
-  return 'A recent pick based on your shopping activity';
+  return 'Based on your shopping activity';
 }
 
 @Injectable()

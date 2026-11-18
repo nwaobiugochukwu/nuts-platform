@@ -91,7 +91,7 @@ An old `PENDING` outbox row with `attempts: 0` has not been claimed by the relay
 - Admin and vendor analytics use Africa/Lagos calendar boundaries, accept up to 730 days of history, and cache server results for 20 seconds. Visible dashboards refresh summaries every 30 seconds and details every 60 seconds; this is polling, not push delivery.
 - Product-view and marketplace-action events are retained for 730 days. Recommendation events are retained for 180 days, except follow/unfollow history used for follower-change reporting. Raw views count events; unique viewers count account or anonymous browser/session identities without merging them across login or device changes.
 - View-to-cart and view-to-paid-purchase are identified account/product cohorts with a seven-day attribution window. Cart-to-paid-purchase matches cart/product/variant lines within seven days. Recent cohorts can mature after the selected date range. Revenue is gross before refunds. See [analytics definitions](docs/domains/analytics-and-measurement.md) and [scaling guidance](docs/scaling/analytics-at-scale.md).
-- `/discover` is the product discovery feed and uses keyset cursors. The recommendation ranker is deterministic API business logic using available activity signals, not a trained machine-learning service. Cold-start marketplace discovery is separate from personalized recommendations.
+- `/discover` is the product discovery feed and uses keyset cursors. The recommendation ranker is deterministic API business logic using available activity signals, not a trained machine-learning service. Cold-start marketplace discovery is separate from personalized recommendations. Recommendation reason labels display `"Based on your shopping activity"` for activity-driven picks.
 - Client-side telemetry impression events are buffered with a 5,000ms collection window and capped at 25 events per batch. Deduplication keys (`${sessionId}:${surface}:${entityId}`) avoid redundant requests for already-seen items, and a `pagehide` listener guarantees event delivery upon tab closure or page exit.
 
 ### Canonical REST routing and optional auth
@@ -100,8 +100,17 @@ An old `PENDING` outbox row with `attempts: 0` has not been claimed by the relay
   - Product Reviews: `GET /api/v1/products/:productId/reviews` (canonical) and `/api/v1/reviews/product/:productId` (legacy alias).
   - Order Payments: `GET /api/v1/orders/:orderId/payment` (canonical) and `/api/v1/payments/order/:orderId` (legacy alias).
   - Product Variants: `POST` & `GET /api/v1/vendors/products/:productId/variants` and `POST` & `GET /api/v1/admin/products/:productId/variants`.
-  - Vendor Engagement: `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, alongside public store profile and catalog routes (`/api/v1/vendors/:storeSlug`, `/products`, `/followers/count`).
+  - Vendor Engagement: `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, alongside public store profile and catalog routes (`/api/v1/vendors/:storeSlug`, `/products`, `/followers/count`). The `VendorFollowsController` is registered before `PublicStoreController` in `VendorsModule` so the explicit `/vendors/follows` path is not shadowed by the `:storeSlug` wildcard.
 - Recommendation endpoints (`/api/v1/recommendations/for-you`, `/trending`, `/daily-mix`, `/by-category`) use `@OptionalAuth()`. This unifies authenticated accounts and guest visitors under single endpoints without throwing `401 Unauthorized` or `403 Forbidden` for anonymous shoppers. Array route mappings preserve legacy `/session` paths for backward compatibility.
+
+### Push notifications
+
+- WebPush (VAPID) is configured via `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` on the API and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` on the web client. These keys must match across all environments.
+- Toggling push notifications **off** updates the account preference (`pushEnabled: false`) only. The browser's FCM push subscription token is intentionally **not** revoked. This avoids the `DOMException: Registration failed - push service error` that occurs when Chrome's FCM daemon enters a cooldown after `subscription.unsubscribe()` and re-subscription is attempted immediately.
+- Toggling push notifications **on** updates the preference and re-uploads the existing browser push token to the backend in milliseconds without FCM re-negotiation.
+- The web push hook (`usePushNotifications`) uses a module-level shared Zustand store and a 60-second cooldown to prevent duplicate background device-sync calls when the hook is mounted in multiple components simultaneously (e.g., `PushNotificationHost` in the root provider and `NotificationPreferencesContent` on the settings page).
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is baked in memory at module load time, eliminating a redundant `GET /api/v1/notifications/push/vapid-key` HTTP request on every toggle.
+- The "Send Test Alert" button is restricted to `NODE_ENV=development` builds (never staging or production) using the `NEXT_PUBLIC_APP_ENV` variable, which is explicitly declared in each environment file (`development`, `staging`, `production`).
 
 ### Authentication, Swagger, and deployment
 
@@ -109,9 +118,9 @@ Browser authentication uses short-lived access and rotating refresh cookies with
 
 Google Identity Services (GIS) sign-in is available across customer and vendor portals. The frontend `<GoogleSignInButton>` renders official branded iconography immediately, mounts a transparent gesture overlay (`opacity-[0.0001]`) to comply with browser pop-up policies, and avoids React #418 SSR hydration mismatches. Because Next.js inlines public environment variables at build time, `apps/web/Dockerfile` and the GitHub Actions deployment workflow declare `ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID` passed via `build-args`.
 
-Swagger is enabled with `SWAGGER_ENABLED=true` in development or when staging is explicitly selected with `NODE_ENV=staging` or `APP_ENV=staging`. A staging hostname by itself does not enable it. Production disables Swagger even when the flag is true. The UI is at `/api/docs`; the JSON document is at `/api/docs-json` when enabled. The API documentation is categorized into 5 enterprise domain groups (Customer Commerce, Merchant & Vendor Operations, Platform Administration & Governance, Identity & Security, System & Infrastructure) with alphabetical tag sorting disabled to preserve natural domain workflows.
+Swagger is enabled with `SWAGGER_ENABLED=true` in development or when staging is explicitly selected with `NODE_ENV=staging` or `APP_ENV=staging`. A staging hostname by itself does not enable it. Production disables Swagger even when the flag is true. The UI is at `/api/docs`; the JSON document is at `/api/docs-json` when enabled. The API documentation arranges all tags and operations in alphabetical order (`tagsSorter: 'alpha'`, `operationsSorter: 'alpha'`) across domain tags (`ADMIN - *`, `AUTH`, `CART`, `CATEGORIES`, `NOTIFICATIONS`, `ORDERS`, `PRODUCTS`, `VENDOR - *`, etc.) for intuitive scanning and consistent contract generation.
 
-GitHub Actions runs lockfile validation, lint, typecheck, API and web authentication tests, and production builds. The workflow named `deploy` publishes API and web images to GitHub Container Registry; it does not perform a host rollout or post-deployment health verification.
+GitHub Actions runs lockfile validation, lint, typecheck, API and web authentication tests, and production builds. The workflow named `deploy` publishes API and web images to GitHub Container Registry (GHCR); host rollout and post-deployment health verification remain separate operational release steps.
 
 ---
 
@@ -161,7 +170,7 @@ Manages identities across Customers, Vendors, and Admins. Issues short-lived acc
 - **Access Token TTL (`JWT_ACCESS_EXPIRES_IN`):** Exactly **15 minutes**. Stateless Bearer token carrying `sub`, `email`, `role`, `tokenVersion`, and `sessionId`.
 - **Refresh Token TTL (`JWT_REFRESH_EXPIRES_IN`):** Exactly **7 days**. Stored as a cryptographic hash in PostgreSQL and bound to a unique device `sessionId`.
 - **The 15-Second Grace Window:** When a refresh token is rotated, its previous ID is cached in Redis (`auth:grace:{refreshId}`) for **15 seconds**. Any concurrent request arriving within this 15-second window receives the newly minted token instead of triggering account revocation.
-- **Security Stamp Invalidation (`auth:stamp:{role}:{userId}`):** Cached in Redis for **24 hours**. On password reset or administrative suspension, the stamp increments; active access tokens are immediately rejected on their next request.
+- **Security Stamp Invalidation (`auth:stamp:{role}:{userId}`):** Cached in Redis for **60 seconds** (`AuthSessionService.STAMP_TTL_SECONDS`). On password reset, logout, or administrative suspension, the database stamp increments and the Redis key is evicted; active access tokens are rejected on their next request across the cluster.
 - **OTP Lifecycle (`OTP_TTL_MIN`):** Exactly **10 minutes**. Numeric 6-digit code stored in Redis. Cooldown between resends: **60 seconds** (`OTP_RESEND_COOLDOWN_SEC`). Max attempts: **5 attempts** (`OTP_MAX_ATTEMPTS`) before auto-invalidation.
 - **Google ID Token Verification:** `GoogleAuthService` wraps `google-auth-library`'s `OAuth2Client.verifyIdToken()`. Checks: (1) signature against Google's rotating JWKS certs, (2) issuer = `accounts.google.com`, (3) audience = `GOOGLE_CLIENT_ID`, (4) token not expired, (5) `email_verified = true`. Sign-in routes (`POST /api/v1/auth/google`, `POST /api/v1/vendors/auth/google`) link to existing same-role accounts; registration routes handle Google signup.
 
@@ -224,7 +233,7 @@ Manages product categorization in an arbitrary-depth nested category tree (e.g. 
   1. Guard: `parentId !== currentCategoryId` (cannot self-parent).
   2. Traversal: Recursively gather all descendant IDs via `getDescendantIds(currentCategoryId)`.
   3. Cycle check: If `descendantIds.includes(newParentId)`, immediately abort with `400 Bad Request: Circular hierarchy detected`.
-- **Cache Eviction Strategy:** Category trees are cached in Redis under `CATEGORY_TREE` with a TTL of **24 hours** (`CATEGORY_TTL`). Mutations (create, update, move, delete) purge `CATEGORY_TREE` and `CATEGORY_BY_SLUG` instantly across all replicas.
+- **Cache Eviction Strategy:** Category trees are cached in Redis under `CATEGORY_TREE` with a TTL of **1 hour outside development** (and **15 seconds** in development, `CATEGORY_TTL`). Mutations (create, update, move, delete) purge `CATEGORY_TREE` and `CATEGORY_BY_SLUG` instantly across all replicas.
 
 #### 4. Client-Side Architecture & UX Flow
 
@@ -326,7 +335,7 @@ Manages payment gateway interactions (Paystack), handles asynchronous order sett
   - _How NUTS Solved It:_ Built an idempotent state machine on the order payment reference. If an incoming webhook arrives for an order that is already in `PROCESSING` or `PAID` state, the handler logs the duplicate and immediately returns `200 OK` without re-executing ledger updates or event publishing.
 - **Abandoned Inventory Holds:**
   - _The Failure Mode:_ Shoppers initiate checkout but abandon the Paystack payment window, leaving inventory reserved and preventing other customers from purchasing.
-  - _How NUTS Solved It:_ Engineered an automated distributed sweeper (`UnpaidOrdersCron`) running every **60 seconds** under an atomic Redis lock (`cron:lock:unpaid-orders`, 45s TTL). It queries `PENDING` orders older than **15 minutes**, releases reserved inventory back to products/variants in a single database transaction, and transitions orders to `CANCELLED`.
+  - _How NUTS Solved It:_ Engineered an automated distributed sweeper (`UnpaidOrdersCron`) running every **5 minutes** under an atomic Redis lock (`cron:lock:unpaid-orders`, 4-minute lock TTL). It queries `PENDING` orders older than **15 minutes** (`UNPAID_ORDER_EXPIRATION`), releases reserved inventory back to products/variants in a single database transaction, and transitions orders to `CANCELLED`.
 - **Premature Merchant Payouts & Marketplace Exposure:**
   - _The Failure Mode:_ Vendors withdrawing sales revenue immediately upon checkout, leaving the platform liable for buyer refunds if goods are never shipped or delivered.
   - _How NUTS Solved It:_ Implemented a two-phase escrow ledger: 85% of order funds are initially locked in `pendingBalance`. Funds only transfer to available `balance` when the buyer or carrier confirms delivery status as `DELIVERED`.
@@ -347,8 +356,8 @@ Manages payment gateway interactions (Paystack), handles asynchronous order sett
   - When payment succeeds, **85%** of the item total is credited to the vendor's `pendingBalance`.
   - When the customer confirms delivery or the carrier status updates to `DELIVERED`, the funds transfer from `pendingBalance` to available `balance` for payout.
 - **Unpaid Order Cleanup Sweeper (`UnpaidOrdersCron`):**
-  - Runs **every 60 seconds** (`* * * * *`).
-  - Acquires an atomic Redis lock: `cron:lock:unpaid-orders` with an auto-release TTL of **45 seconds**.
+  - Runs **every 5 minutes** (`*/5 * * * *`, `UNPAID_ORDER_EXPIRATION.CRON_SCHEDULE`).
+  - Acquires an atomic Redis lock: `cron:lock:unpaid-orders` with an auto-release TTL of **4 minutes** (`LOCK_TTL_MS: 4 * 60 * 1000`).
   - Sweeps all orders in `PENDING` state older than **15 minutes** (`UNPAID_ORDER_TTL_MINUTES`).
   - Restores the reserved stock back to `products` / `product_variants` and transitions order status to `CANCELLED`.
 
@@ -395,7 +404,7 @@ Maintains real-time browser updates via Server-Sent Events (SSE), routes domain 
   - _How NUTS Solved It:_ Engineered an automated daily retention cron (`prunePublishedEvents` at `0 0 3 * * *`, Africa/Lagos) that safely purges `PUBLISHED` events older than **90 days** in bounded batches of 1,000, backed by a composite index `@@index([status, processedAt])`.
 - **Dropped SSE Connections via Cloud Proxies:**
   - _The Failure Mode:_ Cloud reverse proxies (Nginx, Render, Cloudflare) automatically terminate idle HTTP streaming connections after 30–60 seconds of inactivity, breaking real-time browser updates.
-  - _How NUTS Solved It:_ Engineered an active keepalive heartbeat (`: keepalive\n\n`) dispatched every **15 seconds** across all active SSE streams. This resets proxy idle timers while validating the user's Redis security stamp on each pulse to terminate compromised connections immediately.
+  - _How NUTS Solved It:_ Engineered an active keepalive ping frame (`{ data: { type: 'ping' } }`) dispatched every **15 seconds** across all active SSE streams. Authentication and security stamp verification are enforced strictly at connection setup via the route guard, allowing the 15-second heartbeat to remain a zero-cost ping frame that resets proxy idle timers without generating database query storms.
 - **Unified Multi-Role Real-Time Streaming:**
   - _The Failure Mode:_ Maintaining separate SSE controller endpoints for Customers, Admins, and Vendors introduces route redundancy, fragmented client stores, and reverse-proxy route maintenance overhead.
   - _How NUTS Solved It:_ Consolidated SSE streaming into a single, unified canonical endpoint at `/notifications/sse/stream` supporting all authenticated roles (`user`, `vendor`, `admin`) with zero-trust capability filtering and unified client Zustand lifecycle management.
@@ -477,7 +486,7 @@ Provides instant, typo-tolerant search across products, categories, vendors, and
   6. **Full-Text Match (`to_tsvector @@ plainto_tsquery`):** Weight `2.8 + similarity`
   7. **Store Name Match:** Weight `2.0 + similarity`
   8. **Trigram Fuzzy Fallback (`similarity() > 0.3`):** Weight `1.0`
-- **Latency Target:** Sub-**35ms** query execution on indexed PostgreSQL tables using GIN indexes (`gin_trgm_ops`).
+- **Search Execution & Indexing:** Executed via single-roundtrip parameterized PostgreSQL queries using GIN trigram indexes (`gin_trgm_ops`) and `tsvector` lexemes; query latency depends on catalog volume, filters, and hardware tier, and is measured directly rather than assumed via speculative targets.
 
 #### 4. Client-Side Architecture & UX Flow
 
@@ -822,7 +831,7 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
     - **NUTS Production Implementation:**
       - B-Tree indexes on foreign keys: `userId`, `vendorId`, `orderId`, and `status`.
       - Composite index on `[vendorId, createdAt DESC]` for merchant backoffice order pagination.
-      - GIN Trigram index (`CREATE INDEX idx_products_search ON products USING gin (name gin_trgm_ops)`) for sub-35ms fuzzy text matching.
+      - GIN Trigram index (`CREATE INDEX idx_products_search ON products USING gin (name gin_trgm_ops)`) for indexed typo-tolerant fuzzy text matching.
     - **Architecture & Interview Takeaway:** _Indexes accelerate reads but slow down writes. Index foreign keys, frequently filtered status columns, and composite sort keys, but avoid indexing high-churn write columns with low query frequency._
 
 29. **Full-Text Search, Trigrams (`pg_trgm`) & `tsvector` Lexemes:**
@@ -832,8 +841,8 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
     - **NUTS Production Implementation:** NUTS combines both inside `SearchService` via raw PostgreSQL SQL:
       - Generates `tsvector` for full-text phrase matching.
       - Uses `pg_trgm` `similarity(name, :query)` for fuzzy typo handling.
-      - Weights exact matches, prefix matches, and fuzzy matches in a tiered `CASE` ranking, executing in under 35ms without external Elasticsearch operational overhead.
-    - **Architecture & Interview Takeaway:** _For catalogs under 500,000 items, PostgreSQL's native `pg_trgm` and `tsvector` offer exceptional search relevance and sub-50ms latency without the complexity of managing a separate Elasticsearch cluster._
+      - Weights exact matches, prefix matches, and fuzzy matches in a tiered `CASE` ranking without external Elasticsearch operational overhead.
+    - **Architecture & Interview Takeaway:** _PostgreSQL full-text search and `pg_trgm` can avoid a separate search cluster at current scale, but validate relevance and query plans using representative production-like data before committing to a latency or capacity target._
 
 30. **SQL Injection Defense & Parameterized Abstract Syntax Trees:**
     - **Concept & Foundation:** SQL Injection occurs when untrusted user input is concatenated directly into SQL query strings, allowing attackers to manipulate query logic, bypass authentication, or drop tables.
@@ -888,8 +897,8 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
       - Strict TTL assignments:
         - Refresh token grace concurrency window: 15 seconds.
         - Ephemeral OTP verification codes: 10 minutes.
-        - Category taxonomy tree: 24 hours (with event-driven bust).
-        - Distributed cron locks: 45 seconds.
+        - Category taxonomy tree: 1 hour in production, 15 seconds in dev (`CATEGORY_TTL`, with event-driven bust).
+        - Distributed cron locks: bounded per-job locks (e.g. 4 minutes for `UNPAID_ORDER_EXPIRATION`).
       - Configured with `maxmemory-policy: volatile-lru` to protect permanent configurations while evicting expired cache records cleanly.
     - **Architecture & Interview Takeaway:** _Never store unbounded keys in Redis without an explicit TTL. An unmanaged Redis instance will eventually exhaust RAM and reject new writes._
 

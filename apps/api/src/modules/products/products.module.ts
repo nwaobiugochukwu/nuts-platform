@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
 import { RedisModule } from '@api/infrastructure/redis/redis.module';
 import { SearchModule } from '@api/modules/search/search.module';
+import { NotificationsModule } from '@api/modules/notifications/notifications.module';
 import { ProductController } from './controllers/product.controller';
 import { DiscoverController } from './controllers/discover.controller';
 import { AdminProductsController } from './controllers/admin-product.controller';
@@ -20,7 +21,7 @@ import { ProductVariantsService } from './product-variants.service';
 import { LowStockCron } from './jobs/low-stock.cron';
 
 @Module({
-  imports: [PrismaModule, RedisModule, SearchModule],
+  imports: [PrismaModule, RedisModule, SearchModule, NotificationsModule],
   controllers: [
     ProductController,
     DiscoverController,

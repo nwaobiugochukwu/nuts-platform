@@ -149,11 +149,11 @@ export function ProductReviews({
                 return (
                   <div key={star} className="flex items-center gap-2.5 text-xs text-muted-foreground">
                     <span className="w-10 font-medium flex items-center gap-1">
-                      {star} <Star className="h-3 w-3 fill-black text-black inline" />
+                      {star} <Star className="h-3 w-3 fill-primary text-primary inline" />
                     </span>
-                    <div className="flex-1 h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                    <div className="flex-1 h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-black rounded-full transition-all duration-300"
+                        className="h-full bg-primary rounded-full transition-all duration-300"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -244,7 +244,7 @@ export function ProductReviews({
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="What did you love about this product?"
-              className="w-full rounded-xl border border-input bg-white p-3 text-lg text-foreground placeholder:text-muted-foreground focus:border-black focus:outline-none focus:ring-1 focus:ring-black"
+              className="w-full rounded-xl border border-input bg-background p-3 text-sm sm:text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary"
               maxLength={1000}
             />
           </div>
@@ -274,7 +274,7 @@ export function ProductReviews({
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-neutral-100" />
+              <div key={i} className="h-28 animate-pulse rounded-2xl bg-neutral-100 dark:bg-neutral-800" />
             ))}
           </div>
         ) : reviewsList.length === 0 ? (
@@ -294,7 +294,7 @@ export function ProductReviews({
             return (
               <article
                 key={review.id}
-                className="rounded-2xl border border-border/70 bg-white p-5 transition-shadow hover:shadow-xs"
+                className="rounded-2xl border border-border/70 bg-card p-5 transition-shadow hover:shadow-xs"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -305,8 +305,8 @@ export function ProductReviews({
                           key={i}
                           className={`h-3.5 w-3.5 ${
                             i < review.rating
-                              ? "fill-black text-black"
-                              : "text-neutral-200"
+                              ? "fill-primary text-primary"
+                              : "text-neutral-200 dark:text-neutral-700"
                           }`}
                         />
                       ))}
@@ -317,7 +317,7 @@ export function ProductReviews({
                       <span className="text-sm font-bold text-foreground">
                         {authorName}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full">
                         <CheckCircle2 className="h-3 w-3" /> Verified Purchase
                       </span>
                     </div>

@@ -90,7 +90,7 @@ export function WishlistPageView({ initialItems, categories }: WishlistPageViewP
             <button
               type="button"
               onClick={() => setIsClearOpen(true)}
-              className="text-xs font-semibold text-neutral-400 hover:text-neutral-900 transition-colors"
+              className="text-xs font-semibold text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
             >
               Clear All Items
             </button>
@@ -125,14 +125,14 @@ export function WishlistPageView({ initialItems, categories }: WishlistPageViewP
             {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
-                className="aspect-[3/4] animate-pulse rounded-2xl bg-neutral-100"
+                className="aspect-[3/4] animate-pulse rounded-2xl bg-neutral-100 dark:bg-neutral-800"
               />
             ))}
           </div>
         ) : items.length === 0 ? (
           /* Empty State */
           <div className="mx-auto max-w-md py-20 text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-neutral-100 text-neutral-400">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500">
               <Heart className="h-10 w-10 stroke-[1.2]" />
             </div>
             <h2 className="mt-6 text-2xl font-semibold text-foreground">

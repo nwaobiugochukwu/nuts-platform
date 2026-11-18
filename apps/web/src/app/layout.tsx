@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { PaystackScript } from "@/components/paystack-script";
 import { RouteProgressBar } from "@/components/feedback/RouteProgressBar";
 import { Provider } from "@/provider";
@@ -31,15 +32,73 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+const THEME_INITIALIZER_SCRIPT = `
+(function() {
+  try {
+    var d = document.documentElement;
+    var stored = localStorage.getItem('nuts_theme');
+    var isDark = false;
+    if (stored === 'dark') {
+      isDark = true;
+    } else if (stored === 'light') {
+      isDark = false;
+    } else {
+      isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    if (isDark) {
+      d.classList.add('dark');
+      d.classList.remove('light');
+      d.style.colorScheme = 'dark';
+    } else {
+      d.classList.remove('dark');
+      d.classList.add('light');
+      d.style.colorScheme = 'light';
+    }
+    if (stored && document.cookie.indexOf('nuts_theme=' + encodeURIComponent(stored)) === -1) {
+      document.cookie = 'nuts_theme=' + encodeURIComponent(stored) + '; path=/; max-age=31536000; SameSite=Lax';
+    }
+  } catch (e) {}
+})();
+`;
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  let initialThemeClass = "";
+  let initialColorScheme: "dark" | "light" | undefined = undefined;
+
+  try {
+    const cookieStore = await cookies();
+    const themeCookie = cookieStore.get("nuts_theme")?.value;
+    if (themeCookie === "dark") {
+      initialThemeClass = "dark";
+      initialColorScheme = "dark";
+    } else if (themeCookie === "light") {
+      initialThemeClass = "light";
+      initialColorScheme = "light";
+    }
+  } catch {
+    // Graceful fallback during static pre-rendering
+  }
+
   return (
-    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={initialThemeClass}
+      style={initialColorScheme ? { colorScheme: initialColorScheme } : undefined}
+      data-scroll-behavior="smooth"
+      suppressHydrationWarning
+    >
       <head>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <script
+          id="theme-head-initializer"
+          dangerouslySetInnerHTML={{
+            __html: THEME_INITIALIZER_SCRIPT,
+          }}
+        />
       </head>
       {/*
        * suppressHydrationWarning on <body> silences false-positive hydration
@@ -53,6 +112,12 @@ export default function RootLayout({
         className={`${inter.variable} font-sans antialiased text-foreground bg-background`}
         suppressHydrationWarning
       >
+        <script
+          id="theme-body-initializer"
+          dangerouslySetInnerHTML={{
+            __html: THEME_INITIALIZER_SCRIPT,
+          }}
+        />
         <Suspense fallback={null}>
           <RouteProgressBar />
         </Suspense>

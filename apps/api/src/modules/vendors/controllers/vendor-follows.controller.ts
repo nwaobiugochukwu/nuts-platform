@@ -16,19 +16,19 @@ import { VendorFollowsService } from '../vendor-follows.service';
 
 @ApiTags('VENDOR FOLLOWS')
 @ApiBearerAuth('JWT-auth')
-@Controller(['vendors/follows', 'vendors'])
+@Controller('vendors')
 @Roles(ROLE.USER)
 export class VendorFollowsController {
   constructor(private readonly follows: VendorFollowsService) {}
 
-  @Get()
+  @Get(['follows', 'follows/list'])
   @Message('Followed vendors retrieved successfully')
   @ApiOperation({ summary: 'List vendors followed by the current customer' })
   list(@GetUser('id') userId: string) {
     return this.follows.list(userId);
   }
 
-  @Get('manage')
+  @Get('follows/manage')
   @Message('Followed vendors retrieved successfully')
   @ApiOperation({ summary: 'Search and page through followed stores' })
   manage(
@@ -40,13 +40,13 @@ export class VendorFollowsController {
     return this.follows.manage(userId, search, page, limit);
   }
 
-  @Get('count')
+  @Get('follows/count')
   @Message('Followed vendor count retrieved successfully')
   count(@GetUser('id') userId: string) {
     return this.follows.count(userId);
   }
 
-  @Post([':vendorId', ':vendorId/follow'])
+  @Post([':vendorId/follow', 'follows/:vendorId'])
   @Message('Vendor followed successfully')
   @ApiOperation({ summary: 'Follow an active public vendor store' })
   async follow(
@@ -56,7 +56,7 @@ export class VendorFollowsController {
     return this.follows.follow(userId, vendorId);
   }
 
-  @Delete([':vendorId', ':vendorId/follow'])
+  @Delete([':vendorId/follow', 'follows/:vendorId'])
   @Message('Vendor unfollowed successfully')
   @ApiOperation({ summary: 'Unfollow a vendor store' })
   async unfollow(

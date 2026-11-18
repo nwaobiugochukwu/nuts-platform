@@ -320,12 +320,12 @@ export function ProductDetailView({
     const skeleton = (
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-          <div className="aspect-square animate-pulse rounded-3xl bg-neutral-100" />
+          <div className="aspect-square animate-pulse rounded-3xl bg-neutral-100 dark:bg-neutral-800" />
           <div className="space-y-6">
-            <div className="h-8 w-2/3 animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-6 w-1/3 animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-24 w-full animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-12 w-full animate-pulse rounded-xl bg-neutral-100" />
+            <div className="h-8 w-2/3 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-6 w-1/3 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-24 w-full animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-12 w-full animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
           </div>
         </div>
       </div>
@@ -570,7 +570,7 @@ export function ProductDetailView({
                   type="button"
                   onClick={nextImage}
                   aria-label="Next image"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md text-neutral-800 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-800/90 text-neutral-800 dark:text-neutral-100 dark:border dark:border-neutral-700/60 shadow-md backdrop-blur-xs hover:scale-110 active:scale-95 transition-all"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>

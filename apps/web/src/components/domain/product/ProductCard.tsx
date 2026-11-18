@@ -32,6 +32,7 @@ interface ProductCardProps {
   priceClassName?: string;
   priority?: boolean;
   hideVendor?: boolean;
+  hideRecommendationReason?: boolean;
   recommendationContext?: RecommendationAttribution;
 }
 
@@ -77,6 +78,7 @@ export function ProductCard({
   priceClassName,
   priority = false,
   hideVendor = false,
+  hideRecommendationReason = false,
   recommendationContext,
 }: ProductCardProps) {
   const router = useRouter();
@@ -137,7 +139,10 @@ export function ProductCard({
       ? product.images[0].url
       : thumbnail;
   const store = product.vendor;
-  const recommendationReason = "recommendationReason" in product ? product.recommendationReason : undefined;
+  const recommendationReason =
+    !hideRecommendationReason && "recommendationReason" in product
+      ? product.recommendationReason
+      : undefined;
   const stock = isCard ? 0 : (product.stock ?? 0);
   const stockStatus = isCard ? product.stockStatus : undefined;
   const isOutOfStock = isCard
@@ -229,7 +234,7 @@ export function ProductCard({
     <div className="group relative flex h-full flex-col">
       {/* Product Image Box */}
       <div
-        className={`relative w-full overflow-hidden rounded-2xl bg-[#f4f5f6] transition-all ${
+        className={`relative w-full overflow-hidden rounded-2xl bg-[#f4f5f6] dark:bg-neutral-900 transition-all ${
           aspectRatio === "square" ? "aspect-square" : "aspect-[3/4]"
         }`}
       >

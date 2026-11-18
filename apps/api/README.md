@@ -22,7 +22,7 @@ The API is not a microservice per module and does not implement system-wide CQRS
   - Order Payments: Canonical `GET /api/v1/orders/:orderId/payment` (aliased to legacy `/api/v1/payments/order/:orderId`).
   - Vendor Product Variants: Canonical `POST` & `GET /api/v1/vendors/products/:productId/variants` (aliased to `/api/v1/vendors/products/variants`).
   - Admin Product Variants: Canonical `POST` & `GET /api/v1/admin/products/:productId/variants` (aliased to `/api/v1/admin/products/variants`).
-  - Vendor Follows & Public Storefront: Canonical `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, and public store endpoints `GET /api/v1/vendors/:storeSlug`, `/products`, `/followers/count`.
+  - Vendor Follows & Public Storefront: Canonical `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, and public store endpoints `GET /api/v1/vendors/:storeSlug`, `/products`, `/followers/count`. `VendorFollowsController` is registered before `PublicStoreController` in `VendorsModule` so the explicit `GET /api/v1/vendors/follows` path is not shadowed by the `:storeSlug` wildcard. Follow buttons on the storefront use optimistic state updates (no "Checking…" loading state).
 - **Unified Endpoints via `@OptionalAuth()`:** The recommendation engine (`/api/v1/recommendations/for-you`, `/trending`, `/daily-mix`, `/by-category`) uses the custom `@OptionalAuth()` decorator. It transparently attaches authenticated user context if valid JWT credentials exist, but permits anonymous guests without throwing `401 Unauthorized` or `403 Forbidden`. Legacy `/session` endpoints (e.g. `/for-you/session`) are retained via array route decorators for zero-downtime backwards compatibility.
 - Product discovery uses `GET /api/v1/discover` and keyset cursors. Search and some administrative lists use page-based pagination; do not assume a single pagination shape.
 - Paystack webhooks are verified against the raw request body and provider signature. Full refunds create a durable attempt and settle local order, stock, and vendor-earning changes only after provider confirmation. Partial refunds and post-shipment returns are not currently supported.
@@ -31,13 +31,22 @@ The API is not a microservice per module and does not implement system-wide CQRS
 
 ## Important API surfaces
 
-- **Authentication:** `/api/v1/auth`, `/api/v1/vendors/auth`, `/api/v1/admin/auth`.
-- **Catalog and discovery:** `/api/v1/products`, `/api/v1/categories`, `/api/v1/discover`, `/api/v1/search`.
+- **Authentication & identity:** `/api/v1/auth`, `/api/v1/vendors/auth`, `/api/v1/admin/auth`.
+- **Catalog & discovery:** `/api/v1/products`, `/api/v1/categories`, `/api/v1/discover`, `/api/v1/search`.
 - **Customer commerce:** `/api/v1/cart`, `/api/v1/orders`, `/api/v1/payments`, `/api/v1/wallet`, `/api/v1/wishlist`, `/api/v1/reviews`.
-- **Vendor operations:** vendor-scoped products, variants, orders, discounts, wallet, analytics, account and store routes.
-- **Marketplace engagement:** `/api/v1/recommendations`, `/api/v1/analytics`, `/api/v1/vendors/follows`, and referral routes.
-- **Platform governance:** `/api/v1/admin/platform`, `/api/v1/admin/staff`, `/api/v1/admin/announcements`, and role-scoped admin catalog/order/user routes.
-- **Notifications and health:** notification inbox/preferences/push/SSE routes and `/api/v1/health`.
+- **Marketplace engagement & telemetry:** `/api/v1/recommendations`, `/api/v1/analytics`, `/api/v1/vendors/follows`, and referral routes.
+- **Notifications & health:** `/api/v1/notifications` (inbox, preferences, push, SSE stream) and `/api/v1/health`.
+
+The push sub-module exposes:
+- `GET /api/v1/notifications/push/vapid-key` — public endpoint returning the VAPID public key for browser subscription.
+- `POST /api/v1/notifications/push/subscribe` — upserts a browser `PushSubscription` record (endpoint + VAPID crypto keys) for the authenticated user.
+- `POST /api/v1/notifications/push/unsubscribe` — removes a push subscription record by endpoint.
+- `GET /api/v1/notifications/push/status?endpoint=<url>` — returns `{ registered, pushEnabled }` for a given push endpoint, used by the client sync loop.
+- `POST /api/v1/notifications/push/test` — sends a test push notification to all registered devices for the authenticated user.
+
+Toggling `pushEnabled` via `PATCH /api/v1/notifications/preferences` is the sole control for enabling/disabling push delivery. The backend's `NotificationPreferencesService` checks `pushEnabled` before dispatching any push message; the browser subscription record is **not deleted** when the user disables push (only the preference flag changes). This allows instant re-activation without FCM re-negotiation on the next toggle-on.
+- **Platform governance & administration:** `/api/v1/admin/platform`, `/api/v1/admin/staff`, `/api/v1/admin/announcements`, and role-scoped admin catalog/order/user routes.
+- **Vendor operations:** vendor-scoped products, variants, orders, discounts, wallet, analytics, account, and store routes.
 
 See the generated Swagger contract for exact route methods, DTOs, role requirements, response fields, and endpoint-specific pagination.
 
@@ -49,14 +58,7 @@ Analytics definitions, current ingestion mechanisms, failure cases, and reportin
 
 Swagger UI is available at `http://localhost:3001/api/docs` when enabled. `SWAGGER_ENABLED=true` works in development and explicitly selected staging; production disables Swagger even if the flag is set. JSON and YAML documents are available at `/api/docs-json` and `/api/docs-yaml` when Swagger is enabled.
 
-The Swagger documentation taxonomy is structured into 5 enterprise domain groups:
-1. **Customer Commerce:** Catalog, Cart, Checkout, Orders, Payments, Customer Wallet, Reviews, Wishlist, Recommendations, and Analytics.
-2. **Merchant & Vendor Operations:** Vendor Auth, Store Profile, Products, Variants, Inventory, Fulfillment, Escrow Wallet, Discounts, and Metrics.
-3. **Platform Administration & Governance:** Platform Settings, Staff Lifecycle, Vendor Approvals, Global Taxonomy, Order Management, and Platform Announcements.
-4. **Identity & Security:** Customer & Staff Auth, Google OIDC Integration, OTP Lifecycle, Multi-Session Management, and Tokens.
-5. **System & Infrastructure:** Health, Outbox, Distributed Locks, and System Metrics.
-
-Tag alphabetical sorting is disabled (`tagsSorter: 'alpha'` removed) to preserve business domain hierarchy and natural operational workflows.
+Swagger documentation tags and operations are arranged in alphabetical order (`tagsSorter: 'alpha'`, `operationsSorter: 'alpha'`) with alphabetically declared OpenAPI domain tags (`ADMIN - *`, `AUTH`, `CART`, `CATEGORIES`, `NOTIFICATIONS`, `ORDERS`, `PRODUCTS`, `VENDOR - *`, etc.) for intuitive scanning and consistent contract generation in development and staging environments.
 
 ## Local development
 
@@ -92,5 +94,15 @@ The current automated suites cover unit and HTTP-level behavior with mocked infr
 ## Configuration and deployment
 
 Use [`apps/api/.env.example`](.env.example) as the API variable inventory. For production/staging Compose, environment files are selected with root `APP_ENV`; keep provider secrets in the deployment secret manager. When runtime uses a transaction-pool URL, configure `DIRECT_URL` for migration operations. The API and web server-side session checks must use matching JWT verification secrets. Do not commit populated environment files.
+
+**Push notification (VAPID) variables** that must be set in every deployed environment:
+
+| Variable | Purpose |
+|---|---|
+| `VAPID_PUBLIC_KEY` | EC P-256 uncompressed public key (URL-safe base64). Must match `NEXT_PUBLIC_VAPID_PUBLIC_KEY` in the web client. |
+| `VAPID_PRIVATE_KEY` | EC P-256 private key (URL-safe base64, keep secret). |
+| `VAPID_SUBJECT` | Contact URI for VAPID auth header, e.g. `mailto:you@example.com`. |
+
+Generate a fresh VAPID key pair with: `npx web-push generate-vapid-keys`.
 
 The production and staging Compose profiles run a migration job before the API. GitHub Actions publishes API images to GHCR; host rollout, readiness verification, and rollback remain outside that workflow. See the [architecture diagrams](../../docs/architecture/README.md), [codebase audit](../../docs/audits/CODEBASE_AUDIT.md), and [Scaling Strategy](../../docs/scaling/README.md).
