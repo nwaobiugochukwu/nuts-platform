@@ -16,7 +16,7 @@ import {
   isMaintenanceModeResponse,
   MaintenanceModeError,
   useMaintenanceModeStore,
-} from "@/zustand/maintenance-mode";
+} from "../../zustand/maintenance-mode.ts";
 
 declare module "axios" {
   interface AxiosRequestConfig {
