@@ -10,6 +10,13 @@ import {
   type AuthRole,
 } from "./token-storage.ts";
 import type { ApiSuccessEnvelope, PaginationMeta } from "./types.ts";
+import {
+  activateMaintenanceMode,
+  clearMaintenanceMode,
+  isMaintenanceModeResponse,
+  MaintenanceModeError,
+  useMaintenanceModeStore,
+} from "../../zustand/maintenance-mode.ts";
 
 declare module "axios" {
   interface AxiosRequestConfig {
@@ -223,6 +230,16 @@ export const performTokenRefresh = (
 };
 
 axiosInstance.interceptors.request.use(async (config) => {
+  if (typeof window !== "undefined") {
+    const maintenance = useMaintenanceModeStore.getState();
+    const requestUrl = config.url?.toLowerCase() ?? "";
+    const isAdminRequest =
+      config.authRole === "admin" || /(^|\/)admin(?:\/|$)/.test(requestUrl);
+    if (maintenance.active && !isAdminRequest) {
+      throw new MaintenanceModeError(maintenance.message);
+    }
+  }
+
   const method = config.method?.toUpperCase();
   const isMutating =
     method && ["POST", "PUT", "PATCH", "DELETE"].includes(method);
@@ -247,6 +264,17 @@ axiosInstance.interceptors.request.use(async (config) => {
 
 axiosInstance.interceptors.response.use(
   (response) => {
+    if (
+      typeof window !== "undefined" &&
+      /\/admin\/platform\/config(?:[/?]|$)/i.test(response.config.url ?? "")
+    ) {
+      const payload = response.data?.data ?? response.data;
+      if (payload?.maintenanceMode === false) clearMaintenanceMode();
+      if (payload?.maintenanceMode === true) {
+        activateMaintenanceMode(payload.maintenanceMessage);
+      }
+    }
+
     const token = extractHeader(response.headers, "x-csrf-token");
     if (token) {
       setCsrfToken(token);
@@ -254,6 +282,19 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    const responseStatus = error.response?.status as number | undefined;
+    const responseData = error.response?.data as
+      | { maintenanceMode?: unknown; message?: unknown }
+      | undefined;
+    if (
+      typeof window !== "undefined" &&
+      isMaintenanceModeResponse(responseStatus, responseData)
+    ) {
+      activateMaintenanceMode(responseData?.message);
+      const activeMessage = useMaintenanceModeStore.getState().message;
+      return Promise.reject(new MaintenanceModeError(activeMessage));
+    }
+
     const token = extractHeader(error.response?.headers, "x-csrf-token");
     if (token) {
       setCsrfToken(token);

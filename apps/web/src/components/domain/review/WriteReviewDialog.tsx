@@ -16,7 +16,7 @@ DialogTrigger,
 import { Label } from "@/component/ui/label";
 import { Textarea } from "@/component/ui/textarea";
 import { queryKey } from "@/lib/query-key";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQueryClient } from "@tanstack/react-query";
 import React,{ useState } from "react";
 import { Controller,FormProvider,useForm } from "react-hook-form";

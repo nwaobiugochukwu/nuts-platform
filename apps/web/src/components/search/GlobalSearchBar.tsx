@@ -6,6 +6,7 @@ import { formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
+  History,
   Layers3,
   Loader2,
   Search,
@@ -17,6 +18,7 @@ import Link from "@/components/navigation/AppLink";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useRecentSearches } from "@/hooks/use-recent-searches";
 
 interface SearchItemPayload {
   id?: string;
@@ -73,6 +75,7 @@ export function GlobalSearchBar({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { searches: recentSearches, addSearch, removeSearch, clearSearches } = useRecentSearches();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query.trim().toLocaleLowerCase(), 200);
   const isTypingAhead = query.trim().toLocaleLowerCase() !== debouncedQuery;
@@ -159,10 +162,11 @@ export function GlobalSearchBar({
     staleTime: 30_000,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const searchTerm = query.trim();
+  const handleSubmit = (e?: React.FormEvent, customTerm?: string) => {
+    e?.preventDefault();
+    const searchTerm = (customTerm ?? query).trim();
     if (!searchTerm) return;
+    addSearch(searchTerm);
     setIsOpen(false);
     router.push(`/search?query=${encodeURIComponent(searchTerm)}`);
   };
@@ -193,7 +197,9 @@ export function GlobalSearchBar({
   };
 
   const isHero = variant === "hero";
-  const showDropdown = isOpen && query.trim().length >= 2;
+  const showRecentDropdown = isOpen && query.trim().length < 2 && recentSearches.length > 0;
+  const showAutocompleteDropdown = isOpen && query.trim().length >= 2;
+  const showDropdown = showAutocompleteDropdown || showRecentDropdown;
 
   return (
     <div
@@ -271,7 +277,58 @@ export function GlobalSearchBar({
               : "left-0 right-0 sm:left-1/2 sm:-translate-x-1/2 sm:w-[500px]"
           }`}
         >
-          {isTypingAhead ? (
+          {showRecentDropdown && (
+            <div className="p-2 space-y-2">
+              <div className="flex items-center justify-between px-2 py-1">
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <History className="h-3.5 w-3.5" /> Recent Searches
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearSearches();
+                  }}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 px-1 pt-1">
+                {recentSearches.map((term) => (
+                  <span
+                    key={term}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-secondary/60 py-1 pl-3 pr-1.5 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSubmit(undefined, term)}
+                      className="cursor-pointer hover:underline text-left"
+                    >
+                      {term}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeSearch(term);
+                      }}
+                      aria-label={`Remove search ${term}`}
+                      className="rounded-full p-0.5 text-muted-foreground hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {showAutocompleteDropdown && (
+            <>
+              {isTypingAhead ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground" role="status">
               <Loader2 className="mr-2 h-4 w-4 animate-spin text-foreground" />
               Updating suggestions for “{query.trim()}”…
@@ -422,12 +479,17 @@ export function GlobalSearchBar({
           {/* Full Search Action Link */}
           <Link
             href={`/search?query=${encodeURIComponent(query.trim())}`}
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              addSearch(query.trim());
+              setIsOpen(false);
+            }}
             className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/40 px-3 py-2.5 text-xs sm:text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
           >
             View all results for &ldquo;{query.trim()}&rdquo;
             <ArrowRight className="h-4 w-4" />
           </Link>
+            </>
+          )}
         </div>
       )}
 

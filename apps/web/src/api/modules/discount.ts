@@ -15,6 +15,8 @@ export interface DiscountCodePayload {
   expiresAt?: string | null;
   platformwide?: boolean;
   applicableProductIds?: string[];
+  applicableCategoryIds?: string[];
+  firstOrderOnly?: boolean;
   scope?: string;
   vendorId?: string | null;
 }

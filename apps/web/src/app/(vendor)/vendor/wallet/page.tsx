@@ -36,11 +36,14 @@ export default function DashboardWalletPage() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
     queryFn: async () => {
-      return (await vendorWalletService.getTransactions({ page, limit: 15 })).data;
+      return await vendorWalletService.getTransactions({ page, limit: 15 });
     },
   });
 
-  const transactions = paginatedTx?.data ?? wallet?.transactions ?? [];
+  const transactions =
+    (Array.isArray(paginatedTx?.data) ? paginatedTx.data : null) ??
+    wallet?.transactions ??
+    [];
   const meta: PaginationMeta | undefined = paginatedTx?.meta;
 
   const availableBalance = Number(wallet?.balance ?? 0);

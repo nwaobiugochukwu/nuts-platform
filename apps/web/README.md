@@ -30,15 +30,23 @@ The [backend module map](../../docs/reference/backend-module-map.md) maps these 
 
 ## Discovery experience
 
-The home shelves appear in this order: **A good place to start**; **Recently viewed / Continue where you left off**; **Based on your activity / Picked for you**; **Shop by interest**; **Your followed stores / New from vendors you follow**; and **Vendors to explore**. Personalized product shelves render only when real recommendations or recently viewed products are available, and show no more than 12 products. **Picked for you** waits for at least four unique recommendations after products already shown in earlier shelves are removed.
+The home shelves appear in this order: **A good place to start**; **Continue where you left off**; **Picked based on your activity**; **Shop by interest**; **New from vendors you follow**; and **Vendors to explore**. Product shelves show at most 12 products. The activity shelf appears as soon as at least one available recommendation remains after products already shown in earlier shelves are removed.
 
-**Instant Homepage Pre-fetching & Loading Performance:**
-The homepage (`src/app/page.tsx`) server-side pre-fetches trending products (`serverGetTrendingProducts({ limit: 12 })`) in parallel alongside categories and active promotions during initial SSR. Pre-fetched products hydrate directly into `<HomeProductShelves initialProducts={...}>`, completely eliminating client-side layout shifts and blank loading spinners on initial paint.
+**Homepage skeleton loaders — no pre-fetched products:**
+Homepage product shelves (`HomeProductShelves`, `GoodPlaceToStartSection`) do **not** pre-fetch product data on the server. Each shelf fetches only on the client using React Query, displaying a skeleton loader while data loads. This prevents the visible product-swap flash that would occur if pre-fetched products were replaced by a different personalised set after hydration.
 
 **Scroll Position Restoration:**
 The homepage integrates `useScrollRestoration` (`src/hooks/use-scroll-restoration.ts`). Shopper scroll coordinates are throttled and persisted to `sessionStorage`. When shoppers navigate into a product page and hit the browser back button, the hook coordinates double `requestAnimationFrame` cycles to smoothly restore the exact scroll depth without jarring jumps.
 
-**A good place to start** is a horizontal sampler of up to 12 purchasable products with an image, and at most one product per vendor. The homepage starts with up to eight activity based picks, then fills from a stable daily rotating marketplace mix; if that mix cannot fill the remaining slots, additional relevant products can fill the gap. Activity includes product views, clicks, searches, cart and wishlist actions, qualifying purchases, category views, and store follows. The mix favors fresh listings and balances vendors and categories; product rotation is stable per shopper or visitor identity for the UTC day. Product cards retain the plus-to-cart and wishlist actions; variant products open their detail page for option selection. **Shop by interest** links root categories to `/category/[slug]`, preserving the category hierarchy for further browsing. **Vendors to explore** remains a separate vendor focused section. The homepage does not duplicate the complete product feed.
+**A good place to start** is a horizontal sampler of up to 12 purchasable products with an image, and at most one product per vendor. It starts with the stable daily rotating marketplace mix and uses relevant activity-based picks to fill available slots. Activity includes product views, clicks, searches, cart and wishlist actions, qualifying purchases, category views, and store follows. The mix favors fresh listings and balances vendors and categories; product rotation is stable per shopper or visitor identity for the UTC day. Product cards retain the plus-to-cart and wishlist actions; variant products open their detail page for option selection. Recommendation reason labels display `"Based on your shopping activity"` for activity-driven picks. **Shop by interest** links root categories to `/category/[slug]`, preserving the category hierarchy for further browsing. **Vendors to explore** remains a separate vendor focused section. The homepage does not duplicate the complete product feed.
+
+**Recommendation and recent-history storage:** the browser stores only the recommendation session and visitor identifiers in `localStorage` (`nuts.recommendation-session.v2`, `nuts.recommendation-visitor.v1`, and the visitor creation timestamp). Product history is not kept in browser storage. Product views upsert PostgreSQL `recent_product_views` rows, keyed by account or anonymous visitor and product; the homepage reads them through `GET /api/v1/recommendations/recently-viewed` for **Continue where you left off**. Anonymous rows expire after 180 days; account rows are retained for account continuity, so older signed-in history does not disappear on that timer. When a shopper signs in, `RecentHistoryClaim` links available guest rows to the account. The visitor ID is rotated after 180 days and on an account switch.
+
+**Picked based on your activity** is generated by `GET /api/v1/recommendations/for-you`; the product list itself is not saved in `localStorage`. The API ranks from persisted recent and legacy product views, recommendation clicks/impressions, searches, cart and wishlist activity, qualifying orders, category activity, and followed vendors. Recommendation event rows are retained for 180 days (follow/unfollow events are kept for follower-change reporting). TanStack Query caches responses in memory while the app is open; PostgreSQL activity records are the durable source.
+
+**Product discounts in feeds:** product grids and shelves use `POST /api/v1/discounts/public/batch-for-products` (up to 100 product IDs per request) rather than issuing a request per card. `GET /api/v1/discounts/public/for-product/:productId` is used by the product detail voucher panel, where the full list of applicable vouchers is needed.
+
+**Maintenance mode:** a structured maintenance response activates a full-screen notice for customers and vendors with the message configured in Admin → Platform Controls. Regular API requests pause while the notice is active, avoiding retry loops; no separate polling request is made. **Check again** reloads the app to see whether service has returned, and admin routes remain accessible so an operator can disable maintenance. The client state is held in memory and is rediscovered from the API after a reload; it is not saved in browser storage.
 
 Discover is titled **Good Finds Across the Market**, with the subtitle **Find your next favourite from vendors across NUTS.** It uses a server-rendered initial page followed by cursor-based requests to the sole discovery feed, GET /api/v1/discover. There is no retry against a second discovery URL. The filter drawer has underlined search inputs for stores and categories, plus suggested options shoppers can select directly; product search remains on /search. Price, in-stock, and sort controls are also in the drawer, and selected filters are kept in the URL. Shoppers see a personalized horizontal shelf when recommendations are available. Sort choices are newest, oldest, price low-to-high, and price high-to-low. The old /product catalog URL redirects to /discover.
 
@@ -46,6 +54,36 @@ Admin and vendor analytics default to a day view using Africa/Lagos calendar bou
 
 **High-Performance Telemetry & Batch Window Tuning:**
 Product impression events in `src/api/modules/analytics.ts` are buffered with a 5,000ms window (`IMPRESSION_BATCH_WINDOW_MS = 5000`) and a maximum threshold of 25 events. Individual impressions are deduplicated using a composite `${sessionId}:${surface}:${entityId}` key to prevent repeated requests for visible products. In addition, an active `pagehide` browser event listener ensures any remaining queued telemetry events are flushed before the user navigates away or closes the tab.
+
+## Push notifications
+
+The web client uses the [Web Push API](https://www.w3.org/TR/push-api/) with VAPID keys to deliver push notifications. Push notification state is managed in `src/hooks/use-push-notifications.ts` and exposed to the UI through `src/components/domain/notification/NotificationPreferencesView.tsx`.
+
+**Architecture decisions:**
+
+- **Preference-only toggle (no subscription destruction):** Toggling the push notification switch off calls `PATCH /api/v1/notifications/preferences` with `{ pushEnabled: false }` only. The browser's FCM push subscription token is **not** revoked via `PushSubscription.unsubscribe()`. Destroying the browser subscription causes Chrome's FCM daemon to enter a cooldown that prevents immediate re-subscription (`DOMException: Registration failed - push service error`). Production apps (Slack, GitHub, Twitter) follow the same pattern: account preferences gate delivery; the device token stays warm.
+- **Single PATCH call per toggle:** The switch's `onChange` handler is the sole owner of `PATCH /notifications/preferences`. The push hook (`usePushNotifications`) manages only the browser's device token (`subscribePush` / `unsubscribePush`) and local `isSubscribed` state; it never independently fires a preferences update. This prevents the duplicate-call pattern where the UI and hook both issue a PATCH on the same toggle click.
+- **Global Zustand store for push state:** `usePushStore` (a Zustand store inside the hook module) holds `isSubscribed`, `isLoading`, and `permission` as shared module-level state. This means `PushNotificationHost` (mounted at the root in `Provider.tsx`) and `NotificationPreferencesContent` (mounted on the settings page) share one unified state without double-syncing on mount.
+- **VAPID key in memory:** `NEXT_PUBLIC_VAPID_PUBLIC_KEY` is baked into `inMemoryVapidKey` at module load time (compile-time constant). The `GET /api/v1/notifications/push/vapid-key` HTTP request is only made as a fallback if the in-memory key is missing, and concurrent callers share one in-flight promise (`vapidFetchPromise`) to prevent duplicate requests.
+- **60-second sync cooldown:** `syncDeviceState()` (the background hook that checks the existing browser subscription and registers it with the backend) is guarded by a module-level `globalSyncPromise` and a `60_000ms` cooldown window, ensuring it runs at most once per minute regardless of how many hook instances mount or remount.
+- **Environment-gated Test Alert button:** The "Send Test Alert" button in the notification preferences UI is controlled by:
+  ```ts
+  const isDevelopmentEnv =
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_APP_ENV !== "staging" &&
+    process.env.NEXT_PUBLIC_APP_ENV !== "production";
+  ```
+  `NEXT_PUBLIC_APP_ENV` is explicitly defined in each env file: `development` in `.env` / `.env.development`, `staging` in `.env.staging`, and `production` in `.env.production`. Next.js inlines these at build time, so the button code is dead-code eliminated in staging and production bundles entirely.
+
+**Required environment variables:**
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | `apps/web/.env*` | VAPID public key served to the browser for push subscription. Must match the API's `VAPID_PUBLIC_KEY`. |
+| `NEXT_PUBLIC_APP_ENV` | `apps/web/.env*` | Controls environment-gated UI features (e.g., Test Alert button). Set to `development`, `staging`, or `production`. |
+| `VAPID_PUBLIC_KEY` | `apps/api/.env*` | VAPID public key used by the web-push engine for VAPID authentication. |
+| `VAPID_PRIVATE_KEY` | `apps/api/.env*` | VAPID private key (keep secret). |
+| `VAPID_SUBJECT` | `apps/api/.env*` | Contact URI (`mailto:`) for VAPID auth. |
 
 ## Category browsing and portal responsiveness
 
@@ -56,6 +94,8 @@ Vendor and admin dashboards share a responsive shell: desktop uses a fixed sideb
 ## Authentication and API calls
 
 The API issues short-lived access and rotating refresh cookies with HttpOnly and environment-appropriate Secure settings. The browser keeps the access token in memory for bearer requests; cookie-authenticated writes use the CSRF cookie/header pair.
+
+The notification SSE client uses `fetch`, sends the access token in the `Authorization: Bearer` header, and includes cookies. The URL never contains the access token; only the non-secret `lastEventId` replay cursor may appear in the query string.
 
 **Google Identity Services (GIS) Sign-In Architecture:**
 Customer and vendor flows provide official Google Identity Services sign-in:

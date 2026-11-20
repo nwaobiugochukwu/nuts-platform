@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getNodeChildren, resolveCategoryPath } from "@/lib/category-tree";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { analyticsEventService } from "@/api/modules/analytics";
 import { createRecommendationRequestId, getRecommendationSessionId } from "@/lib/recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
@@ -187,14 +188,12 @@ function CategoryCatalogContent({
     const frame = window.requestAnimationFrame(updateActiveSection);
     window.addEventListener("scroll", updateActiveSection, { passive: true });
     window.addEventListener("resize", updateActiveSection);
-    window.addEventListener("hashchange", updateActiveSection);
     window.addEventListener("popstate", updateActiveSection);
 
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", updateActiveSection);
       window.removeEventListener("resize", updateActiveSection);
-      window.removeEventListener("hashchange", updateActiveSection);
       window.removeEventListener("popstate", updateActiveSection);
     };
   }, [isRootCategory, subcategories]);
@@ -316,6 +315,14 @@ function CategoryCatalogContent({
   });
 
   const products = productQuery.data?.items ?? initialProducts;
+  const dealProductIds = useMemo(
+    () =>
+      (isRootCategory ? topPicksQuery.data ?? [] : products).map(
+        ({ id }) => id,
+      ),
+    [isRootCategory, topPicksQuery.data, products],
+  );
+  const { data: dealsMap } = useBatchProductDeals(dealProductIds);
   const isLoading = !isRootCategory && productQuery.isLoading;
 
   return (
@@ -357,27 +364,24 @@ function CategoryCatalogContent({
           <div className="mt-6 flex items-center gap-6 border-b border-border">
             <nav aria-label="Browse subcategories" className="flex min-w-0 flex-1 snap-x gap-7 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {isRootCategory ? (
-                <a
-                  href="#category-top-picks"
+                <button
+                  type="button"
                   aria-current={activeSubcategorySlug === null ? "location" : undefined}
-                  onClick={(event) => {
+                  onClick={() => {
                     setActiveSubcategorySlug(null);
-                    if (window.location.hash === "#category-top-picks") {
-                      event.preventDefault();
-                      document.getElementById("category-top-picks")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    }
+                    document.getElementById("category-top-picks")?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
                   }}
-                  className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-semibold transition-colors ${
+                  className={`shrink-0 border-b-2 px-1 pb-3 text-sm font-semibold transition-colors cursor-pointer ${
                     activeSubcategorySlug === null
                       ? "border-foreground text-foreground"
                       : "border-transparent text-muted-foreground hover:border-border hover:text-foreground"
                   }`}
                 >
                   Top Picks
-                </a>
+                </button>
               ) : (
                 <span aria-current="page" className="shrink-0 border-b-2 border-foreground px-1 pb-3 text-sm font-semibold text-foreground">
                   {activeCategory?.name || "Products"}
@@ -385,28 +389,25 @@ function CategoryCatalogContent({
               )}
               {subcategories.map((sub) => (
                 isRootCategory ? (
-                  <a
+                  <button
                     key={sub.id}
-                    href={`#subcategory-${encodeURIComponent(sub.slug)}`}
+                    type="button"
                     aria-current={activeSubcategorySlug === sub.slug ? "location" : undefined}
-                    onClick={(event) => {
+                    onClick={() => {
                       setActiveSubcategorySlug(sub.slug);
-                      if (window.location.hash === `#subcategory-${encodeURIComponent(sub.slug)}`) {
-                        event.preventDefault();
-                        document.getElementById(`subcategory-${sub.slug}`)?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "start",
-                        });
-                      }
+                      document.getElementById(`subcategory-${sub.slug}`)?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
                     }}
-                    className={`shrink-0 border-b-2 px-1 pb-3 text-sm transition-colors hover:border-border hover:text-foreground ${
+                    className={`shrink-0 border-b-2 px-1 pb-3 text-sm transition-colors hover:border-border hover:text-foreground cursor-pointer ${
                       activeSubcategorySlug === sub.slug
                         ? "border-foreground font-semibold text-foreground"
                         : "border-transparent text-muted-foreground"
                     }`}
                   >
                     {sub.name}
-                  </a>
+                  </button>
                 ) : (
                   <Link
                     key={sub.id}
@@ -441,7 +442,11 @@ function CategoryCatalogContent({
             <section id="category-top-picks" className="scroll-mt-24" aria-labelledby="category-top-picks-heading">
               <div className="mb-6">
                 <h2 id="category-top-picks-heading" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Top Picks</h2>
-                {search && <p className="mt-1 text-sm text-muted-foreground">Matching: {search}</p>}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {search
+                    ? `Top results matching "${search}" in ${activeCategory?.name || "this category"}`
+                    : `Best-selling and featured items across ${activeCategory?.name || "all subcategories"}`}
+                </p>
               </div>
               {topPicksQuery.isLoading ? (
                 <ProductGridSkeleton count={8} />
@@ -451,6 +456,7 @@ function CategoryCatalogContent({
                     <ProductCard
                       key={product.id}
                       product={product}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       categoryPath={currentCategoryHref}
                       priority={index < 4}
                     />
@@ -459,8 +465,8 @@ function CategoryCatalogContent({
               ) : (
                 <div className="rounded-3xl border border-dashed border-border py-16 text-center">
                   <Search className="mx-auto h-10 w-10 text-muted-foreground" />
-                  <h3 className="mt-4 text-base font-bold text-foreground">No best-selling products match these filters</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Try a wider price range or clear your search.</p>
+                  <h3 className="mt-4 text-base font-bold text-foreground">No products found matching these filters</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Try adjusting your price range or search terms.</p>
                 </div>
               )}
             </section>
@@ -510,6 +516,7 @@ function CategoryCatalogContent({
                     <ProductCard
                       key={product.id}
                       product={product}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       categoryPath={currentCategoryHref}
                       priority={index < 4}
                     />
@@ -613,6 +620,8 @@ function CategoryPreviewSection({
     staleTime: 1000 * 60 * 3,
   });
   const items = query.data?.items ?? [];
+  const productIds = items.map(({ id }) => id);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   return (
     <section id={`subcategory-${category.slug}`} className="mt-14 scroll-mt-24" aria-labelledby={`subcategory-heading-${category.id}`}>
@@ -637,7 +646,13 @@ function CategoryPreviewSection({
       ) : items.length > 0 ? (
         <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 sm:gap-x-6 sm:gap-y-8">
           {items.map((product, index) => (
-            <ProductCard key={product.id} product={product} categoryPath={categoryHref} priority={index < 2} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              deal={dealsMap?.[product.id]?.bestDiscount ?? null}
+              categoryPath={categoryHref}
+              priority={index < 2}
+            />
           ))}
         </div>
       ) : (

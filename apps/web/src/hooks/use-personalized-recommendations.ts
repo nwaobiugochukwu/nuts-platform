@@ -12,7 +12,6 @@ import type { MarketplaceMixVendorDto } from "@/api/dto/recommendations";
 import { useMemo } from "react";
 
 const STARTER_PICK_LIMIT = 12;
-const PERSONALIZED_STARTER_PICK_LIMIT = 8;
 
 function selectStarterPicks(
   personalized: ProductCardDto[],
@@ -36,19 +35,14 @@ function selectStarterPicks(
     selectedVendorIds.add(vendorId);
   };
 
-  for (const product of personalized) {
-    if (selected.length >= PERSONALIZED_STARTER_PICK_LIMIT) break;
-    add(product);
-  }
-
+  // 1. Prioritize rotating marketplace mix (one in-stock product per unique vendor)
   for (const vendor of rotatingVendors) {
     if (selected.length >= STARTER_PICK_LIMIT) break;
     const product = vendor.products.find((candidate) => !selectedProductIds.has(candidate.id));
     if (product) add(product);
   }
 
-  // A small catalog or a vendor overlap can leave some slots open. Use more
-  // relevant products only after offering the daily exploration mix.
+  // 2. If slots remain, supplement with relevant activity-based picks
   for (const product of personalized) {
     if (selected.length >= STARTER_PICK_LIMIT) break;
     add(product);

@@ -16,12 +16,14 @@ import { RemoteImage } from "@/component/ui/RemoteImage";
 import { Button } from "@/component/ui/button";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { CategoryFilterDrawer } from "@/component/category/CategoryFilterDrawer";
 import { Loader2, Search, SlidersHorizontal, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/zustand/auth";
 import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
+import { useRecentSearches } from "@/hooks/use-recent-searches";
 
 const EMPTY_CATEGORIES: CategoryResponseDto[] = [];
 
@@ -85,6 +87,13 @@ export function ProductCatalogView({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const sessionId = useRecommendationSessionId();
+  const { addSearch } = useRecentSearches();
+
+  useEffect(() => {
+    if (search.trim()) {
+      addSearch(search.trim());
+    }
+  }, [search, addSearch]);
 
   const allCategories = initialCategories ?? EMPTY_CATEGORIES;
   const categoryOptions = flattenActiveCategories(allCategories);
@@ -216,12 +225,24 @@ export function ProductCatalogView({
         : undefined,
   });
 
-  const rawProducts = data?.pages
-    ? data.pages.flatMap((page) => page.data)
-    : canUseInitialSearchResults || canUseInitialCatalogResults
-      ? initialProducts
-      : [];
+  const rawProducts = useMemo(
+    () =>
+      data?.pages
+        ? data.pages.flatMap((page) => page.data)
+        : canUseInitialSearchResults || canUseInitialCatalogResults
+          ? initialProducts
+          : [],
+    [
+      canUseInitialCatalogResults,
+      canUseInitialSearchResults,
+      data,
+      initialProducts,
+    ],
+  );
   const searchResultCount = rawProducts.length;
+
+  const productIds = useMemo(() => rawProducts.map((p) => p.id), [rawProducts]);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
   const { data: matchingCategories = [] } = useQuery({
     queryKey: ["search-category-results", search],
     queryFn: async () => (await categoryService.search(search)).data,
@@ -537,6 +558,7 @@ export function ProductCatalogView({
                 <ProductCard
                   key={product.id}
                   product={product}
+                  deal={dealsMap?.[product.id]?.bestDiscount}
                   priority={index < 4}
                 />
               ))}

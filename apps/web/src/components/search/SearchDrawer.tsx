@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronRight, Layers3, Loader2, Search, ShoppingBag, Store, X } from "lucide-react";
+import { ArrowRight, ChevronRight, History, Layers3, Loader2, Search, ShoppingBag, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { RemoteImage } from "@/component/ui/RemoteImage";
 import { publicApi } from "@/api/core/client";
@@ -22,6 +22,7 @@ import { createRecommendationRequestId } from "@/lib/recommendation-session";
 import { storeRecommendationAttribution } from "@/lib/recommendation-attribution";
 import type { SearchDiscoveryItemDto } from "@/api/dto/recommendations";
 import { useAuthStore } from "@/zustand/auth";
+import { useRecentSearches } from "@/hooks/use-recent-searches";
 import type { SearchResultItem } from "./GlobalSearchBar";
 
 interface AutocompleteApiResponse {
@@ -52,6 +53,7 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
   const isShopper = !isAuthenticated || isCustomer;
   const sessionId = useRecommendationSessionId();
   const visitorId = useRecommendationVisitorId();
+  const { searches: recentSearches, addSearch, removeSearch, clearSearches } = useRecentSearches();
   const [recommendationRequestId, setRecommendationRequestId] = useState("");
   const isEmptySearch = query.trim().length === 0;
 
@@ -128,10 +130,11 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
     };
   }, [isOpen, isEmptySearch, sessionId, isShopper]);
 
-  const goToSearch = (event?: React.FormEvent) => {
+  const goToSearch = (event?: React.FormEvent, customTerm?: string) => {
     event?.preventDefault();
-    const term = query.trim();
+    const term = (customTerm ?? query).trim();
     if (!term) return;
+    addSearch(term);
     onClose();
     router.push(`/search?query=${encodeURIComponent(term)}`);
   };
@@ -157,6 +160,51 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-3 py-4 sm:px-4">
+          {!query.trim() && recentSearches.length > 0 && (
+            <section aria-labelledby="recent-searches-heading">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <h2 id="recent-searches-heading" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <History className="h-3.5 w-3.5" />
+                  Recent Searches
+                </h2>
+                <button
+                  type="button"
+                  onClick={clearSearches}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recentSearches.map((term) => (
+                  <span
+                    key={term}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-secondary/60 py-1 pl-3 pr-1.5 text-xs font-medium text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => goToSearch(undefined, term)}
+                      className="cursor-pointer hover:underline text-left"
+                    >
+                      {term}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSearch(term);
+                      }}
+                      aria-label={`Remove search ${term}`}
+                      className="rounded-full p-0.5 text-muted-foreground hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
           {!query.trim() && isShopper && (
             <section>
               <h2 className="mb-2 px-1 text-sm font-semibold">Discover on NUTS</h2>

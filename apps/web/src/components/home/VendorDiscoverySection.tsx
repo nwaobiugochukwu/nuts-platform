@@ -42,7 +42,7 @@ export function VendorDiscoverySection({ vendors, sessionId, trackRecommendation
     };
   }, []);
 
-  const { followedIds, isLoading: isLoadingFollows, isPending, setFollowing } = useVendorFollowing();
+  const { followedIds, isPending, setFollowing } = useVendorFollowing();
 
   const scrollVendors = (direction: "left" | "right") => {
     const container = vendorScrollRef.current;
@@ -122,7 +122,6 @@ export function VendorDiscoverySection({ vendors, sessionId, trackRecommendation
             <VendorFeatureCard
               vendor={vendor}
               isFollowing={followedIds.has(vendor.id)}
-              isLoadingFollows={isLoadingFollows}
               isCustomer={isCustomer}
               isAuthenticated={isAuthenticated}
               isPending={isPending(vendor.id)}
@@ -139,7 +138,6 @@ export function VendorDiscoverySection({ vendors, sessionId, trackRecommendation
 function VendorFeatureCard({
   vendor,
   isFollowing,
-  isLoadingFollows,
   isCustomer,
   isAuthenticated,
   isPending,
@@ -148,7 +146,6 @@ function VendorFeatureCard({
 }: {
   vendor: FeaturedVendorDto;
   isFollowing: boolean;
-  isLoadingFollows: boolean;
   isCustomer: boolean;
   isAuthenticated: boolean;
   isPending: boolean;
@@ -227,12 +224,13 @@ function VendorFeatureCard({
       <div className="mt-auto flex items-center justify-between gap-3 pt-4">
         <Link href={`/vendor/${encodeURIComponent(vendor.storeSlug)}`} onClick={trackClick} className="text-sm font-semibold text-foreground underline-offset-4 hover:underline">Visit store</Link>
         {isCustomer && (
-          <button type="button" onClick={onFollow} disabled={isLoadingFollows || isPending} className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:opacity-50">
-            {isLoadingFollows
-              ? "Checking…"
-              : isPending
-                ? (isFollowing ? "Following…" : "Unfollowing…")
-                : isFollowing ? "Following" : "Follow store"}
+          <button
+            type="button"
+            onClick={onFollow}
+            disabled={isPending}
+            className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-secondary disabled:opacity-50"
+          >
+            {isFollowing ? "Following" : "Follow store"}
           </button>
         )}
         {!isAuthenticated && (

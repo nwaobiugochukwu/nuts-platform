@@ -16,14 +16,13 @@ export function useNotificationPreferences() {
   const role = useAuthStore((s) => s.role);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const activeRole = normalizeRole(role ?? user?.role) ?? "user";
-  const userId = user?.id ?? "me";
 
   const {
     data: preferences = null,
     isLoading,
     refetch,
   } = useQuery<NotificationPreferences | null>({
-    queryKey: queryKey.notification.preferences(userId),
+    queryKey: queryKey.notification.preferences("current"),
     queryFn: async () => {
       const api = notificationsApiForRole(activeRole);
       const res = await api.getPreferences();
@@ -32,6 +31,8 @@ export function useNotificationPreferences() {
     enabled: Boolean(isAuthenticated),
     staleTime: 1000 * 60 * 5, // 5 minutes fresh
     gcTime: 1000 * 60 * 15,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const mutation = useMutation({
@@ -41,13 +42,13 @@ export function useNotificationPreferences() {
       return res.data;
     },
     onMutate: async (updates) => {
-      await qc.cancelQueries({ queryKey: queryKey.notification.preferences(userId) });
+      await qc.cancelQueries({ queryKey: queryKey.notification.preferences("current") });
       const previous = qc.getQueryData<NotificationPreferences | null>(
-        queryKey.notification.preferences(userId),
+        queryKey.notification.preferences("current"),
       );
       if (previous) {
         qc.setQueryData<NotificationPreferences>(
-          queryKey.notification.preferences(userId),
+          queryKey.notification.preferences("current"),
           { ...previous, ...updates },
         );
       }
@@ -55,13 +56,13 @@ export function useNotificationPreferences() {
     },
     onSuccess: (data) => {
       if (data) {
-        qc.setQueryData(queryKey.notification.preferences(userId), data);
+        qc.setQueryData(queryKey.notification.preferences("current"), data);
       }
       toast.success("Notification preferences updated");
     },
     onError: (err: unknown, _updates, context) => {
       if (context?.previous) {
-        qc.setQueryData(queryKey.notification.preferences(userId), context.previous);
+        qc.setQueryData(queryKey.notification.preferences("current"), context.previous);
       }
       const msg = err instanceof Error ? err.message : "Failed updating preferences";
       toast.error(msg);

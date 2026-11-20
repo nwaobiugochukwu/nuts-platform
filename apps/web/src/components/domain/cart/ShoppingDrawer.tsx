@@ -27,7 +27,7 @@ import { Heart,Minus,Plus,ShoppingBag,Trash2,X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { extractStockConflict } from "@/lib/stock-conflict";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 type Address = { fullName: string; phone: string; street: string; city: string; state: string; country: string };
@@ -381,8 +381,8 @@ export function ShoppingDrawer() {
   const close = useShoppingDrawerStore((state) => state.close);
   const [discountCode, setDiscountCode] = useState("");
   const [discountPreview, setDiscountPreview] = useState<DiscountPreviewDto | null>(null);
-  const { appliedDiscount, setAppliedDiscount, clearDiscount } = useDiscountStore();
-  const effectiveDiscountCode = discountCode || appliedDiscount?.code || "";
+  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
   const { items: wishlist, removeItem } = useWishlist();
   const {
     items: cartItems,
@@ -404,6 +404,19 @@ export function ShoppingDrawer() {
       toast.error("Discount code could not be applied");
     },
   });
+
+  // Auto-apply claimed discount code when drawer opens with items in cart
+  useEffect(() => {
+    if (
+      (panel === "cart" || panel === "checkout") &&
+      claimedCode &&
+      !appliedDiscount &&
+      !previewDiscount.isPending &&
+      (cartItems.length > 0 || (cart?.totalItemCount ?? 0) > 0)
+    ) {
+      previewDiscount.mutate(claimedCode);
+    }
+  }, [panel, claimedCode, appliedDiscount, cartItems.length, cart?.totalItemCount, previewDiscount]);
 
   const handleApplyDiscount = () => {
     const code = effectiveDiscountCode.trim();

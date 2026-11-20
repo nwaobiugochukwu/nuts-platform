@@ -3,8 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const GUEST_HISTORY_DAYS = 30;
-const ACCOUNT_HISTORY_DAYS = 180;
+const GUEST_HISTORY_DAYS = 180;
 
 @Injectable()
 export class RecentProductViewRetentionCron {
@@ -16,15 +15,11 @@ export class RecentProductViewRetentionCron {
   async removeExpiredRecentHistory(): Promise<void> {
     try {
       const guestCutoff = new Date(Date.now() - GUEST_HISTORY_DAYS * DAY_MS);
-      const accountCutoff = new Date(
-        Date.now() - ACCOUNT_HISTORY_DAYS * DAY_MS,
-      );
       const result = await this.prisma.recentProductView.deleteMany({
         where: {
-          OR: [
-            { visitorId: { not: null }, lastViewedAt: { lt: guestCutoff } },
-            { userId: { not: null }, lastViewedAt: { lt: accountCutoff } },
-          ],
+          userId: null,
+          visitorId: { not: null },
+          lastViewedAt: { lt: guestCutoff },
         },
       });
       if (result.count) {

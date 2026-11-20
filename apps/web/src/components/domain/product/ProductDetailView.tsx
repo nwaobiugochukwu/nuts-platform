@@ -13,9 +13,11 @@ import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review"
 import { CustomerLayout } from "@/component/layout/CustomerLayout";
 import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
 import { ProductReviews } from "@/component/review/ProductReviews";
+import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDock";
 import { Button } from "@/component/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { findCategoryBreadcrumbs } from "@/lib/category-tree";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -37,6 +39,7 @@ Plus,
 Share2,
 Shield,
 ShoppingBag,
+Star,
 Truck
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
@@ -124,7 +127,15 @@ export function ProductDetailView({
     enabled: Boolean(product?.id),
     staleTime: 1000 * 60 * 5,
   });
-  const relatedProducts = relatedProductsQuery.data ?? [];
+  const relatedProducts = useMemo(
+    () => relatedProductsQuery.data ?? [],
+    [relatedProductsQuery.data],
+  );
+  const relatedProductIds = useMemo(
+    () => relatedProducts.map(({ id }) => id),
+    [relatedProducts],
+  );
+  const { data: relatedDealsMap } = useBatchProductDeals(relatedProductIds);
 
   useEffect(() => {
     let cancelled = false;
@@ -143,7 +154,7 @@ export function ProductDetailView({
   }, [product?.id]);
 
   useEffect(() => {
-    if (!product?.id || !isAuthInitialized || (isAuthenticated && !canPurchase)) return;
+    if (!product?.id || !isAuthInitialized) return;
     let trackedView = trackedProductViewRef.current;
     if (!trackedView || trackedView.productId !== product.id) {
       trackedView = {
@@ -320,12 +331,12 @@ export function ProductDetailView({
     const skeleton = (
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-          <div className="aspect-square animate-pulse rounded-3xl bg-neutral-100" />
+          <div className="aspect-square animate-pulse rounded-3xl bg-neutral-100 dark:bg-neutral-800" />
           <div className="space-y-6">
-            <div className="h-8 w-2/3 animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-6 w-1/3 animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-24 w-full animate-pulse rounded-xl bg-neutral-100" />
-            <div className="h-12 w-full animate-pulse rounded-xl bg-neutral-100" />
+            <div className="h-8 w-2/3 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-6 w-1/3 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-24 w-full animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
+            <div className="h-12 w-full animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />
           </div>
         </div>
       </div>
@@ -570,7 +581,7 @@ export function ProductDetailView({
                   type="button"
                   onClick={nextImage}
                   aria-label="Next image"
-                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md text-neutral-800 hover:scale-110 active:scale-95 transition-all"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-800/90 text-neutral-800 dark:text-neutral-100 dark:border dark:border-neutral-700/60 shadow-md backdrop-blur-xs hover:scale-110 active:scale-95 transition-all"
                 >
                   <ChevronRight className="h-5 w-5" />
                 </button>
@@ -643,7 +654,7 @@ export function ProductDetailView({
                   >
                     <Heart
                       className={`h-5 w-5 ${
-                        isLiked ? "fill-black text-black" : "stroke-[1.6]"
+                        isLiked ? "fill-rose-500 text-rose-500" : "stroke-[1.6]"
                       }`}
                     />
                   </button>
@@ -672,6 +683,27 @@ export function ProductDetailView({
                 >
                   {p.vendor.storeName}
                 </Link>
+              </div>
+            )}
+
+            {/* Rating Jump Link */}
+            {Boolean(p.reviewCount && p.reviewCount > 0) && (
+              <div className="mt-2.5 flex items-center gap-2">
+                <a
+                  href="#reviews-heading"
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors group"
+                >
+                  <div className="flex items-center gap-0.5">
+                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    <span className="font-semibold text-foreground">
+                      {Number(p.averageRating || 0).toFixed(1)}
+                    </span>
+                  </div>
+                  <span>•</span>
+                  <span className="group-hover:underline underline-offset-4">
+                    {p.reviewCount} {p.reviewCount === 1 ? "review" : "reviews"}
+                  </span>
+                </a>
               </div>
             )}
 
@@ -707,6 +739,9 @@ export function ProductDetailView({
                 </div>
               )}
             </div>
+
+            {/* Interactive Deals & Voucher Dock */}
+            <ProductVoucherDock productId={p.id} currentPrice={basePrice} />
 
             {/* Variants Selector (if applicable) */}
             {variantOptionGroups.length > 0 && (
@@ -950,6 +985,7 @@ export function ProductDetailView({
                 <RecommendationProductCard
                   key={relatedProduct.id}
                   product={relatedProduct}
+                  deal={relatedDealsMap?.[relatedProduct.id]?.bestDiscount ?? null}
                   surface="PRODUCT_RELATED"
                   requestId={relatedRequestId}
                   sessionId={recommendationSessionId}

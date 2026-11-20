@@ -14,7 +14,7 @@ import { clearClientCart } from "@/lib/cart-cleanup";
 import { formatPrice } from "@/lib/util";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
 ArrowLeft,
@@ -53,8 +53,8 @@ export default function CheckoutPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { appliedDiscount, setAppliedDiscount, clearDiscount } = useDiscountStore();
-  const [discountCode, setDiscountCode] = useState(() => searchParams.get("code") ?? appliedDiscount?.code ?? "");
+  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const [discountCode, setDiscountCode] = useState(() => searchParams.get("code") ?? appliedDiscount?.code ?? claimedCode ?? "");
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [addressMode, setAddressMode] = useState<"default" | "new">("default");
   const [saveAsDefault, setSaveAsDefault] = useState(false);

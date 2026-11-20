@@ -226,7 +226,11 @@ export function CalendarPeriodFilter({
             { length: now.getFullYear() - minYear + 1 },
             (_, index) => String(now.getFullYear() - index),
           ).map((year) => (
-            <option key={year} value={year} className="text-neutral-900">
+            <option
+              key={year}
+              value={year}
+              className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+            >
               {year}
             </option>
           ))}

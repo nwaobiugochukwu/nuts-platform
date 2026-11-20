@@ -5,13 +5,16 @@ import type { AddedFromType } from "@/api/dto/cart";
 import type { RecommendationAttribution } from "@/api/modules/analytics";
 import { analyticsEventService } from "@/api/modules/analytics";
 import type { ProductCardDto,PublicProductResponseDto } from "@/api/dto/product";
+import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { useFirstTimeShopper } from "@/hooks/use-product-deals";
 import { formatPrice } from "@/lib/util";
 import { resolveProductDetailPath } from "@/lib/product-path";
 import { storeRecommendationAttribution } from "@/lib/recommendation-attribution";
 import { useAuthStore } from "@/zustand/auth";
-import { Heart,Plus,ShoppingBag } from "lucide-react";
+import { useDiscountStore } from "@/zustand/discount";
+import { Heart,Plus,ShoppingBag,Tag } from "lucide-react";
 import Image from "next/image";
 import Link from "@/components/navigation/AppLink";
 import { useRouter } from "next/navigation";
@@ -22,6 +25,7 @@ type ProductLike = ProductCardDto | PublicProductResponseDto;
 
 interface ProductCardProps {
   product: ProductLike;
+  deal?: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
   onQuickAdd?: () => void;
   categoryPath?: string;
   href?: string;
@@ -32,6 +36,7 @@ interface ProductCardProps {
   priceClassName?: string;
   priority?: boolean;
   hideVendor?: boolean;
+  hideRecommendationReason?: boolean;
   recommendationContext?: RecommendationAttribution;
 }
 
@@ -67,6 +72,7 @@ function toWishlistProduct(product: ProductLike): WishlistProductShape {
 
 export function ProductCard({
   product,
+  deal,
   onQuickAdd,
   categoryPath,
   href,
@@ -77,6 +83,7 @@ export function ProductCard({
   priceClassName,
   priority = false,
   hideVendor = false,
+  hideRecommendationReason = false,
   recommendationContext,
 }: ProductCardProps) {
   const router = useRouter();
@@ -90,8 +97,28 @@ export function ProductCard({
   const canPurchase = capabilities ? capabilities.canPurchase : !isAuthenticated;
   const { toggleItem, isInWishlist } = useWishlist();
   const { addItem: addToCart } = useCart();
+  const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
   const [isWishlistPending, setIsWishlistPending] = useState(false);
   const isLiked = isInWishlist(product.id);
+
+  const { hasPurchased } = useFirstTimeShopper();
+
+  // Product cards receive deal data from their parent batch query. Avoid one
+  // public discount request per rendered card when a feed is loading.
+  const rawDeal = deal ?? null;
+  // Exclude first-time buyer deal if shopper has already bought before
+  const effectiveDeal = hasPurchased && rawDeal?.isFirstOrderOnly ? null : rawDeal;
+
+  const isDealClaimed =
+    effectiveDeal ? (claimedCode === effectiveDeal.code || appliedDiscount?.code === effectiveDeal.code) : false;
+
+  const handleClaimDeal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (effectiveDeal) {
+      claimCode(effectiveDeal.code);
+    }
+  };
   const trackRecommendationClick = () => {
     if (!recommendationContext || (isAuthenticated && !canPurchase)) return;
     storeRecommendationAttribution(product.id, recommendationContext);
@@ -137,7 +164,10 @@ export function ProductCard({
       ? product.images[0].url
       : thumbnail;
   const store = product.vendor;
-  const recommendationReason = "recommendationReason" in product ? product.recommendationReason : undefined;
+  const recommendationReason =
+    !hideRecommendationReason && "recommendationReason" in product
+      ? product.recommendationReason
+      : undefined;
   const stock = isCard ? 0 : (product.stock ?? 0);
   const stockStatus = isCard ? product.stockStatus : undefined;
   const isOutOfStock = isCard
@@ -229,7 +259,7 @@ export function ProductCard({
     <div className="group relative flex h-full flex-col">
       {/* Product Image Box */}
       <div
-        className={`relative w-full overflow-hidden rounded-2xl bg-[#f4f5f6] transition-all ${
+        className={`relative w-full overflow-hidden rounded-2xl bg-[#f4f5f6] dark:bg-neutral-900 transition-all ${
           aspectRatio === "square" ? "aspect-square" : "aspect-[3/4]"
         }`}
       >
@@ -253,6 +283,23 @@ export function ProductCard({
 
         {/* Badges Overlay */}
         <div className="absolute left-2.5 top-2.5 flex flex-col gap-1 pointer-events-none">
+          {effectiveDeal && (
+            <button
+              type="button"
+              onClick={handleClaimDeal}
+              title={`Claim ${effectiveDeal.code} for ${effectiveDeal.type === "PERCENTAGE" ? `${effectiveDeal.value}% off` : formatPrice(effectiveDeal.value) + " off"}`}
+              className={`pointer-events-auto inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold text-white shadow-xs backdrop-blur-xs transition-transform hover:scale-105 active:scale-95 ${
+                isDealClaimed
+                  ? "bg-emerald-600 dark:bg-emerald-500"
+                  : "bg-emerald-700/90 dark:bg-emerald-600/90 hover:bg-emerald-600"
+              }`}
+            >
+              <Tag className="h-3 w-3 stroke-[2.5]" />
+              <span>
+                {effectiveDeal.type === "PERCENTAGE" ? `${effectiveDeal.value}% OFF` : `Save ${formatPrice(effectiveDeal.value)}`}
+              </span>
+            </button>
+          )}
           {hasDiscount && (
             <span className="inline-flex items-center rounded-md bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground shadow-xs">
               -{discountPercent}%
@@ -333,7 +380,7 @@ export function ProductCard({
         )}
 
         {/* Price Row */}
-        <div className="mt-0.5 flex items-baseline gap-2">
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span
             className={
               priceClassName ||
@@ -354,6 +401,20 @@ export function ProductCard({
             </span>
           )}
         </div>
+
+        {effectiveDeal?.dealPrice && effectiveDeal.dealPrice < currentPrice && (
+          <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <span>As low as {formatPrice(effectiveDeal.dealPrice)} with</span>
+            <button
+              type="button"
+              onClick={handleClaimDeal}
+              className="font-mono underline decoration-dotted hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
+              title={`Click to claim code ${effectiveDeal.code}`}
+            >
+              {effectiveDeal.code}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@ import { FormInput } from "@/component/form/FormInput";
 import { Button } from "@/component/ui/button";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { CheckCircle2, LogIn, ShieldAlert } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { parseGoogleAuthError } from "@/lib/google-auth-error";

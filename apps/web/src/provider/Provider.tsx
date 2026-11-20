@@ -3,8 +3,10 @@
 import { SessionHydrator } from "@/component/auth/SessionHydrator";
 import { ThemeProvider } from "@/component/provider/ThemeProvider";
 import { Toaster } from "@/component/ui/sonner";
+import { MaintenanceModeHost } from "@/components/maintenance/MaintenanceModeHost";
 import { NotificationStreamHost } from "@/hooks/use-notifications";
-import { Suspense,type ReactNode } from "react";
+import { PushNotificationHost } from "@/hooks/use-push-notifications";
+import { type ReactNode } from "react";
 import { QueryProvider } from "./QueryProvider";
 
 export function Provider({ children }: { children: ReactNode }) {
@@ -13,10 +15,10 @@ export function Provider({ children }: { children: ReactNode }) {
       <ThemeProvider>
         <SessionHydrator>
           <NotificationStreamHost />
+          <PushNotificationHost />
+          <MaintenanceModeHost />
           {children}
         </SessionHydrator>
-        <Suspense fallback={null}>
-                  </Suspense>
         <Toaster />
       </ThemeProvider>
     </QueryProvider>

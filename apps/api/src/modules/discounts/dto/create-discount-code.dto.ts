@@ -141,12 +141,32 @@ export class CreateDiscountCodeDto {
   applicableProductIds?: string[];
 
   @ApiPropertyOptional({
+    description:
+      'Category IDs this discount code applies to. Empty or omitted applies to all categories.',
+    type: [String],
+    example: ['f47ac10b-58cc-4372-a567-0e02b2c3d479'],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  applicableCategoryIds?: string[];
+
+  @ApiPropertyOptional({
     description: 'Whether the discount applies platform-wide.',
     default: false,
   })
   @IsOptional()
   @IsBoolean()
   platformwide?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether the discount is exclusively for first-time shoppers who have never completed an order.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  firstOrderOnly?: boolean;
 }
 
 export {

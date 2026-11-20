@@ -42,8 +42,12 @@ export function useVendorFollowing() {
     queryFn: async ({ signal }) => (await vendorFollowingService.list(signal)).data,
     enabled: isCustomer,
     staleTime: 60_000,
+    placeholderData: (previous) => previous ?? [],
   });
-  const followedIds = new Set((followsQuery.data ?? []).map(({ vendor }) => vendor.id));
+  const followedIds = useMemo(
+    () => new Set((followsQuery.data ?? []).map(({ vendor }) => vendor.id)),
+    [followsQuery.data],
+  );
 
   useEffect(() => authBroadcast.subscribe((event) => {
     if (event.type !== "VENDOR_FOLLOW_CHANGED" || event.userId !== userId) return;
