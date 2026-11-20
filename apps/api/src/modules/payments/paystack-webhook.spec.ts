@@ -66,7 +66,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       mockPrisma,
       { assertActiveAccount: jest.fn() } as unknown as UsersService,
       mockConfig,
-      { sendPaymentReceipt: jest.fn() } as unknown as EmailService,
+      {} as unknown as EmailService,
       mockWalletService,
       { emit: jest.fn() } as unknown as EventEmitter2,
       {

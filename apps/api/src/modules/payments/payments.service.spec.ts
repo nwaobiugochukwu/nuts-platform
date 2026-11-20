@@ -67,7 +67,6 @@ const mockConfigService = {
 };
 
 const mockEmailService = {
-  sendPaymentReceipt: jest.fn(),
   sendOrderConfirmation: jest.fn(),
 };
 

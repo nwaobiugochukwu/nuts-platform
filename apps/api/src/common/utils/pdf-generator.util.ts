@@ -31,10 +31,7 @@ export function generateInvoicePdf(
     doc.pipe(writeStream);
 
     // Title / Logo Area
-    doc
-      .fontSize(24)
-      .fillColor('#4F46E5')
-      .text('NUTS E-Commerce', { align: 'left' });
+    doc.fontSize(24).fillColor('#4F46E5').text('NUTS', { align: 'left' });
     doc
       .fontSize(10)
       .fillColor('#6B7280')
@@ -44,7 +41,7 @@ export function generateInvoicePdf(
     doc
       .fontSize(18)
       .fillColor('#1F2937')
-      .text('INVOICE / RECEIPT', { align: 'right' });
+      .text('PAYMENT RECEIPT', { align: 'right' });
     doc.moveDown(1);
 
     // Metadata
