@@ -256,7 +256,6 @@ export class RecommendationsService {
             { userId },
             ...(guestIds.length ? [{ visitorId: { in: guestIds } }] : []),
           ],
-          lastViewedAt: { gte: historyStart },
         }
       : {
           visitorId: { in: guestIds.length ? guestIds : [actorId] },
@@ -696,7 +695,6 @@ export class RecommendationsService {
               ? [{ visitorId: { in: guestHistoryIds } }]
               : []),
           ],
-          lastViewedAt: { gte: historyStart },
         }
       : {
           visitorId: { in: guestHistoryIds },
@@ -1187,7 +1185,6 @@ export class RecommendationsService {
               ? [{ visitorId: { in: guestHistoryIds } }]
               : []),
           ],
-          lastViewedAt: { gte: historyStart },
         }
       : {
           visitorId: { in: guestHistoryIds },
@@ -1282,8 +1279,8 @@ export class RecommendationsService {
         });
       }
 
-      // Keep the visitor rows for a short retention window. A second tab or a
-      // delayed guest event can still be claimed safely on the next hydration.
+      // Keep visitor rows through the guest-history retention window so a
+      // delayed auth hydration or another tab can still claim them safely.
       return { claimed: visitorViews.length };
     });
   }
@@ -1402,7 +1399,6 @@ export class RecommendationsService {
                       ? [{ visitorId: { in: guestHistoryIds } }]
                       : []),
                   ],
-                  lastViewedAt: { gte: historyStart },
                 }
               : {
                   visitorId: { in: guestHistoryIds },

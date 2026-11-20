@@ -1,6 +1,7 @@
 "use client";
 
 import { QueryClient } from "@tanstack/react-query";
+import { isMaintenanceModeError } from "@/zustand/maintenance-mode";
 
 function createQueryClient() {
   return new QueryClient({
@@ -9,6 +10,7 @@ function createQueryClient() {
         staleTime: 1000 * 60 * 5,
         gcTime: 1000 * 60 * 10,
         retry: (failureCount, error) => {
+          if (isMaintenanceModeError(error)) return false;
           const status =
             typeof error === "object" && error !== null && "response" in error
               ? (error as { response?: { status?: number } }).response?.status

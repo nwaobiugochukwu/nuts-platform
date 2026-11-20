@@ -2,7 +2,7 @@ const SESSION_KEY = "nuts.recommendation-session.v2";
 const LEGACY_SESSION_KEY = "nuts.recommendation-session.v1";
 const VISITOR_KEY = "nuts.recommendation-visitor.v1";
 const VISITOR_CREATED_KEY = "nuts.recommendation-visitor-created.v1";
-// 180 days persistent retention for shopper activity and personalized recommendations
+// Rotate the browser-local visitor identity after 180 days. Server history uses the same window.
 const VISITOR_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 let inMemorySessionId = "";
 let inMemoryVisitorId = "";
@@ -100,9 +100,8 @@ function createSessionId(): string {
 export const createRecommendationRequestId = createSessionId;
 
 /**
- * Returns a durable, browser-local ID for shopper recommendation signals.
- * Uses localStorage so "Continue where you left off" and "Picked for you"
- * persist reliably across browser tabs, restarts, and navigation.
+ * Returns a durable, browser-local ID used to associate shopper recommendation signals.
+ * The ID is stored in localStorage; viewed products and recommendation signals are stored server-side.
  */
 export function getRecommendationSessionId(): string {
   if (typeof window === "undefined") return "";

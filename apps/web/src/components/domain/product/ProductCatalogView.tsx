@@ -225,11 +225,20 @@ export function ProductCatalogView({
         : undefined,
   });
 
-  const rawProducts = data?.pages
-    ? data.pages.flatMap((page) => page.data)
-    : canUseInitialSearchResults || canUseInitialCatalogResults
-      ? initialProducts
-      : [];
+  const rawProducts = useMemo(
+    () =>
+      data?.pages
+        ? data.pages.flatMap((page) => page.data)
+        : canUseInitialSearchResults || canUseInitialCatalogResults
+          ? initialProducts
+          : [],
+    [
+      canUseInitialCatalogResults,
+      canUseInitialSearchResults,
+      data,
+      initialProducts,
+    ],
+  );
   const searchResultCount = rawProducts.length;
 
   const productIds = useMemo(() => rawProducts.map((p) => p.id), [rawProducts]);

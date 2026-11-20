@@ -20,23 +20,28 @@ export function PushNotificationHost() {
   useEffect(() => {
     if (!isSupported || !isAuthenticated || typeof window === "undefined") return;
 
-    if (permission === "default" && !isSubscribed) {
-      let dismissed = false;
-      try {
-        dismissed = sessionStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) === "true";
-      } catch {
-        // ignore
-      }
-      if (!dismissed) {
-        const timer = setTimeout(() => {
-          setShowPrompt(true);
-        }, 3500);
-        return () => clearTimeout(timer);
-      }
-    } else {
-      setShowPrompt(false);
+    if (permission !== "default" || isSubscribed) return;
+
+    let dismissed = false;
+    try {
+      dismissed = sessionStorage.getItem(PUSH_PROMPT_DISMISSED_KEY) === "true";
+    } catch {
+      // ignore
     }
+    if (dismissed) return;
+
+    const timer = setTimeout(() => {
+      setShowPrompt(true);
+    }, 3500);
+    return () => clearTimeout(timer);
   }, [isSupported, isAuthenticated, permission, isSubscribed]);
+
+  const shouldShowPrompt =
+    showPrompt &&
+    isSupported &&
+    isAuthenticated &&
+    permission === "default" &&
+    !isSubscribed;
 
   const handleDismiss = () => {
     setShowPrompt(false);
@@ -54,7 +59,7 @@ export function PushNotificationHost() {
     }
   };
 
-  if (!showPrompt) return null;
+  if (!shouldShowPrompt) return null;
 
   return (
     <aside

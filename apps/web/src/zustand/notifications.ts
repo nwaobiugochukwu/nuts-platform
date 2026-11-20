@@ -3,6 +3,7 @@ import { getAuthToken } from "@/api/core/token-storage";
 import { performTokenRefresh } from "@/api/core/client";
 import type { AppNotification, ListNotificationsParams } from "@/api/notifications";
 import { useAuthStore, type AuthRole, normalizeRole } from "@/zustand/auth";
+import { activateMaintenanceMode, isMaintenanceModeResponse } from "@/zustand/maintenance-mode";
 import { notificationDetailPath } from "@/lib/notification-path";
 import {
   shouldRetryNotificationHttpStatus,
@@ -330,14 +331,11 @@ async function consumeNotificationStream(
     }
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    // Build URL with query params for token & lastEventId (ensures auth works even if headers are stripped)
+    // Keep the replay cursor in the URL as a fallback for proxies that strip custom headers.
     let requestUrl = url;
     try {
       const baseOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
       const parsedUrl = new URL(url, baseOrigin);
-      if (token) {
-        parsedUrl.searchParams.set("token", token);
-      }
       if (latestEventId) {
         parsedUrl.searchParams.set("lastEventId", latestEventId);
       }
@@ -410,6 +408,19 @@ async function consumeNotificationStream(
     }
 
     if (!response.ok) {
+      if (response.status === 503) {
+        const payload: unknown = await response.clone().json().catch(() => null);
+        if (
+          isMaintenanceModeResponse(response.status, payload) &&
+          payload &&
+          typeof payload === "object"
+        ) {
+          activateMaintenanceMode((payload as { message?: unknown }).message);
+          await response.body?.cancel().catch(() => undefined);
+          onConnectionChange(false);
+          return;
+        }
+      }
       await response.body?.cancel().catch(() => undefined);
       if (response.status === 502) {
         console.warn(

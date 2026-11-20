@@ -17,6 +17,7 @@ import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDo
 import { Button } from "@/component/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { findCategoryBreadcrumbs } from "@/lib/category-tree";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -126,7 +127,15 @@ export function ProductDetailView({
     enabled: Boolean(product?.id),
     staleTime: 1000 * 60 * 5,
   });
-  const relatedProducts = relatedProductsQuery.data ?? [];
+  const relatedProducts = useMemo(
+    () => relatedProductsQuery.data ?? [],
+    [relatedProductsQuery.data],
+  );
+  const relatedProductIds = useMemo(
+    () => relatedProducts.map(({ id }) => id),
+    [relatedProducts],
+  );
+  const { data: relatedDealsMap } = useBatchProductDeals(relatedProductIds);
 
   useEffect(() => {
     let cancelled = false;
@@ -976,6 +985,7 @@ export function ProductDetailView({
                 <RecommendationProductCard
                   key={relatedProduct.id}
                   product={relatedProduct}
+                  deal={relatedDealsMap?.[relatedProduct.id]?.bestDiscount ?? null}
                   surface="PRODUCT_RELATED"
                   requestId={relatedRequestId}
                   sessionId={recommendationSessionId}

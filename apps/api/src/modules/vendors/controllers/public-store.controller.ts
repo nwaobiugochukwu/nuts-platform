@@ -1,6 +1,12 @@
 // public-store.controller.ts
 
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiExtraModels,

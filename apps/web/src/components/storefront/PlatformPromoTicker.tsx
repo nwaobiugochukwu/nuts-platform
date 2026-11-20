@@ -23,8 +23,8 @@ const FALLBACK_PROMOS: PublicPlatformPromoDto[] = [
   },
 ];
 
-function formatTimeRemaining(expiresAt: string | Date): string | null {
-  const diffMs = new Date(expiresAt).getTime() - Date.now();
+function formatTimeRemaining(expiresAt: string | Date, now: number): string | null {
+  const diffMs = new Date(expiresAt).getTime() - now;
   if (diffMs <= 0) return null;
   const diffHours = diffMs / (1000 * 60 * 60);
   if (diffHours > 72) return null;
@@ -42,6 +42,7 @@ export function PlatformPromoTicker() {
   const [isDismissed, setIsDismissed] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [now, setNow] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Wheel scroll throttling ref
@@ -59,15 +60,27 @@ export function PlatformPromoTicker() {
     }
   }, []);
 
+  useEffect(() => {
+    const updateNow = () => setNow(Date.now());
+    const timeout = window.setTimeout(updateNow, 0);
+    const interval = window.setInterval(updateNow, 60_000);
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const validPromos = useMemo(() => {
     const activeList = promos.length > 0 ? promos : FALLBACK_PROMOS;
     const filtered = activeList.filter((p) => {
       if (!p.code) return false;
-      if (p.expiresAt && new Date(p.expiresAt).getTime() <= Date.now()) return false;
+      if (now !== null && p.expiresAt && new Date(p.expiresAt).getTime() <= now) {
+        return false;
+      }
       return true;
     });
     return filtered.length > 0 ? filtered : FALLBACK_PROMOS;
-  }, [promos]);
+  }, [promos, now]);
 
   // Automatic slide rotation
   useEffect(() => {
@@ -85,12 +98,6 @@ export function PlatformPromoTicker() {
     };
   }, [validPromos.length, isPaused, isDismissed]);
 
-  useEffect(() => {
-    if (currentIndex >= validPromos.length && validPromos.length > 0) {
-      setCurrentIndex(0);
-    }
-  }, [currentIndex, validPromos.length]);
-
   if (isDismissed || validPromos.length === 0) {
     return null;
   }
@@ -100,7 +107,10 @@ export function PlatformPromoTicker() {
     return null;
   }
 
-  const timeRemaining = activePromo.expiresAt ? formatTimeRemaining(activePromo.expiresAt) : null;
+  const timeRemaining =
+    activePromo.expiresAt && now !== null
+      ? formatTimeRemaining(activePromo.expiresAt, now)
+      : null;
   const isCurrentlyClaimed =
     claimedCode === activePromo.code || appliedDiscount?.code === activePromo.code;
 

@@ -1719,7 +1719,7 @@ export class OrdersService {
           if (discountRecord.applicableCategoryIds.length > 0) {
             const applicable = cart.cartItems.some((item) =>
               discountRecord!.applicableCategoryIds.includes(
-                (item.product as any).categoryId ?? '',
+                item.product.categoryId,
               ),
             );
 

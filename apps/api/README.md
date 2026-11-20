@@ -35,7 +35,10 @@ The API is not a microservice per module and does not implement system-wide CQRS
 - **Catalog & discovery:** `/api/v1/products`, `/api/v1/categories`, `/api/v1/discover`, `/api/v1/search`.
 - **Customer commerce:** `/api/v1/cart`, `/api/v1/orders`, `/api/v1/payments`, `/api/v1/wallet`, `/api/v1/wishlist`, `/api/v1/reviews`.
 - **Marketplace engagement & telemetry:** `/api/v1/recommendations`, `/api/v1/analytics`, `/api/v1/vendors/follows`, and referral routes.
+- **Public discount discovery:** `GET /api/v1/discounts/public/platform-promos` returns active platform campaigns; `POST /api/v1/discounts/public/batch-for-products` calculates card deals for up to 100 product IDs; `GET /api/v1/discounts/public/for-product/:productId` returns the full voucher list for a product detail page. Use the batch route for product feeds to avoid one request per card.
 - **Notifications & health:** `/api/v1/notifications` (inbox, preferences, push, SSE stream) and `/api/v1/health`.
+
+The notification stream is `GET /api/v1/notifications/sse/stream`. It authenticates with the standard bearer `Authorization` header or HttpOnly access cookie; JWTs in query parameters are not accepted. `Last-Event-ID` may be sent as a header, with `lastEventId` as a non-secret replay fallback.
 
 The push sub-module exposes:
 - `GET /api/v1/notifications/push/vapid-key` — public endpoint returning the VAPID public key for browser subscription.
@@ -53,6 +56,10 @@ See the generated Swagger contract for exact route methods, DTOs, role requireme
 ## Analytics and event behavior
 
 Analytics definitions, current ingestion mechanisms, failure cases, and reporting flows are in [Analytics and Measurement](../../docs/domains/analytics-and-measurement.md). Storage alternatives are in [Analytics at Scale](../../docs/scaling/analytics-at-scale.md), while capacity methodology and results belong in [Performance and Capacity](../../docs/performance/README.md). Dashboards share PostgreSQL with commerce and the web currently polls them. No measured request or event capacity is published yet.
+
+Recent browsing is persisted in PostgreSQL `recent_product_views` and served by `/api/v1/recommendations/recently-viewed`; anonymous rows expire after 180 days, while account rows are retained for account continuity. Anonymous session/visitor IDs are browser-local identifiers, not the product history itself. `product_views` are retained for 730 days, while recommendation attribution events are retained for 180 days except follow/unfollow events. `/api/v1/recommendations/for-you` computes its response from those records plus searches, cart and wishlist activity, qualifying orders, category activity, and follows; recommendation results are not persisted as a browser-side list.
+
+The global exception response preserves `maintenanceMode: true` and the configured message on blocked requests, including in production, so clients can render the notice without a separate status-polling endpoint.
 
 ## Swagger
 

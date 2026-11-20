@@ -173,7 +173,7 @@ export function ProductReviews({
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                You've reviewed this product
+                You&apos;ve reviewed this product
               </span>
             </div>
           ) : isAuthenticated ? (

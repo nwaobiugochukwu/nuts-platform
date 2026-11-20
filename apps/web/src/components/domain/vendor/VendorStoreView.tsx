@@ -28,6 +28,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo,useRef,useState } from "react";
 import { toast } from "sonner";
 import { useVendorFollowing } from "@/hooks/use-vendor-following";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { useAuthStore } from "@/zustand/auth";
 import { getRecommendationSessionId, getRecommendationVisitorId } from "@/lib/recommendation-session";
 
@@ -180,6 +181,8 @@ export function VendorStoreView({
     () => productsData?.products ?? initialProducts,
     [productsData, initialProducts],
   );
+  const productIds = useMemo(() => rawProducts.map(({ id }) => id), [rawProducts]);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   // Group products strictly by Root Category
   const rootCategoryGroups: RootCategoryGroup[] = useMemo(() => {
@@ -737,6 +740,7 @@ export function VendorStoreView({
                         parentSubcategory: product.parentSubcategory,
                         subcategory: product.subcategory,
                       }}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       addedFrom="PRODUCT_PAGE"
                       priority={groupIndex === 0 && pIdx < 4}
                     />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Clock, Copy, Info, Sparkles, Tag, Ticket } from "lucide-react";
+import { Check, Copy, Sparkles, Tag, Ticket } from "lucide-react";
 import { useFirstTimeShopper, useProductDeal } from "@/hooks/use-product-deals";
 import { useDiscountStore } from "@/zustand/discount";
 import { formatPrice } from "@/lib/util";

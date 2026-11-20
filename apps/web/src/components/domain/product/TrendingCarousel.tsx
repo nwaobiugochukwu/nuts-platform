@@ -36,7 +36,7 @@ export function TrendingCarousel({
 }: TrendingCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [requestId, setRequestId] = useState("");
-  const products = initialProducts ?? [];
+  const products = useMemo(() => initialProducts ?? [], [initialProducts]);
 
   const productIds = useMemo(() => products.map((p) => p.id), [products]);
   const { data: dealsMap } = useBatchProductDeals(productIds);

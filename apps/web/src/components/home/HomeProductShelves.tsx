@@ -12,7 +12,7 @@ import Link from "@/components/navigation/AppLink";
 import { usePersonalizedRecommendations } from "@/hooks/use-personalized-recommendations";
 import { useScrollRestoration } from "@/hooks/use-scroll-restoration";
 
-const MIN_PICKED_FOR_YOU_PRODUCTS = 4;
+const MIN_PICKED_FOR_YOU_PRODUCTS = 1;
 
 function uniqueProducts(
   products: ProductCardDto[],
@@ -200,8 +200,8 @@ export function HomeProductShelves({
       {visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
         <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300" aria-labelledby="for-you-heading">
           <TrendingCarousel
-            title="Picked for you"
-            eyebrow="Based on your activity"
+            title="Picked based on your activity"
+            eyebrow="Personalized for you"
             headingId="for-you-heading"
             initialProducts={visibleForYou}
             recommendationSurface="HOME_FOR_YOU"

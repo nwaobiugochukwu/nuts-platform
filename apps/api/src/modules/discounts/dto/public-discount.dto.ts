@@ -9,25 +9,40 @@ export class PublicPlatformPromoDto {
   @ApiProperty({ description: 'Coupon code', example: 'WELCOME10' })
   code!: string;
 
-  @ApiPropertyOptional({ description: 'Campaign description', example: '10% off for all shoppers' })
+  @ApiPropertyOptional({
+    description: 'Campaign description',
+    example: '10% off for all shoppers',
+  })
   description?: string | null;
 
   @ApiProperty({ enum: DiscountCodeType, example: DiscountCodeType.PERCENTAGE })
   type!: DiscountCodeType;
 
-  @ApiProperty({ description: 'Value (percentage or fixed amount in NGN)', example: 10 })
+  @ApiProperty({
+    description: 'Value (percentage or fixed amount in NGN)',
+    example: 10,
+  })
   value!: number;
 
-  @ApiPropertyOptional({ description: 'Max discount cap in NGN', example: 25000 })
+  @ApiPropertyOptional({
+    description: 'Max discount cap in NGN',
+    example: 25000,
+  })
   maxDiscountAmount?: number | null;
 
   @ApiProperty({ description: 'Minimum spend required', example: 50000 })
   minOrderAmount!: number;
 
-  @ApiPropertyOptional({ description: 'Expiration date', example: '2026-12-31T23:59:59.000Z' })
+  @ApiPropertyOptional({
+    description: 'Expiration date',
+    example: '2026-12-31T23:59:59.000Z',
+  })
   expiresAt?: Date | null;
 
-  @ApiPropertyOptional({ description: 'Whether this promo is exclusively for first-time buyers', example: true })
+  @ApiPropertyOptional({
+    description: 'Whether this promo is exclusively for first-time buyers',
+    example: true,
+  })
   isFirstOrderOnly?: boolean;
 }
 
@@ -56,13 +71,19 @@ export class ProductVoucherSummaryDto {
   @ApiPropertyOptional({ example: 20000 })
   maxDiscountAmount?: number | null;
 
-  @ApiProperty({ description: 'Estimated savings on single quantity of base price in NGN', example: 27750 })
+  @ApiProperty({
+    description: 'Estimated savings on single quantity of base price in NGN',
+    example: 27750,
+  })
   estimatedSavings!: number;
 
   @ApiPropertyOptional()
   expiresAt?: Date | null;
 
-  @ApiPropertyOptional({ description: 'Whether this voucher is exclusively for first-time shoppers', example: false })
+  @ApiPropertyOptional({
+    description: 'Whether this voucher is exclusively for first-time shoppers',
+    example: false,
+  })
   isFirstOrderOnly?: boolean;
 }
 
@@ -70,15 +91,24 @@ export class PublicProductDealDto {
   @ApiProperty({ example: 'uuid' })
   productId!: string;
 
-  @ApiPropertyOptional({ type: ProductVoucherSummaryDto, description: 'Single highest-saving voucher' })
+  @ApiPropertyOptional({
+    type: ProductVoucherSummaryDto,
+    description: 'Single highest-saving voucher',
+  })
   bestDiscount?: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
 
-  @ApiProperty({ type: [ProductVoucherSummaryDto], description: 'All applicable vouchers' })
+  @ApiProperty({
+    type: [ProductVoucherSummaryDto],
+    description: 'All applicable vouchers',
+  })
   allVouchers!: ProductVoucherSummaryDto[];
 }
 
 export class BatchProductDiscountsDto {
-  @ApiProperty({ type: [String], description: 'List of product IDs to calculate discounts for (max 100)' })
+  @ApiProperty({
+    type: [String],
+    description: 'List of product IDs to calculate discounts for (max 100)',
+  })
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(100)

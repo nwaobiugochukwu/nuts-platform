@@ -1,6 +1,16 @@
 import { toNestErrors } from "@hookform/resolvers";
-import type { Resolver } from "react-hook-form";
+import type {
+  FieldValues,
+  ResolverOptions,
+  ResolverResult,
+} from "react-hook-form";
 import type { ZodTypeAny } from "zod";
+
+type FlexibleResolver = <TFieldValues extends FieldValues>(
+  values: TFieldValues,
+  context: unknown,
+  options: ResolverOptions<TFieldValues>,
+) => Promise<ResolverResult<TFieldValues>>;
 
 /**
  * Custom zodResolver compatible with both Zod v3 and Zod v4.
@@ -13,25 +23,40 @@ import type { ZodTypeAny } from "zod";
 export function zodResolver<T extends ZodTypeAny>(
   schema: T,
   schemaOptions?: Parameters<T["parseAsync"]>[1],
-): Resolver<any> {
-  return async (values, _context, options) => {
+): FlexibleResolver {
+  return async <TFieldValues extends FieldValues>(
+    values: TFieldValues,
+    _context: unknown,
+    options: ResolverOptions<TFieldValues>,
+  ): Promise<ResolverResult<TFieldValues>> => {
     try {
       const parsed = await schema.parseAsync(values, schemaOptions);
-      return { values: parsed, errors: {} };
+      return { values: parsed as TFieldValues, errors: {} };
     } catch (error: unknown) {
       // Zod v4 uses `.issues`; Zod v3 used `.errors`
-      const issues =
-        (error as any)?.issues ?? (error as any)?.errors;
+      const errorRecord =
+        typeof error === "object" && error !== null
+          ? (error as Record<string, unknown>)
+          : null;
+      const issues = errorRecord?.issues ?? errorRecord?.errors;
 
       if (Array.isArray(issues)) {
         const flatErrors: Record<string, { message: string; type: string }> =
           {};
         for (const issue of issues) {
-          const path = (issue.path as (string | number)[]).join(".");
+          if (typeof issue !== "object" || issue === null) continue;
+          const candidate = issue as {
+            path?: unknown;
+            message?: unknown;
+            code?: unknown;
+          };
+          if (!Array.isArray(candidate.path)) continue;
+          const path = candidate.path.join(".");
           if (!flatErrors[path]) {
             flatErrors[path] = {
-              message: issue.message as string,
-              type: issue.code as string,
+              message:
+                typeof candidate.message === "string" ? candidate.message : "Invalid value",
+              type: typeof candidate.code === "string" ? candidate.code : "custom",
             };
           }
         }

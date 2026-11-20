@@ -26,7 +26,8 @@ export class PublicDiscountCodesController {
 
   @Get('platform-promos')
   @ApiOperation({
-    summary: 'Get active platform-wide discount codes for storefront announcement banner',
+    summary:
+      'Get active platform-wide discount codes for storefront announcement banner',
   })
   @Message('Active platform promotions retrieved successfully')
   getPlatformPromos(): Promise<PublicPlatformPromoDto[]> {

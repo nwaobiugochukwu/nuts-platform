@@ -18,6 +18,7 @@ DialogHeader,
 DialogTitle,
 } from "@/component/ui/dialog";
 import { categoryService } from "@/api/modules/category";
+import type { CategoryResponseDto } from "@/api/dto/category";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { zodResolver } from "@/lib/zod-resolver";
@@ -152,7 +153,7 @@ function CategorySelector({
   selectedCategoryIds,
   onChange,
 }: {
-  categories: any[];
+  categories: CategoryResponseDto[];
   selectedCategoryIds: string[];
   onChange: (ids: string[]) => void;
 }) {
@@ -161,7 +162,7 @@ function CategorySelector({
 
   const flatList = useMemo(() => {
     const list: { id: string; name: string; path: string }[] = [];
-    const traverse = (nodes: any[], prefix = "") => {
+    const traverse = (nodes: CategoryResponseDto[], prefix = "") => {
       if (!Array.isArray(nodes)) return;
       for (const node of nodes) {
         if (node.status === "ARCHIVED" || node.isActive === false) continue;

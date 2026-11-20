@@ -3,15 +3,8 @@ import { PaystackScript } from "@/components/paystack-script";
 import { RouteProgressBar } from "@/components/feedback/RouteProgressBar";
 import { Provider } from "@/provider";
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -122,7 +115,7 @@ export default async function RootLayout({
        * does NOT affect child component hydration checks.
        */}
       <body
-        className={`${inter.variable} font-sans antialiased text-foreground bg-background`}
+        className="font-sans antialiased text-foreground bg-background"
         suppressHydrationWarning
       >
         <script

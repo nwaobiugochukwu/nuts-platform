@@ -9,7 +9,6 @@ import { toast } from "sonner";
 export { PushNotificationHost } from "@/components/notification/PushNotificationHost";
 
 const PUSH_DISABLED_KEY = "nuts_push_disabled";
-const PUSH_PROMPT_DISMISSED_KEY = "nuts_push_prompt_dismissed";
 const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
   "BG7iC_hNvLZ6zu3e1sFiAHxIypBSkQuQYhD0LmJX4T0lRoQHQjkToLROdPvbxc32U9rxXkHK5WWsmNHWK6a8r1k";

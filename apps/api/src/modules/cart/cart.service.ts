@@ -195,7 +195,7 @@ export class CartService {
       discountCode.applicableCategoryIds.length > 0 &&
       !response.cartItems.some((item) =>
         discountCode.applicableCategoryIds.includes(
-          (item.product as any)?.categoryId ?? '',
+          item.product.subcategory?.id ?? item.product.category?.id ?? '',
         ),
       )
     ) {

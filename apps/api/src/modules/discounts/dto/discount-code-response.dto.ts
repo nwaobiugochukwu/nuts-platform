@@ -83,7 +83,8 @@ export class DiscountCodeResponseDto {
   platformwide!: boolean;
 
   @ApiProperty({
-    description: 'Whether the code is strictly reserved for first-time shoppers.',
+    description:
+      'Whether the code is strictly reserved for first-time shoppers.',
     example: false,
   })
   firstOrderOnly!: boolean;

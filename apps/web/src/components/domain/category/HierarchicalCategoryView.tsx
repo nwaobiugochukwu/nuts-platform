@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { getNodeChildren, resolveCategoryPath } from "@/lib/category-tree";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { analyticsEventService } from "@/api/modules/analytics";
 import { createRecommendationRequestId, getRecommendationSessionId } from "@/lib/recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
@@ -314,6 +315,14 @@ function CategoryCatalogContent({
   });
 
   const products = productQuery.data?.items ?? initialProducts;
+  const dealProductIds = useMemo(
+    () =>
+      (isRootCategory ? topPicksQuery.data ?? [] : products).map(
+        ({ id }) => id,
+      ),
+    [isRootCategory, topPicksQuery.data, products],
+  );
+  const { data: dealsMap } = useBatchProductDeals(dealProductIds);
   const isLoading = !isRootCategory && productQuery.isLoading;
 
   return (
@@ -447,6 +456,7 @@ function CategoryCatalogContent({
                     <ProductCard
                       key={product.id}
                       product={product}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       categoryPath={currentCategoryHref}
                       priority={index < 4}
                     />
@@ -506,6 +516,7 @@ function CategoryCatalogContent({
                     <ProductCard
                       key={product.id}
                       product={product}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       categoryPath={currentCategoryHref}
                       priority={index < 4}
                     />
@@ -609,6 +620,8 @@ function CategoryPreviewSection({
     staleTime: 1000 * 60 * 3,
   });
   const items = query.data?.items ?? [];
+  const productIds = items.map(({ id }) => id);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   return (
     <section id={`subcategory-${category.slug}`} className="mt-14 scroll-mt-24" aria-labelledby={`subcategory-heading-${category.id}`}>
@@ -633,7 +646,13 @@ function CategoryPreviewSection({
       ) : items.length > 0 ? (
         <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 sm:gap-x-6 sm:gap-y-8">
           {items.map((product, index) => (
-            <ProductCard key={product.id} product={product} categoryPath={categoryHref} priority={index < 2} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              deal={dealsMap?.[product.id]?.bestDiscount ?? null}
+              categoryPath={categoryHref}
+              priority={index < 2}
+            />
           ))}
         </div>
       ) : (

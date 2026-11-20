@@ -1108,7 +1108,9 @@ export class DiscountCodeService {
           description: c.description,
           type: c.type,
           value: Number(c.value),
-          maxDiscountAmount: c.maxDiscountAmount ? Number(c.maxDiscountAmount) : null,
+          maxDiscountAmount: c.maxDiscountAmount
+            ? Number(c.maxDiscountAmount)
+            : null,
           minOrderAmount: Number(c.minOrderAmount),
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
@@ -1121,7 +1123,9 @@ export class DiscountCodeService {
     return fetcher();
   }
 
-  async getPublicProductDeals(productId: string): Promise<PublicProductDealDto> {
+  async getPublicProductDeals(
+    productId: string,
+  ): Promise<PublicProductDealDto> {
     const fetcher = async (): Promise<PublicProductDealDto> => {
       const product = await this.prisma.product.findUnique({
         where: { id: productId },
@@ -1170,7 +1174,10 @@ export class DiscountCodeService {
         if (c.type === DiscountCodeType.PERCENTAGE) {
           estimatedSavings = (productPrice * val) / 100;
           if (c.maxDiscountAmount) {
-            estimatedSavings = Math.min(estimatedSavings, Number(c.maxDiscountAmount));
+            estimatedSavings = Math.min(
+              estimatedSavings,
+              Number(c.maxDiscountAmount),
+            );
           }
         } else {
           estimatedSavings = Math.min(productPrice, val);
@@ -1184,7 +1191,9 @@ export class DiscountCodeService {
           value: val,
           scope: c.scope,
           minOrderAmount: Number(c.minOrderAmount),
-          maxDiscountAmount: c.maxDiscountAmount ? Number(c.maxDiscountAmount) : null,
+          maxDiscountAmount: c.maxDiscountAmount
+            ? Number(c.maxDiscountAmount)
+            : null,
           estimatedSavings: Math.round(estimatedSavings * 100) / 100,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
@@ -1213,14 +1222,23 @@ export class DiscountCodeService {
     };
 
     if (this.cacheService) {
-      return this.cacheService.wrap(`discounts:product:${productId}`, 60, fetcher);
+      return this.cacheService.wrap(
+        `discounts:product:${productId}`,
+        60,
+        fetcher,
+      );
     }
     return fetcher();
   }
 
-  async getBatchProductDeals(
-    dto: BatchProductDiscountsDto,
-  ): Promise<Record<string, { bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null }>> {
+  async getBatchProductDeals(dto: BatchProductDiscountsDto): Promise<
+    Record<
+      string,
+      {
+        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+      }
+    >
+  > {
     const productIds = [...new Set(dto.productIds)];
     if (productIds.length === 0) return {};
 
@@ -1253,7 +1271,11 @@ export class DiscountCodeService {
           { platformwide: true },
           { vendorId: { in: vendorIds } },
           { applicableProductIds: { hasSome: productIds } },
-          { applicableCategoryIds: { hasSome: [...new Set(products.map((p) => p.categoryId))] } },
+          {
+            applicableCategoryIds: {
+              hasSome: [...new Set(products.map((p) => p.categoryId))],
+            },
+          },
         ],
       },
     });
@@ -1262,7 +1284,12 @@ export class DiscountCodeService {
       (c) => c.usageLimit === null || c.usageCount < c.usageLimit,
     );
 
-    const result: Record<string, { bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null }> = {};
+    const result: Record<
+      string,
+      {
+        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+      }
+    > = {};
 
     for (const prod of products) {
       const prodPrice = Number(prod.price);
@@ -1274,7 +1301,8 @@ export class DiscountCodeService {
           c.applicableCategoryIds.includes(prod.categoryId),
       );
 
-      let best: (ProductVoucherSummaryDto & { dealPrice: number }) | null = null;
+      let best: (ProductVoucherSummaryDto & { dealPrice: number }) | null =
+        null;
       let maxSavings = 0;
 
       for (const c of matchingCodes) {
@@ -1299,9 +1327,14 @@ export class DiscountCodeService {
             value: val,
             scope: c.scope,
             minOrderAmount: Number(c.minOrderAmount),
-            maxDiscountAmount: c.maxDiscountAmount ? Number(c.maxDiscountAmount) : null,
+            maxDiscountAmount: c.maxDiscountAmount
+              ? Number(c.maxDiscountAmount)
+              : null,
             estimatedSavings: Math.round(savings * 100) / 100,
-            dealPrice: Math.max(0, Math.round((prodPrice - savings) * 100) / 100),
+            dealPrice: Math.max(
+              0,
+              Math.round((prodPrice - savings) * 100) / 100,
+            ),
             expiresAt: c.expiresAt,
             isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
           };

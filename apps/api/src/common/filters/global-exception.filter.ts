@@ -14,6 +14,8 @@ interface HttpExceptionBody {
   retryAfter?: number;
   /** Optional domain error code (UPPER_SNAKE_CASE), e.g. INSUFFICIENT_STOCK. */
   code?: string;
+  /** Lets clients render the configured public maintenance notice. */
+  maintenanceMode?: boolean;
   /** Optional structured, client-safe payload. Only exposed for 4xx responses. */
   meta?: Record<string, unknown>;
   [key: string]: unknown;
@@ -44,6 +46,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let errorCode = 'INTERNAL_ERROR';
     let retryAfter: number | undefined;
     let meta: Record<string, unknown> | undefined;
+    let maintenanceMode = false;
 
     // HTTP exceptions
     if (exception instanceof HttpException) {
@@ -91,6 +94,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
        * `meta` is restricted to 4xx so internal details never leak on 5xx.
        */
       if (typeof res === 'object' && res !== null) {
+        maintenanceMode = res.maintenanceMode === true;
         if (
           typeof res.code === 'string' &&
           DOMAIN_ERROR_CODE_PATTERN.test(res.code)
@@ -150,7 +154,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       success: false,
       message:
-        status >= 500 && isProduction ? 'Internal server error' : message,
+        status >= 500 && isProduction && !maintenanceMode
+          ? 'Internal server error'
+          : message,
+      ...(maintenanceMode ? { maintenanceMode: true } : {}),
       error: {
         code: errorCode,
         ...(errors && !(status >= 500 && isProduction)
