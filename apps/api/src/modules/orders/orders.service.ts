@@ -20,7 +20,6 @@ import { customAlphabet } from 'nanoid';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { CART_CACHE_PREFIX } from '@api/modules/cart/cart.service';
-import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
@@ -331,7 +330,6 @@ export class OrdersService {
     private readonly discountCodeService: DiscountCodeService,
     private readonly referralService: ReferralService,
     private readonly paymentsService: PaymentsService,
-    private readonly emailService: EmailService,
     private readonly auditLog: AuditLogService,
     private readonly walletService: WalletService,
     private readonly eventEmitter: EventEmitter2,
@@ -2881,73 +2879,6 @@ export class OrdersService {
     } catch (error) {
       this.logger.error(
         `Failed to emit status event for order ${orderId}`,
-        error,
-      );
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ORDER CONFIRMATION EMAIL
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Dispatches the official order confirmation email with generated PDF invoice.
-   *
-   * Crucial: This must only be invoked when payment has been successfully confirmed
-   * (e.g., transition to PROCESSING / payment SUCCESS), never during initial unpaid checkout.
-   */
-  async sendOrderConfirmationEmail(orderId: string): Promise<void> {
-    try {
-      const order = await this.prisma.order.findUnique({
-        where: { id: orderId },
-        include: {
-          user: {
-            select: {
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          orderItems: {
-            include: {
-              product: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!order || !order.user) {
-        return;
-      }
-
-      const items = order.orderItems.map((item) => ({
-        productName: item.product.name,
-        quantity: item.quantity,
-        price: Number(item.unitPrice),
-      }));
-
-      await this.emailService.sendOrderConfirmation(order.user.email, {
-        orderNumber: order.orderNumber,
-        customerName:
-          `${order.user.firstName ?? ''} ${order.user.lastName ?? ''}`.trim() ||
-          'Valued Customer',
-        customerEmail: order.user.email,
-        shippingAddress: order.shippingAddress ?? '',
-        totalAmount: Number(order.totalAmount),
-        discountAmount: Number(order.discountAmount),
-        discountCode: order.discountCode,
-        finalAmount: Number(order.finalAmount),
-        currency: this.defaultCurrency,
-        createdAt: order.createdAt,
-        items,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to send order confirmation email for order ${orderId}`,
         error,
       );
     }
