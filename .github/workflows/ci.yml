@@ -34,7 +34,8 @@ jobs:
           # No cache: must validate the lockfile cold
 
       - name: Assert lockfile is in sync with package.json
-        run: npm ci --dry-run
+        # Dry-run does not install Prisma, so skip the postinstall DB generation hook.
+        run: npm ci --dry-run --ignore-scripts
 
   # ── 1. Code Quality & Linting ──────────────────────────────────
   lint:
