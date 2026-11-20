@@ -12,6 +12,10 @@ The GitHub Actions workflow named `deploy` builds and publishes API and web imag
 4. Review new migrations for forward compatibility with the current API and for recovery implications. Confirm the hosting provider's database backup and restore point before a high-risk migration.
 5. Verify the same commit and migration path in staging before promoting to production, consistent with the repository's source-branch workflow.
 
+## Docker workspace installs
+
+The API and web Dockerfiles install workspace dependencies from a partial monorepo context before copying all source files. The root `postinstall` hook therefore skips Prisma generation when the API manifest or database schema is not present. The API image generates the Prisma client explicitly after copying the schema; the web image does not need an API workspace to install or build. Keep `scripts/postinstall.js` copied into each dependency-install stage so `npm ci` can run the guarded hook while preserving dependency install scripts. The API runtime stage assigns `node` ownership as files are copied instead of recursively changing ownership across `node_modules`.
+
 ## Deploy
 
 1. Use the hosting platform's approved procedure to select the intended API and web images.

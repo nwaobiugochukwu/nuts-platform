@@ -31,7 +31,7 @@
     "test:api": "npm run --prefix apps/api test",
     "test": "npm run test:api",
     "check:lockfile": "cross-env npm_config_allow_scripts=\"\" npm ci --dry-run",
-    "postinstall": "npm run db:generate",
+    "postinstall": "node scripts/postinstall.js",
     "db:generate": "npm run --prefix apps/api db:generate",
     "db:seed": "node --experimental-strip-types packages/database/scripts/seed.ts",
     "migrate:deploy": "npm run --prefix apps/api migrate:deploy",

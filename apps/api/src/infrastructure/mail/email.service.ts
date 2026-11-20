@@ -148,8 +148,8 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
-   * Generates an invoice PDF, attaches it to the order confirmation email,
-   * and guarantees temporary-file cleanup.
+   * Generates a payment receipt PDF, attaches it to the single order
+   * confirmation email, and guarantees temporary-file cleanup.
    *
    * The PDF generator currently writes to a file, so we isolate each request
    * inside its own temporary directory. This prevents filename collisions when
@@ -162,33 +162,13 @@ export class EmailService implements OnModuleInit {
       to,
       subject,
       html: this.buildOrderConfirmationHtml(data),
-      filename: `invoice_${this.sanitizeFilename(data.orderNumber)}.pdf`,
-      temporaryPrefix: 'nuts-invoice-',
-      data,
-    });
-
-    this.logger.log(
-      `Order confirmation email sent successfully for order ${data.orderNumber}`,
-    );
-  }
-
-  /**
-   * Generates and sends a payment receipt.
-   */
-  async sendPaymentReceipt(to: string, data: PdfInvoiceData): Promise<void> {
-    const subject = `Payment Receipt - ${data.orderNumber}`;
-
-    await this.sendPdfEmail({
-      to,
-      subject,
-      html: this.buildPaymentReceiptHtml(data),
       filename: `receipt_${this.sanitizeFilename(data.orderNumber)}.pdf`,
       temporaryPrefix: 'nuts-receipt-',
       data,
     });
 
     this.logger.log(
-      `Payment receipt email sent successfully for order ${data.orderNumber}`,
+      `Order confirmation email sent successfully for order ${data.orderNumber}`,
     );
   }
 
@@ -222,9 +202,8 @@ export class EmailService implements OnModuleInit {
   /**
    * Shared implementation for emails that require a generated PDF.
    *
-   * The previous implementation duplicated this logic in both invoice and
-   * receipt methods. Centralizing it prevents the two implementations from
-   * drifting apart.
+   * Keeping PDF rendering, attachment and temporary-file cleanup in one place
+   * prevents receipt delivery paths from drifting apart.
    */
   private async sendPdfEmail(params: {
     to: string;
@@ -639,7 +618,7 @@ export class EmailService implements OnModuleInit {
     return this.wrapHtml(`
       <div class="email-header">
         <p class="eyebrow">Order confirmation</p>
-        <h1>Order received</h1>
+        <h1>Order confirmed</h1>
       </div>
 
       <div class="email-body">
@@ -650,8 +629,8 @@ export class EmailService implements OnModuleInit {
         <p>
           Your order
           <strong>#${this.escapeHtml(data.orderNumber)}</strong>
-          has been placed successfully.
-          A proforma invoice is attached for your reference.
+          is confirmed and payment has been received. Your receipt is attached
+          for your records.
         </p>
 
         <div class="details-box">
@@ -680,103 +659,8 @@ export class EmailService implements OnModuleInit {
     `);
   }
 
-  private buildPaymentReceiptHtml(data: PdfInvoiceData): string {
-    const currency = data.currency;
-
-    const itemsHtml = this.buildItemsHtml(data);
-
-    const discountHtml =
-      data.discountAmount > 0
-        ? `
-          <div class="summary-card">
-            <div>
-              <span>Subtotal</span>
-              <strong>
-                ${this.formatMoney(currency, data.totalAmount)}
-              </strong>
-            </div>
-
-            <div>
-              <span>
-                Discount${
-                  data.discountCode
-                    ? ` (${this.escapeHtml(data.discountCode)})`
-                    : ''
-                }
-              </span>
-
-              <strong class="discount">
-                -${this.formatMoney(currency, data.discountAmount)}
-              </strong>
-            </div>
-
-            <div class="summary-total">
-              <span><strong>Total paid</strong></span>
-              <strong>
-                ${this.formatMoney(currency, data.finalAmount)}
-              </strong>
-            </div>
-          </div>
-        `
-        : `
-          <div class="summary-card">
-            <div>
-              <span>Total paid</span>
-              <strong>
-                ${this.formatMoney(currency, data.finalAmount)}
-              </strong>
-            </div>
-          </div>
-        `;
-
-    return this.wrapHtml(`
-      <div class="email-header">
-        <p class="eyebrow">Payment received</p>
-        <h1>Payment confirmed</h1>
-      </div>
-
-      <div class="email-body">
-        <p>
-          Hello ${this.escapeHtml(data.customerName)},
-        </p>
-
-        <p>
-          We've successfully received your payment of
-          <strong>
-            ${this.formatMoney(currency, data.finalAmount)}
-          </strong>
-          for order
-          <strong>#${this.escapeHtml(data.orderNumber)}</strong>.
-        </p>
-
-        ${discountHtml}
-
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th style="text-align: center;">Qty</th>
-              <th style="text-align: right;">Price</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="hero-card">
-          <p>
-            Your receipt is attached for your records.
-          </p>
-        </div>
-      </div>
-    `);
-  }
-
   /**
-   * Builds the product table once and reuses it for both order confirmations
-   * and payment receipts.
+   * Builds the product table for order confirmation emails.
    */
   private buildItemsHtml(data: PdfInvoiceData): string {
     const currency = data.currency;

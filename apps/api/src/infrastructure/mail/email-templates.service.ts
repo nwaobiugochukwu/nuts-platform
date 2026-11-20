@@ -12,18 +12,6 @@ export interface EmailOrderItem {
   productImage?: string;
 }
 
-export interface OrderConfirmationData {
-  orderNumber: string;
-  customerName: string;
-  items: EmailOrderItem[];
-  totalAmount: number;
-  discountAmount: number;
-  discountCode?: string;
-  finalAmount: number;
-  currency: string;
-  shippingAddress: string;
-}
-
 export interface NewOrderForVendorData {
   vendorStoreName: string;
   orderNumber: string;
@@ -57,15 +45,6 @@ export interface OrderCancelledData {
   reason?: string;
   refundProcessed: boolean;
   currency: string;
-}
-
-export interface PaymentConfirmedData {
-  orderNumber: string;
-  customerName: string;
-  items: EmailOrderItem[];
-  amount: number;
-  currency: string;
-  paymentReference: string;
 }
 
 export interface PaymentFailedData {
@@ -183,58 +162,6 @@ export class EmailTemplatesService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
-  }
-
-  // ── Order Confirmation (Customer) ──────────────────────
-
-  orderConfirmation(data: OrderConfirmationData): string {
-    const itemsHtml = this.renderItemsTable(data.items, data.currency);
-
-    return this.baseHtml(`
-      <div style="text-align:center;padding-bottom:28px;border-bottom:2px solid #e2e8f0">
-        <div style="display:inline-block;background:#f5f3ff;border-radius:50%;width:64px;height:64px;line-height:64px;margin-bottom:16px">
-          <span style="font-size:28px">&#10003;</span>
-        </div>
-        <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.5px;color:#7c3aed;text-transform:uppercase;font-weight:600">Order confirmation</p>
-        <h1 style="margin:0;font-size:28px;color:#111827;font-weight:800">Order Confirmed!</h1>
-      </div>
-
-      <div style="padding-top:24px;color:#475569;line-height:1.7;font-size:15px">
-        <p style="margin:0 0 4px">Hello <strong style="color:#111827">${data.customerName}</strong>,</p>
-        <p style="margin:0 0 24px">Your order <strong style="color:#111827">#${data.orderNumber}</strong> has been placed successfully. We'll notify you once it ships.</p>
-
-        <!-- Shipping Address -->
-        <div style="background:#f8fafc;border-radius:12px;padding:16px 20px;margin-bottom:20px">
-          <p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#667085;font-weight:600">Shipping to</p>
-          <p style="margin:0;color:#111827;font-size:15px">${data.shippingAddress}</p>
-        </div>
-
-        ${itemsHtml}
-
-        <!-- Summary -->
-        <div style="background:#f8fafc;border-radius:12px;padding:20px;margin-top:20px">
-          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:15px">
-            <span style="color:#667085">Subtotal</span>
-            <span style="color:#111827;font-weight:600">${this.formatPrice(data.currency, data.totalAmount)}</span>
-          </div>
-          ${
-            data.discountAmount > 0
-              ? `
-          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:15px;border-top:1px solid #e2e8f0">
-            <span style="color:#667085">Discount${data.discountCode ? ` <span style="color:#7c3aed;font-weight:600">${data.discountCode}</span>` : ''}</span>
-            <span style="color:#059669;font-weight:600">-${this.formatPrice(data.currency, data.discountAmount)}</span>
-          </div>`
-              : ''
-          }
-          <div style="display:flex;justify-content:space-between;padding:10px 0 0;margin-top:6px;border-top:2px solid #e2e8f0;font-size:18px">
-            <span style="color:#111827;font-weight:700">Total Paid</span>
-            <span style="color:#7c3aed;font-weight:800">${this.formatPrice(data.currency, data.finalAmount)}</span>
-          </div>
-        </div>
-
-        <p style="margin-top:24px;text-align:center;font-size:14px;color:#94a3b8">Need help? <a href="mailto:support@nuts.com" style="color:#7c3aed;text-decoration:none;font-weight:600">Contact Support</a></p>
-      </div>
-    `);
   }
 
   // ── New Order for Vendor ──────────────────────────────
@@ -391,43 +318,6 @@ export class EmailTemplatesService {
         }
 
         <p style="margin-top:24px;text-align:center;font-size:14px;color:#94a3b8">Questions? <a href="mailto:support@nuts.com" style="color:#7c3aed;text-decoration:none;font-weight:600">Contact Support</a></p>
-      </div>
-    `);
-  }
-
-  // ── Payment Confirmed (Customer) ───────────────────────
-
-  paymentConfirmed(data: PaymentConfirmedData): string {
-    const itemsHtml = this.renderItemsTable(data.items, data.currency);
-
-    return this.baseHtml(`
-      <div style="text-align:center;padding-bottom:28px;border-bottom:2px solid #e2e8f0">
-        <div style="display:inline-block;background:#ecfdf5;border-radius:50%;width:64px;height:64px;line-height:64px;margin-bottom:16px">
-          <span style="font-size:28px">&#10003;</span>
-        </div>
-        <p style="margin:0 0 8px;font-size:12px;letter-spacing:1.5px;color:#059669;text-transform:uppercase;font-weight:600">Payment confirmed</p>
-        <h1 style="margin:0;font-size:28px;color:#111827;font-weight:800">Payment Confirmed!</h1>
-      </div>
-
-      <div style="padding-top:24px;color:#475569;line-height:1.7;font-size:15px">
-        <p style="margin:0 0 4px">Hello <strong style="color:#111827">${data.customerName}</strong>,</p>
-        <p style="margin:0 0 24px">Your payment for order <strong style="color:#111827">#${data.orderNumber}</strong> has been successfully confirmed.</p>
-
-        <!-- Amount Paid -->
-        <div style="background:#ecfdf5;border-radius:12px;padding:20px;margin-bottom:20px;text-align:center">
-          <p style="margin:0 0 4px;font-size:13px;color:#667085">Amount Paid</p>
-          <p style="margin:0;font-size:32px;font-weight:800;color:#059669">${this.formatPrice(data.currency, data.amount)}</p>
-        </div>
-
-        ${itemsHtml}
-
-        <!-- Payment Reference -->
-        <div style="background:#f8fafc;border-radius:12px;padding:16px 20px;margin-top:20px">
-          <p style="margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#667085;font-weight:600">Payment Reference</p>
-          <p style="margin:0;color:#111827;font-size:15px;font-family:monospace">${data.paymentReference}</p>
-        </div>
-
-        <p style="margin-top:24px;text-align:center;font-size:14px;color:#94a3b8">A receipt has been sent to your registered email address.</p>
       </div>
     `);
   }

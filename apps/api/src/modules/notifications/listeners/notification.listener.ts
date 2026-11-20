@@ -155,38 +155,8 @@ export class NotificationListener {
       'Order processing event received',
     );
 
-    // 1. Email to customer
-    const items: EmailOrderItem[] = payload.items.map((item) => ({
-      productName: item.productName,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      variantOptions: item.variantOptions,
-    }));
-
-    const customerHtml = this.emailTemplates.orderConfirmation({
-      orderNumber: payload.orderNumber,
-      customerName: payload.userFirstName || 'Valued Customer',
-      items,
-      totalAmount: payload.totalAmount,
-      discountAmount: 0,
-      finalAmount: payload.finalAmount,
-      currency: payload.currency,
-      shippingAddress: payload.shippingAddress,
-    });
-
-    await this.dispatchEmail({
-      to: payload.userEmail,
-      subject: `Order Confirmation - ${payload.orderNumber}`,
-      html: customerHtml,
-      type: 'order_confirmation',
-      userId: payload.userId,
-      role: ROLE.USER,
-      category: 'orderUpdates',
-      metadata: { orderId: payload.orderId },
-    });
-
-    // In-app notification to customer with dedupe key
+    // The payment service sends the single customer confirmation with its PDF
+    // receipt. Keep this event responsible for inbox and vendor updates only.
     await this.dispatchNotification({
       userId: payload.userId,
       role: ROLE.USER,
@@ -525,50 +495,6 @@ export class NotificationListener {
       { paymentId: payload.paymentId },
       'Payment confirmed event received',
     );
-
-    const order = await this.prisma.order.findUnique({
-      where: { id: payload.orderId },
-      include: {
-        orderItems: {
-          include: {
-            product: { select: { name: true } },
-            variant: { select: { options: true } },
-          },
-        },
-      },
-    });
-
-    if (!order) return;
-
-    const items: EmailOrderItem[] = order.orderItems.map((item) => ({
-      productName: item.product.name,
-      quantity: item.quantity,
-      unitPrice: Number(item.unitPrice),
-      totalPrice: Number(item.totalPrice),
-      variantOptions: item.variant
-        ? this.formatVariantOptions(item.variant.options)
-        : undefined,
-    }));
-
-    const html = this.emailTemplates.paymentConfirmed({
-      orderNumber: payload.orderNumber,
-      customerName: payload.userFirstName || 'Valued Customer',
-      items,
-      amount: payload.amount,
-      currency: payload.currency,
-      paymentReference: payload.paymentReference,
-    });
-
-    await this.dispatchEmail({
-      to: payload.userEmail,
-      subject: `Payment Confirmed - Order #${payload.orderNumber}`,
-      html,
-      type: 'payment_confirmed',
-      userId: payload.userId,
-      role: ROLE.USER,
-      category: 'paymentAlerts',
-      metadata: { paymentId: payload.paymentId, orderId: payload.orderId },
-    });
 
     await this.dispatchNotification({
       userId: payload.userId,
