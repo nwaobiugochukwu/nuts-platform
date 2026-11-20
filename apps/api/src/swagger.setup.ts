@@ -135,105 +135,60 @@ Successful responses use the application's JSON envelope: \`{ success, message, 
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // ENTERPRISE DOMAIN-GROUPED TAG HIERARCHY
+  // ALPHABETICAL DOMAIN TAG HIERARCHY
   // ───────────────────────────────────────────────────────────────────────────
   const swaggerConfig = swaggerBuilder
-    // ── 1. Storefront & Customer Operations ──
     .addTag(
-      'PRODUCTS',
-      'Public product catalog — browse, search, filter by category/price/stock, and fetch detail by slug',
+      'ADMIN - ANALYTICS',
+      'Admin platform analytics — revenue summaries, top vendors/categories, user funnels, and audit log inspection',
     )
     .addTag(
-      'CATEGORIES',
-      'Public category tree — browse the nested category hierarchy and resolve slug paths',
+      'ADMIN - ANNOUNCEMENTS',
+      'Admin system announcements — create, broadcast, and manage platform announcements',
     )
-    .addTag(
-      'CART',
-      'Shopping cart management — add/update/remove items, clear cart (authenticated customer)',
-    )
-    .addTag(
-      'ORDERS',
-      'Customer order management — checkout, view orders, cancel, and update shipping details',
-    )
-    .addTag(
-      'WISHLIST',
-      'Customer wishlist — add/remove products and variants, view customer wishlist',
-    )
-    .addTag(
-      'REVIEWS',
-      'Product reviews — create verified purchase reviews, view summary by product, delete reviews',
-    )
-    .addTag(
-      'RECOMMENDATIONS',
-      'Marketplace recommendations — personalized for-you picks, daily marketplace mix, recently viewed, and store discovery',
-    )
-    .addTag(
-      'SEARCH',
-      'Global storefront search — fuzzy search, category filters, and autocomplete suggestions',
-    )
-    .addTag(
-      'USER WALLET',
-      'Customer wallet — view in-app balance, transaction ledgers, and credit history',
-    )
-    .addTag(
-      'USERS',
-      'Customer profile management — view profile, update personal information, change password, and account deletion',
-    )
-    .addTag(
-      'SHIPPING ADDRESSES',
-      'Customer address book — create, list, set default, and manage delivery addresses',
-    )
-
-    // ── 2. Merchant & Vendor Operations ──
-    .addTag(
-      'VENDORS - AUTH',
-      'Vendor authentication — register, login, logout, refresh, OTP verification, and Google merchant sign-in',
-    )
-    .addTag(
-      'VENDORS - ACCOUNT',
-      'Vendor store profile — store settings, branding, public profile, and store deactivation',
-    )
-    .addTag(
-      'VENDOR - PRODUCTS',
-      'Vendor catalog management — create products, update details, stock adjustments, and soft deletion',
-    )
-    .addTag(
-      'VENDOR - PRODUCT VARIANTS',
-      'Vendor variant management — manage SKUs, sizes, colors, and variant stock per product',
-    )
-    .addTag(
-      'VENDOR - ORDERS',
-      'Vendor order fulfillment — view store line items, update shipment dispatch and tracking status',
-    )
-    .addTag(
-      'VENDOR - DISCOUNT CODES',
-      'Vendor promotions — create merchant discount codes, view usage, activate, and deactivate',
-    )
-    .addTag(
-      'VENDOR - WALLET',
-      'Vendor financial wallet — view available store balance, escrow payouts, and transaction history',
-    )
-    .addTag(
-      'VENDOR - ANALYTICS',
-      'Vendor store analytics — sales revenue, order volumes, top products, and conversion metrics',
-    )
-    .addTag(
-      'VENDOR - SEARCH',
-      'Vendor merchant search — scoped search across store products, orders, and promo codes',
-    )
-    .addTag(
-      'VENDOR FOLLOWS',
-      'Store followers — customer store follow management and follower metrics',
-    )
-
-    // ── 3. Platform Administration & Governance ──
     .addTag(
       'ADMIN - AUTH',
       'Admin authentication — secure staff login, administrator provisioning, and token rotation',
     )
     .addTag(
+      'ADMIN - CACHE',
+      'Admin Redis cache operations — inspect cache keys and flush shared memory stores',
+    )
+    .addTag(
+      'ADMIN - CATEGORIES',
+      'Admin category taxonomy — create, update, reorder, move, archive, and manage product taxonomy',
+    )
+    .addTag(
+      'ADMIN - DISCOUNT CODES',
+      'Admin platform discounts — create marketplace-wide promotions, monitor redemptions, and deactivate codes',
+    )
+    .addTag(
+      'ADMIN - ORDERS',
+      'Admin order management — platform-wide order lookup, dispute overrides, and status audits',
+    )
+    .addTag(
       'ADMIN - PLATFORM',
       'Platform configuration — global maintenance mode, operational toggles, and system parameters',
+    )
+    .addTag(
+      'ADMIN - PLATFORM GOVERNANCE',
+      'Admin platform governance — maintenance mode controls, operational locks, and system policies',
+    )
+    .addTag(
+      'ADMIN - PRODUCT VARIANTS',
+      'Admin variant management — platform-wide variant inspections and adjustments',
+    )
+    .addTag(
+      'ADMIN - PRODUCTS',
+      'Admin catalog management — global product oversight, stock audits, and administrative deactivations',
+    )
+    .addTag(
+      'ADMIN - SEARCH',
+      'Admin global search — cross-entity lookup across users, merchants, products, orders, and codes',
+    )
+    .addTag(
+      'ADMIN - STAFF GOVERNANCE',
+      'Admin staff lifecycle — manage administrator accounts, role elevation, and staff audits',
     )
     .addTag(
       'ADMIN - USERS',
@@ -244,72 +199,136 @@ Successful responses use the application's JSON envelope: \`{ success, message, 
       'Admin merchant governance — approve applications, verify stores, review compliance, and handle suspensions',
     )
     .addTag(
-      'ADMIN - CATEGORIES',
-      'Admin category taxonomy — create, update, reorder, move, archive, and manage product taxonomy',
+      'ANALYTICS EVENTS',
+      'Client telemetry — user behavior tracking, search query metrics, and recommendation interaction batching',
     )
-    .addTag(
-      'ADMIN - PRODUCTS',
-      'Admin catalog management — global product oversight, stock audits, and administrative deactivations',
-    )
-    .addTag(
-      'ADMIN - PRODUCT VARIANTS',
-      'Admin variant management — platform-wide variant inspections and adjustments',
-    )
-    .addTag(
-      'ADMIN - ORDERS',
-      'Admin order management — platform-wide order lookup, dispute overrides, and status audits',
-    )
-    .addTag(
-      'ADMIN - DISCOUNT CODES',
-      'Admin platform discounts — create marketplace-wide promotions, monitor redemptions, and deactivate codes',
-    )
-    .addTag(
-      'ADMIN - ANALYTICS',
-      'Admin platform analytics — revenue summaries, top vendors/categories, user funnels, and audit log inspection',
-    )
-    .addTag(
-      'ADMIN - SEARCH',
-      'Admin global search — cross-entity lookup across users, merchants, products, orders, and codes',
-    )
-    .addTag(
-      'ADMIN - CACHE',
-      'Admin Redis cache operations — inspect cache keys and flush shared memory stores',
-    )
-
-    // ── 4. Identity, Security & Telemetry ──
     .addTag(
       'AUTH',
       'Customer authentication — register, login, logout, refresh session, password recovery, and Google sign-in',
     )
     .addTag(
-      'SECURITY',
-      'Security services — CSRF token issuance, bot verification, and rate limiting controls',
+      'CART',
+      'Shopping cart management — add/update/remove items, clear cart (authenticated customer)',
     )
     .addTag(
-      'ANALYTICS EVENTS',
-      'Client telemetry — user behavior tracking, search query metrics, and recommendation interaction batching',
-    )
-
-    // ── 5. Platform Services & Infrastructure ──
-    .addTag(
-      'PAYMENTS',
-      'Paystack payment processing — initialize checkout transactions, reference verification, webhooks, and refunds',
+      'CATEGORIES',
+      'Public category tree — browse the nested category hierarchy and resolve slug paths',
     )
     .addTag(
-      'NOTIFICATIONS',
-      'Notification center — authenticated in-app notification inbox, mark as read, and delete',
+      'DISCOVER',
+      'Keyset cursor product discovery feed — infinite scroll catalog with price and stock filtering',
     )
     .addTag(
-      'NOTIFICATIONS - SSE',
-      'Real-time streaming — Server-Sent Events (SSE) stream for instant notification delivery',
+      'HEALTH',
+      'Service health probes — liveness probe, database connectivity check, and Redis latency verification',
     )
     .addTag(
       'IMAGES',
       'Asset uploads — secure, authenticated image upload service with Cloudinary CDN integration',
     )
     .addTag(
-      'HEALTH',
-      'Service health probes — liveness probe, database connectivity check, and Redis latency verification',
+      'NOTIFICATIONS',
+      'Notification center — authenticated in-app notification inbox, mark as read, and delete',
+    )
+    .addTag(
+      'NOTIFICATIONS - PREFERENCES',
+      'Notification preferences — manage customer and merchant communication channels and email alerts',
+    )
+    .addTag(
+      'NOTIFICATIONS - PUSH',
+      'Push notification management — register and unregister Web Push subscription tokens',
+    )
+    .addTag(
+      'NOTIFICATIONS - SSE',
+      'Real-time streaming — Server-Sent Events (SSE) stream for instant notification delivery',
+    )
+    .addTag(
+      'ORDERS',
+      'Customer order management — checkout, view orders, cancel, and update shipping details',
+    )
+    .addTag(
+      'PAYMENTS',
+      'Paystack payment processing — initialize checkout transactions, reference verification, webhooks, and refunds',
+    )
+    .addTag(
+      'PRODUCT VARIANTS',
+      'Public product variants — retrieve SKU, sizing, and color attributes for storefront catalog items',
+    )
+    .addTag(
+      'PRODUCTS',
+      'Public product catalog — browse, search, filter by category/price/stock, and fetch detail by slug',
+    )
+    .addTag(
+      'RECOMMENDATIONS',
+      'Marketplace recommendations — personalized for-you picks, daily marketplace mix, recently viewed, and store discovery',
+    )
+    .addTag(
+      'REVIEWS',
+      'Product reviews — create verified purchase reviews, view summary by product, delete reviews',
+    )
+    .addTag(
+      'SEARCH',
+      'Global storefront search — fuzzy search, category filters, and autocomplete suggestions',
+    )
+    .addTag(
+      'SECURITY',
+      'Security services — CSRF token issuance, bot verification, and rate limiting controls',
+    )
+    .addTag(
+      'SHIPPING ADDRESSES',
+      'Customer address book — create, list, set default, and manage delivery addresses',
+    )
+    .addTag(
+      'USER WALLET',
+      'Customer wallet — view in-app balance, transaction ledgers, and credit history',
+    )
+    .addTag(
+      'USERS',
+      'Customer profile management — view profile, update personal information, change password, and account deletion',
+    )
+    .addTag(
+      'VENDOR - ANALYTICS',
+      'Vendor store analytics — sales revenue, order volumes, top products, and conversion metrics',
+    )
+    .addTag(
+      'VENDOR - DISCOUNT CODES',
+      'Vendor promotions — create merchant discount codes, view usage, activate, and deactivate',
+    )
+    .addTag(
+      'VENDOR - ORDERS',
+      'Vendor order fulfillment — view store line items, update shipment dispatch and tracking status',
+    )
+    .addTag(
+      'VENDOR - PRODUCT VARIANTS',
+      'Vendor variant management — manage SKUs, sizes, colors, and variant stock per product',
+    )
+    .addTag(
+      'VENDOR - PRODUCTS',
+      'Vendor catalog management — create products, update details, stock adjustments, and soft deletion',
+    )
+    .addTag(
+      'VENDOR - SEARCH',
+      'Vendor merchant search — scoped search across store products, orders, and promo codes',
+    )
+    .addTag(
+      'VENDOR - WALLET',
+      'Vendor financial wallet — view available store balance, escrow payouts, and transaction history',
+    )
+    .addTag(
+      'VENDOR FOLLOWS',
+      'Store followers — customer store follow management and follower metrics',
+    )
+    .addTag(
+      'VENDORS - ACCOUNT',
+      'Vendor store profile — store settings, branding, public profile, and store deactivation',
+    )
+    .addTag(
+      'VENDORS - AUTH',
+      'Vendor authentication — register, login, logout, refresh, OTP verification, and Google merchant sign-in',
+    )
+    .addTag(
+      'WISHLIST',
+      'Customer wishlist — add/remove products and variants, view customer wishlist',
     )
     .addBearerAuth(
       {
@@ -353,6 +372,8 @@ Successful responses use the application's JSON envelope: \`{ success, message, 
       defaultModelsExpandDepth: 1,
       defaultModelExpandDepth: 1,
       tryItOutEnabled: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
     },
     customSiteTitle: 'NUTS Platform — Staging & Development API Reference',
     customCss: `

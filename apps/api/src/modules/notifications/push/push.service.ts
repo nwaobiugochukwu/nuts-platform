@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ROLE } from '@prisma/client';
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
@@ -74,8 +74,8 @@ export class WebPushService implements OnModuleInit {
     const jsonPayload = JSON.stringify({
       title: payload.title,
       body: payload.body,
-      icon: payload.icon || '/icon-192x192.png',
-      badge: payload.badge || '/badge-72x72.png',
+      icon: payload.icon || '/favicon.svg',
+      badge: payload.badge || '/favicon.svg',
       url: payload.url || '/',
       data: payload.data || {},
     });

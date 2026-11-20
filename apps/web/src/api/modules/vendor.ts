@@ -129,9 +129,6 @@ export const vendorWalletService = {
     return vendorApi.get<VendorWalletResponseDto>("/vendors/wallet");
   },
   getTransactions(params?: { page?: number; limit?: number }) {
-    return vendorApi.get<{
-      data: WalletTransactionResponseDto[];
-      meta: { total: number; page: number; limit: number; totalPages: number };
-    }>("/vendors/wallet/transactions", { params });
+    return vendorApi.get<WalletTransactionResponseDto[]>("/vendors/wallet/transactions", { params });
   },
 };

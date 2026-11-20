@@ -1,6 +1,7 @@
 "use client";
 
 import type { ProductCardDto } from "@/api/dto/product";
+import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 import type { RecommendationAttribution, RecommendationSurface } from "@/api/modules/analytics";
 import { ProductCard } from "@/component/product/ProductCard";
 import { useRecommendationImpression } from "@/hooks/use-recommendation-impression";
@@ -11,6 +12,7 @@ const RANKER_VERSION = "hybrid-v2";
 
 interface RecommendationProductCardProps {
   product: ProductCardDto;
+  deal?: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
   surface: RecommendationSurface;
   requestId: string;
   sessionId: string;
@@ -21,6 +23,7 @@ interface RecommendationProductCardProps {
 
 export function RecommendationProductCard({
   product,
+  deal,
   surface,
   requestId,
   sessionId,
@@ -51,10 +54,12 @@ export function RecommendationProductCard({
     <div ref={cardRef}>
       <ProductCard
         product={product}
+        deal={deal}
         addedFrom="PRODUCT_PAGE"
         recommendationContext={attribution}
         priority={priority}
         size={size}
+        hideRecommendationReason={surface === "HOME_MARKETPLACE_MIX"}
       />
     </div>
   );

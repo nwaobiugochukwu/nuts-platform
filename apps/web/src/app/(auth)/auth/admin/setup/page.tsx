@@ -5,7 +5,7 @@ import type { AuthResponseDto } from "@/api/dto/auth";
 import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
 import { FormInput } from "@/component/form/FormInput";
 import { Button } from "@/component/ui/button";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { AxiosError } from "axios";
 import { ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";

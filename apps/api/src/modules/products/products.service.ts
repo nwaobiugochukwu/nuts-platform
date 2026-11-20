@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   NotFoundException,
@@ -561,6 +561,7 @@ export class ProductsService {
         storeName: true,
         storeSlug: true,
         storeLogoUrl: true,
+        storeDescription: true,
       },
     },
 
@@ -602,6 +603,7 @@ export class ProductsService {
         storeName: true,
         storeSlug: true,
         storeLogoUrl: true,
+        storeDescription: true,
       },
     },
 
@@ -1334,6 +1336,50 @@ export class ProductsService {
           .filter((p): p is PublicProductWithCategory => p !== undefined);
       }
 
+      // If top sales returned fewer than limit (e.g. sparse sales or new category),
+      // backfill with high-quality active in-stock products in the category/catalog
+      // so "Top Picks" is never an empty wasteland.
+      const remainingSlots = limit - products.length;
+      if (remainingSlots > 0) {
+        const existingIds = new Set(products.map((p) => p.id));
+        const fallbacks = await this.prisma.product.findMany({
+          where: {
+            id: { notIn: Array.from(existingIds) },
+            isActive: true,
+            isDeleted: false,
+            ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
+            ...(search
+              ? { name: { contains: search, mode: 'insensitive' as const } }
+              : {}),
+            ...(params.minPrice !== undefined || params.maxPrice !== undefined
+              ? {
+                  price: {
+                    ...(params.minPrice !== undefined
+                      ? { gte: params.minPrice }
+                      : {}),
+                    ...(params.maxPrice !== undefined
+                      ? { lte: params.maxPrice }
+                      : {}),
+                  },
+                }
+              : {}),
+            OR: [
+              { stock: { gt: 0 } },
+              {
+                variants: {
+                  some: { isActive: true, isDeleted: false, stock: { gt: 0 } },
+                },
+              },
+            ],
+            vendor: { isActive: true, isApproved: true },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: remainingSlots,
+          include: this.publicListProductInclude,
+        });
+        products.push(...fallbacks);
+      }
+
       const unitsSoldByProduct = new Map(
         topSales.map((sale) => [
           sale.productId,
@@ -1343,9 +1389,19 @@ export class ProductsService {
 
       return products.map((product) => {
         const unitsSold = unitsSoldByProduct.get(product.id) ?? 0;
+        let reason: string | undefined;
+        if (unitsSold >= 10) {
+          reason = `${unitsSold}+ bought recently`;
+        } else if (unitsSold >= 5) {
+          reason = 'Trending this week';
+        } else if (unitsSold > 0) {
+          reason = 'Popular pick';
+        } else {
+          reason = 'Featured pick';
+        }
         return {
           ...this.toCardResponse(product),
-          recommendationReason: `${unitsSold} sold in the last ${days} days`,
+          recommendationReason: reason,
         };
       });
     };

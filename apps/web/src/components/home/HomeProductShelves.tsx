@@ -12,7 +12,7 @@ import Link from "@/components/navigation/AppLink";
 import { usePersonalizedRecommendations } from "@/hooks/use-personalized-recommendations";
 import { useScrollRestoration } from "@/hooks/use-scroll-restoration";
 
-const MIN_PICKED_FOR_YOU_PRODUCTS = 4;
+const MIN_PICKED_FOR_YOU_PRODUCTS = 1;
 
 function uniqueProducts(
   products: ProductCardDto[],
@@ -32,14 +32,14 @@ function uniqueProducts(
 
 export function HomeProductShelves({
   initialCategories,
-  initialVendors,
-  initialProducts,
+  initialVendors = [],
+  initialProducts = [],
 }: {
   initialCategories: CategoryResponseDto[];
-  initialVendors: FeaturedVendorDto[];
-  /** SSR-prefetched trending products — displayed immediately on first paint
-   *  as "A good place to start" before the personalized client query resolves. */
-  initialProducts: ProductCardDto[];
+  /** Optional SSR-prefetched featured vendors. If omitted, skeleton loader displays until client recommendations resolve. */
+  initialVendors?: FeaturedVendorDto[];
+  /** Optional SSR-prefetched products for starter shelf. If omitted, skeleton loader displays until client recommendations resolve. */
+  initialProducts?: ProductCardDto[];
 }) {
   // Restore scroll position when navigating back from a product detail page.
   useScrollRestoration();
@@ -89,26 +89,22 @@ export function HomeProductShelves({
   // -------------------------------------------------------------------------
 
   // True while we're still waiting for auth + sessionId to be established.
-  // We don't block rendering on this — SSR fallbacks are shown immediately.
   const clientHydrating = !isAuthInitialized || !sessionId;
 
-  // "A good place to start": show SSR products immediately; replace with
-  // personalized picks once they arrive. Never hide after first appearance.
+  // "A good place to start": show skeleton loader while client query resolves,
+  // preventing jarring UI flashes where generic SSR items are suddenly replaced.
+  const showStarterSkeleton = clientHydrating || isLoadingStarterPicks;
+  const starterSettled = !clientHydrating && !isLoadingStarterPicks;
   const displayedStarterPicks =
     visibleStarterPicks.length > 0 ? visibleStarterPicks : initialProducts;
-
-  // Show a skeleton for "Continue where you left off" only while actively
-  // loading. Once loaded with 0 items, omit the shelf entirely.
-  const showRecentSkeleton = clientHydrating || isLoadingRecentlyViewed;
-  const recentSettled = !clientHydrating && !isLoadingRecentlyViewed;
-
-  // "Picked for you" follows the same pattern.
-  const showForYouSkeleton = clientHydrating || isLoadingForYou;
-  const forYouSettled = !clientHydrating && !isLoadingForYou;
 
   // "New from followed vendors" — customer-only shelf.
   const showFollowingSkeleton = isCustomer && (clientHydrating || isLoadingFollowing);
   const followingSettled = isCustomer && !clientHydrating && !isLoadingFollowing;
+
+  // "Vendors to explore": show skeleton loader while client query resolves.
+  const showStoresSkeleton = clientHydrating || isLoadingStores;
+  const storesSettled = !clientHydrating && !isLoadingStores;
 
   // Final fallback: shown only when everything is settled AND empty.
   const hasHomeContent = Boolean(
@@ -131,10 +127,47 @@ export function HomeProductShelves({
     <div className="space-y-14 pb-24 pt-8 sm:space-y-16">
       {/* ------------------------------------------------------------------ */}
       {/* 1. A good place to start                                            */}
-      {/* Always visible: starts with SSR trending products, upgrades to      */}
-      {/* personalised starter picks once client queries resolve.             */}
+      {/* Shows skeleton while recommendations resolve, then renders curated   */}
+      {/* marketplace mix without jarring item swap flashes.                  */}
       {/* ------------------------------------------------------------------ */}
-      {(displayedStarterPicks.length > 0 || isErrorStarterPicks) && (
+      {showStarterSkeleton && (
+        <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="A good place to start — loading">
+          <div className="space-y-6">
+            <div className="flex items-start sm:items-end justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  A good place to start
+                </h2>
+                <span className="mt-1.5 inline-flex text-sm font-semibold text-muted-foreground sm:hidden">
+                  Browse all finds
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="hidden text-sm font-semibold text-muted-foreground sm:inline">Browse all finds</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-9 rounded-full bg-secondary animate-pulse" />
+                  <div className="h-9 w-9 rounded-full bg-secondary animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 overflow-hidden pb-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-[220px] sm:w-[250px] shrink-0 space-y-3 rounded-2xl border border-border/40 p-3 bg-card/60"
+                >
+                  <div className="aspect-[4/5] w-full rounded-xl bg-secondary animate-pulse" />
+                  <div className="h-4 w-3/4 rounded-md bg-secondary animate-pulse" />
+                  <div className="h-3 w-1/2 rounded-md bg-secondary animate-pulse" />
+                  <div className="h-5 w-1/3 rounded-md bg-secondary animate-pulse pt-1" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+      {starterSettled && (displayedStarterPicks.length > 0 || isErrorStarterPicks) && (
         <GoodPlaceToStartSection
           products={displayedStarterPicks}
           sessionId={sessionId}
@@ -146,15 +179,10 @@ export function HomeProductShelves({
 
       {/* ------------------------------------------------------------------ */}
       {/* 2. Continue where you left off (recently viewed)                    */}
-      {/* Show skeleton while loading; omit once settled with no items.       */}
+      {/* Renders when recently viewed products exist, without layout flash.  */}
       {/* ------------------------------------------------------------------ */}
-      {showRecentSkeleton && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="Recently viewed — loading">
-          <TrendingSkeleton />
-        </section>
-      )}
-      {recentSettled && visibleRecent.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {visibleRecent.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
           <TrendingCarousel
             title="Continue where you left off"
             eyebrow="Recently viewed"
@@ -167,18 +195,13 @@ export function HomeProductShelves({
 
       {/* ------------------------------------------------------------------ */}
       {/* 3. Picked for you                                                   */}
-      {/* Show skeleton while loading; omit once settled with < 4 items.     */}
+      {/* Renders when activity-based recommendations are available.          */}
       {/* ------------------------------------------------------------------ */}
-      {showForYouSkeleton && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="Picked for you — loading" aria-labelledby="for-you-skeleton-heading">
-          <TrendingSkeleton />
-        </section>
-      )}
-      {forYouSettled && visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-labelledby="for-you-heading">
+      {visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300" aria-labelledby="for-you-heading">
           <TrendingCarousel
-            title="Picked for you"
-            eyebrow="Based on your activity"
+            title="Picked based on your activity"
+            eyebrow="Personalized for you"
             headingId="for-you-heading"
             initialProducts={visibleForYou}
             recommendationSurface="HOME_FOR_YOU"
@@ -214,15 +237,50 @@ export function HomeProductShelves({
       )}
 
       {/* ------------------------------------------------------------------ */}
-      {/* 6. Vendors to explore — SSR fallback available immediately          */}
+      {/* 6. Vendors to explore — shows skeleton until client stores resolve  */}
       {/* ------------------------------------------------------------------ */}
-      {vendorsToExplore.length > 0 ? (
+      {showStoresSkeleton && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="Vendors to explore — loading">
+          <div className="space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Vendors to explore</h2>
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <span className="text-sm font-semibold text-muted-foreground">Explore all stores</span>
+                <div className="flex items-center gap-1">
+                  <div className="h-9 w-9 rounded-full bg-secondary animate-pulse" />
+                  <div className="h-9 w-9 rounded-full bg-secondary animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 overflow-hidden pb-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-[280px] sm:w-[320px] shrink-0 space-y-3 rounded-2xl border border-border/40 p-5 bg-card/60"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-full bg-secondary animate-pulse" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-3/4 rounded-md bg-secondary animate-pulse" />
+                      <div className="h-3 w-1/2 rounded-md bg-secondary animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-10 w-full rounded-xl bg-secondary animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+      {storesSettled && vendorsToExplore.length > 0 && (
         <VendorDiscoverySection
           vendors={vendorsToExplore}
           sessionId={sessionId}
           trackRecommendations={storesToDiscover.length > 0}
         />
-      ) : isErrorStores ? (
+      )}
+      {storesSettled && isErrorStores && vendorsToExplore.length === 0 && (
         <section
           className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
           aria-label="Vendors to explore"
@@ -240,7 +298,7 @@ export function HomeProductShelves({
             </button>
           </div>
         </section>
-      ) : null}
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Global empty state — only shown when everything has settled empty   */}

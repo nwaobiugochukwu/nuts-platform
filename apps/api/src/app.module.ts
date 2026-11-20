@@ -106,7 +106,6 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     // ── Direct Feature Modules ────────────────────────────
     AuthModule,
     UsersModule,
-    VendorsModule,
     ProductsModule,
     CategoriesModule,
     CartModule,
@@ -120,6 +119,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     NotificationsModule,
     AnalyticsModule,
     SearchModule,
+    VendorsModule,
     UploadModule,
     SecurityModule,
     HealthModule,

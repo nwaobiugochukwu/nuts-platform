@@ -1,7 +1,7 @@
 "use client";
 
 import { RemoteImage } from "@/component/ui/RemoteImage";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import { useCallback,useMemo,useState } from "react";
 import { FormProvider,useForm,useWatch } from "react-hook-form";

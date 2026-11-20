@@ -1,7 +1,9 @@
-const SESSION_KEY = "nuts.recommendation-session.v1";
+const SESSION_KEY = "nuts.recommendation-session.v2";
+const LEGACY_SESSION_KEY = "nuts.recommendation-session.v1";
 const VISITOR_KEY = "nuts.recommendation-visitor.v1";
 const VISITOR_CREATED_KEY = "nuts.recommendation-visitor-created.v1";
-const VISITOR_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// Rotate the browser-local visitor identity after 180 days. Server history uses the same window.
+const VISITOR_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 let inMemorySessionId = "";
 let inMemoryVisitorId = "";
 const recommendationIdentityListeners = new Set<() => void>();
@@ -17,6 +19,7 @@ export function subscribeRecommendationIdentity(
   const onStorage = (event: StorageEvent) => {
     if (
       event.key === SESSION_KEY ||
+      event.key === LEGACY_SESSION_KEY ||
       event.key === VISITOR_KEY ||
       event.key === VISITOR_CREATED_KEY
     ) {
@@ -48,7 +51,11 @@ export function subscribeRecommendationIdentity(
 export function getRecommendationSessionSnapshot(): string {
   if (typeof window === "undefined") return "";
   try {
-    return window.sessionStorage.getItem(SESSION_KEY) ?? inMemorySessionId;
+    return (
+      window.localStorage.getItem(SESSION_KEY) ??
+      window.sessionStorage.getItem(LEGACY_SESSION_KEY) ??
+      inMemorySessionId
+    );
   } catch {
     return inMemorySessionId;
   }
@@ -77,8 +84,6 @@ function createSessionId(): string {
     if (typeof crypto !== "undefined" && crypto.getRandomValues) {
       crypto.getRandomValues(bytes);
     } else {
-      // Recommendation/session IDs are opaque correlation IDs, not credentials.
-      // Keep the API usable in browsers that lack Web Crypto UUID support.
       for (let index = 0; index < bytes.length; index += 1) {
         bytes[index] = Math.floor(Math.random() * 256);
       }
@@ -94,17 +99,29 @@ function createSessionId(): string {
 
 export const createRecommendationRequestId = createSessionId;
 
-/** Returns an opaque, browser-local ID for anonymous recommendation signals. */
+/**
+ * Returns a durable, browser-local ID used to associate shopper recommendation signals.
+ * The ID is stored in localStorage; viewed products and recommendation signals are stored server-side.
+ */
 export function getRecommendationSessionId(): string {
   if (typeof window === "undefined") return "";
 
   try {
-    const existing = window.sessionStorage.getItem(SESSION_KEY);
+    // 1. Check primary persistent localStorage
+    const existing = window.localStorage.getItem(SESSION_KEY);
     if (existing) return existing;
 
+    // 2. Check legacy sessionStorage and migrate to localStorage
+    const legacy = window.sessionStorage.getItem(LEGACY_SESSION_KEY);
+    if (legacy) {
+      window.localStorage.setItem(SESSION_KEY, legacy);
+      return legacy;
+    }
+
+    // 3. Generate a fresh UUID and persist
     const id = createSessionId();
-    if (!id) return "";
-    window.sessionStorage.setItem(SESSION_KEY, id);
+    if (!id) return inMemorySessionId;
+    window.localStorage.setItem(SESSION_KEY, id);
     return id;
   } catch {
     if (!inMemorySessionId) inMemorySessionId = createSessionId();
@@ -112,14 +129,15 @@ export function getRecommendationSessionId(): string {
   }
 }
 
-/** Starts a fresh analytics session after sign-out or an account switch. */
+/** Starts a fresh analytics session after sign-out or an explicit account switch. */
 export function rotateRecommendationSessionId(): string {
   inMemorySessionId = "";
   if (typeof window !== "undefined") {
     try {
-      window.sessionStorage.removeItem(SESSION_KEY);
+      window.localStorage.removeItem(SESSION_KEY);
+      window.sessionStorage.removeItem(LEGACY_SESSION_KEY);
     } catch {
-      // The in-memory identity below still prevents session reuse in this tab.
+      // In-memory identity still prevents session reuse
     }
   }
   const nextId = getRecommendationSessionId();
@@ -127,7 +145,7 @@ export function rotateRecommendationSessionId(): string {
   return nextId;
 }
 
-/** Returns a short-lived browser identity used only to claim guest recent history. */
+/** Returns a persistent browser identity used to claim guest recent history. */
 export function getRecommendationVisitorId(): string {
   if (typeof window === "undefined") return "";
 
@@ -142,8 +160,10 @@ export function getRecommendationVisitorId(): string {
       return existing;
     }
 
-    const id = createSessionId();
-    if (!id) return "";
+    // Also reuse session ID if available to keep visitor identity unified
+    const sessionId = window.localStorage.getItem(SESSION_KEY);
+    const id = sessionId || createSessionId();
+    if (!id) return inMemoryVisitorId;
     window.localStorage.setItem(VISITOR_KEY, id);
     window.localStorage.setItem(VISITOR_CREATED_KEY, String(Date.now()));
     inMemoryVisitorId = id;
@@ -154,7 +174,7 @@ export function getRecommendationVisitorId(): string {
   }
 }
 
-/** Starts a fresh anonymous history after sign-out or a customer account switch. */
+/** Starts a fresh anonymous history after an explicit customer account switch. */
 export function rotateRecommendationVisitorId(): string {
   inMemoryVisitorId = "";
   if (typeof window !== "undefined") {
@@ -162,7 +182,7 @@ export function rotateRecommendationVisitorId(): string {
       window.localStorage.removeItem(VISITOR_KEY);
       window.localStorage.removeItem(VISITOR_CREATED_KEY);
     } catch {
-      // The in-memory identity below still prevents history from crossing accounts in this tab.
+      // In-memory identity prevents crossing accounts
     }
   }
   const nextId = getRecommendationVisitorId();

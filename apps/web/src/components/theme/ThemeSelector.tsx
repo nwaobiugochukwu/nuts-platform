@@ -13,6 +13,12 @@ export function ThemeSelector({ className = "", showTitle = true }: ThemeSelecto
 
   const options: { mode: ThemeMode; label: string; description: string; icon: typeof Sun }[] = [
     {
+      mode: "system",
+      label: "System Match (Default)",
+      description: "Automatically synchronizes with your device operating system",
+      icon: Laptop,
+    },
+    {
       mode: "light",
       label: "Light Mode",
       description: "Clean luxury porcelain white aesthetics",
@@ -23,12 +29,6 @@ export function ThemeSelector({ className = "", showTitle = true }: ThemeSelecto
       label: "Dark Mode",
       description: "Sleek obsidian black with reduced eye strain",
       icon: Moon,
-    },
-    {
-      mode: "system",
-      label: "System Match",
-      description: "Automatically synchronizes with your device settings",
-      icon: Laptop,
     },
   ];
 

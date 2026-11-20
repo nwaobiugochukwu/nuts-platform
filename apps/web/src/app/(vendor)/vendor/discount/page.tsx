@@ -20,7 +20,7 @@ DialogTitle,
 } from "@/component/ui/dialog";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
 Ban,
@@ -51,20 +51,75 @@ interface VendorDiscount {
   description?: string | null;
 }
 
-const createDiscountSchema = z.object({
-  code: z
-    .string()
-    .min(3, "Code must be at least 3 characters")
-    .max(64)
-    .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
-  type: z.enum(["PERCENTAGE", "FIXED"]),
-  value: z.coerce.number().positive("Value must be greater than 0"),
-  description: z.string().max(256).optional().or(z.literal("")),
-  minOrderAmount: z.coerce.number().min(0).optional(),
-  maxDiscountAmount: z.coerce.number().min(0).optional(),
-  usageLimit: z.coerce.number().int().positive().optional(),
-  expiresAt: z.string().optional().or(z.literal("")),
-});
+const optionalNumber = (minVal = 0, label = "Value") =>
+  z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = typeof val === "string" ? Number(val.trim()) : Number(val);
+      if (isNaN(num)) return undefined;
+      return num;
+    })
+    .pipe(
+      z
+        .number()
+        .min(minVal, `${label} cannot be negative`)
+        .optional()
+    );
+
+const optionalPositiveInt = (label: string) =>
+  z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === "" || val === null || val === undefined) return null;
+      if (typeof val === "string") {
+        const trimmed = val.trim();
+        if (trimmed === "") return null;
+        const num = Number(trimmed);
+        if (isNaN(num)) return null;
+        if (num === 0) return null;
+        return num;
+      }
+      if (typeof val === "number") {
+        if (isNaN(val) || val === 0) return null;
+        return val;
+      }
+      return null;
+    })
+    .pipe(
+      z.union([
+        z
+          .number()
+          .int(`${label} must be a whole number`)
+          .positive(`${label} must be greater than 0`),
+        z.null(),
+      ])
+    );
+
+const createDiscountSchema = z
+  .object({
+    code: z
+      .string()
+      .min(3, "Code must be at least 3 characters")
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
+    type: z.enum(["PERCENTAGE", "FIXED"]),
+    value: z.coerce.number().positive("Value must be greater than 0"),
+    description: z.string().max(256).optional().or(z.literal("")),
+    minOrderAmount: optionalNumber(0, "Minimum basket size"),
+    maxDiscountAmount: optionalNumber(0, "Maximum discount cap"),
+    usageLimit: optionalPositiveInt("Global usage limit"),
+    expiresAt: z.string().optional().or(z.literal("")),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PERCENTAGE" && data.value > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Percentage discount cannot exceed 100%",
+        path: ["value"],
+      });
+    }
+  });
 
 type CreateDiscountFormData = z.infer<typeof createDiscountSchema>;
 
@@ -117,7 +172,10 @@ export default function DashboardDiscountPage() {
       values.type === "PERCENTAGE" && values.maxDiscountAmount
         ? values.maxDiscountAmount
         : null,
-    usageLimit: values.usageLimit || null,
+    usageLimit:
+      values.usageLimit !== null && values.usageLimit !== undefined && values.usageLimit > 0
+        ? values.usageLimit
+        : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
   });
 
@@ -224,19 +282,20 @@ export default function DashboardDiscountPage() {
     {
       key: "code",
       header: "Coupon Code",
+      className: "min-w-[160px]",
       render: (r) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 shrink-0">
             <Tag className="h-4 w-4" />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white truncate">
               {r.code}
             </span>
             <button
               type="button"
               onClick={() => copyToClipboard(r.code)}
-              className="p-1 text-neutral-400 hover:text-foreground transition-colors"
+              className="p-1 text-neutral-400 hover:text-foreground transition-colors shrink-0"
               title="Copy coupon code"
             >
               {copiedCode === r.code ? (
@@ -252,8 +311,9 @@ export default function DashboardDiscountPage() {
     {
       key: "type",
       header: "Calculation",
+      className: "min-w-[130px]",
       render: (r) => (
-        <Badge variant="outline" className="text-xs font-medium">
+        <Badge variant="outline" className="text-xs font-medium whitespace-nowrap">
           {r.type === "PERCENTAGE" ? "Percentage Off" : "Fixed Discount"}
         </Badge>
       ),
@@ -261,8 +321,9 @@ export default function DashboardDiscountPage() {
     {
       key: "value",
       header: "Discount Value",
+      className: "min-w-[110px]",
       render: (r) => (
-        <span className="font-semibold text-sm text-neutral-900 dark:text-white">
+        <span className="font-semibold text-sm text-neutral-900 dark:text-white whitespace-nowrap">
           {r.type === "PERCENTAGE" ? `${r.value}% Off` : formatPrice(r.value)}
         </span>
       ),
@@ -270,8 +331,9 @@ export default function DashboardDiscountPage() {
     {
       key: "usedCount",
       header: "Redemptions",
+      className: "min-w-[110px]",
       render: (r) => (
-        <span className="text-xs text-neutral-700 dark:text-neutral-300">
+        <span className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
           {r.usageCount ?? 0} {r.usageLimit ? `/ ${r.usageLimit}` : "uses"}
         </span>
       ),
@@ -279,6 +341,7 @@ export default function DashboardDiscountPage() {
     {
       key: "isActive",
       header: "Status",
+      className: "min-w-[90px]",
       render: (r) =>
         r.isActive ? (
           <Badge variant="success" className="text-xs font-semibold">
@@ -293,8 +356,9 @@ export default function DashboardDiscountPage() {
     {
       key: "expiresAt",
       header: "Expires",
+      className: "min-w-[120px]",
       render: (r) => (
-        <span className="text-xs text-neutral-400">
+        <span className="text-xs text-neutral-400 whitespace-nowrap">
           {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "Never"}
         </span>
       ),
@@ -302,8 +366,10 @@ export default function DashboardDiscountPage() {
     {
       key: "actions",
       header: "Actions",
+      className: "min-w-[110px] text-right",
+      headerClassName: "text-right",
       render: (r) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -359,7 +425,7 @@ export default function DashboardDiscountPage() {
         />
         <Button
           onClick={openCreate}
-          className="gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
+          className="w-full sm:w-auto justify-center gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
         >
           <Plus className="h-4 w-4" />
           Create Discount
@@ -425,9 +491,9 @@ export default function DashboardDiscountPage() {
 
       {/* CREATE / EDIT DISCOUNT MODAL */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
+          <DialogHeader className="pb-3 border-b border-border/50 shrink-0">
+            <DialogTitle className="text-base sm:text-lg font-bold pr-6">
               {editingDiscount
                 ? `Edit Coupon: ${editingDiscount.code}`
                 : "Create Store Coupon"}
@@ -436,15 +502,27 @@ export default function DashboardDiscountPage() {
 
           <FormProvider {...methods}>
             <form
-              onSubmit={methods.handleSubmit((data) =>
-                editingDiscount
+              onSubmit={methods.handleSubmit((data) => {
+                if (
+                  editingDiscount &&
+                  data.usageLimit !== null &&
+                  data.usageLimit !== undefined &&
+                  data.usageLimit < editingDiscount.usageCount
+                ) {
+                  methods.setError("usageLimit", {
+                    type: "manual",
+                    message: `Total limit (${data.usageLimit}) cannot be less than current redemptions (${editingDiscount.usageCount})`,
+                  });
+                  return;
+                }
+                return editingDiscount
                   ? updateMutation.mutate({
                       id: editingDiscount.id,
                       values: data,
                     })
-                  : createMutation.mutate(data)
-              )}
-              className="space-y-4 pt-2"
+                  : createMutation.mutate(data);
+              })}
+              className="space-y-4 pt-3 overflow-y-auto pr-1 sm:pr-2 flex-1 overscroll-contain"
             >
               <FormInput
                 name="code"
@@ -453,7 +531,7 @@ export default function DashboardDiscountPage() {
                 required
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormSelect
                   name="type"
                   label="Type"
@@ -484,7 +562,7 @@ export default function DashboardDiscountPage() {
                 />
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormInput
                   name="minOrderAmount"
                   label="Minimum Order Value"
@@ -495,7 +573,12 @@ export default function DashboardDiscountPage() {
                   name="usageLimit"
                   label="Total Usage Limit"
                   type="number"
-                  placeholder="e.g. 50"
+                  placeholder="Leave empty or 0 for unlimited"
+                  hint={
+                    editingDiscount && editingDiscount.usageCount > 0
+                      ? `Already redeemed: ${editingDiscount.usageCount} times`
+                      : "Empty or 0 = unlimited"
+                  }
                 />
               </div>
 
@@ -511,19 +594,19 @@ export default function DashboardDiscountPage() {
                 placeholder="e.g. Weekend special promotional coupon"
               />
 
-              <DialogFooter className="mt-6 flex flex-row items-center justify-end gap-2 pt-2">
+              <DialogFooter className="mt-4 pt-3 border-t border-border/50 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setOpen(false)}
-                  className="rounded-xl text-xs h-9 px-4 font-semibold"
+                  className="rounded-xl text-xs h-9 px-4 font-semibold w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
-                  className="rounded-xl text-xs h-9 px-4 font-bold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 shadow-xs"
+                  className="rounded-xl text-xs h-9 px-4 font-bold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 shadow-xs w-full sm:w-auto"
                 >
                   {editingDiscount
                     ? updateMutation.isPending

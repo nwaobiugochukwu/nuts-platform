@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -10,17 +10,23 @@ import {
   DiscountCode,
   DiscountCodeScope,
   DiscountCodeType,
+  OrderStatus,
   Prisma,
 } from '@prisma/client';
 
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
+import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import {
+  BatchProductDiscountsDto,
   CreateAdminDiscountCodeDto,
   CreateDiscountCodeDto,
   CreateVendorDiscountCodeDto,
   DiscountCodeResponseDto,
+  ProductVoucherSummaryDto,
+  PublicPlatformPromoDto,
+  PublicProductDealDto,
   UpdateAdminDiscountCodeDto,
   UpdateDiscountCodeDto,
   UpdateVendorDiscountCodeDto,
@@ -31,6 +37,7 @@ export class DiscountCodeService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly auditLog?: AuditLogService,
+    @Optional() private readonly cacheService?: CacheService,
   ) {}
 
   // ============================================================
@@ -50,6 +57,33 @@ export class DiscountCodeService {
    */
   private normalizeCode(code: string): string {
     return code.trim().toUpperCase();
+  }
+
+  /**
+   * Identifies campaigns and coupons that are explicitly reserved
+   * for first-time shoppers who have never placed an order before.
+   */
+  private isFirstOrderOnlyDiscount(discount: {
+    code: string;
+    description?: string | null;
+    firstOrderOnly?: boolean;
+  }): boolean {
+    if (discount.firstOrderOnly) {
+      return true;
+    }
+    const normCode = discount.code.trim().toUpperCase();
+    const normDesc = (discount.description || '').toLowerCase();
+    return (
+      normCode.startsWith('WELCOME') ||
+      normCode.startsWith('FIRST') ||
+      normCode.includes('NEWUSER') ||
+      normCode.includes('FIRSTBUY') ||
+      normDesc.includes('first-time') ||
+      normDesc.includes('first order') ||
+      normDesc.includes('new customer') ||
+      normDesc.includes('first purchase') ||
+      normDesc.includes('first shopper')
+    );
   }
 
   // ============================================================
@@ -189,6 +223,7 @@ export class DiscountCodeService {
       : DiscountCodeScope.PLATFORM;
 
     const applicableProductIds = dto.applicableProductIds ?? [];
+    const applicableCategoryIds = dto.applicableCategoryIds ?? [];
 
     return this.prisma.discountCode.create({
       data: {
@@ -226,12 +261,18 @@ export class DiscountCodeService {
         vendorId: vendorId ?? null,
 
         applicableProductIds,
+        applicableCategoryIds,
 
         /**
-         * Empty product list means the vendor's discount
-         * applies to all of their products.
+         * Empty product & category lists mean the vendor's or platform's discount
+         * applies to all products within its scope.
          */
-        platformwide: dto.platformwide ?? applicableProductIds.length === 0,
+        platformwide:
+          dto.platformwide ??
+          (applicableProductIds.length === 0 &&
+            applicableCategoryIds.length === 0),
+
+        firstOrderOnly: dto.firstOrderOnly ?? false,
 
         scope,
       },
@@ -376,8 +417,16 @@ export class DiscountCodeService {
           applicableProductIds: dto.applicableProductIds,
         }),
 
+        ...(dto.applicableCategoryIds !== undefined && {
+          applicableCategoryIds: dto.applicableCategoryIds,
+        }),
+
         ...(dto.platformwide !== undefined && {
           platformwide: dto.platformwide,
+        }),
+
+        ...(dto.firstOrderOnly !== undefined && {
+          firstOrderOnly: dto.firstOrderOnly,
         }),
       },
     });
@@ -466,6 +515,28 @@ export class DiscountCodeService {
       if (userUsage && userUsage.usageCount >= discount.perUserUsageLimit) {
         throw new ConflictException(
           'You have reached the usage limit for this discount code.',
+        );
+      }
+    }
+
+    /**
+     * Check first-time buyer restriction.
+     * If the discount is designated for first-time shoppers,
+     * the customer must not have any prior non-cancelled orders.
+     */
+    if (this.isFirstOrderOnlyDiscount(discount)) {
+      const priorOrdersCount = await this.prisma.order.count({
+        where: {
+          userId,
+          status: {
+            not: OrderStatus.CANCELLED,
+          },
+        },
+      });
+
+      if (priorOrdersCount > 0) {
+        throw new ConflictException(
+          'This discount is exclusively reserved for first-time shoppers on their first purchase.',
         );
       }
     }
@@ -995,13 +1066,284 @@ export class DiscountCodeService {
       usageCount: code.usageCount,
       isActive: code.isActive,
       platformwide: code.platformwide,
+      firstOrderOnly: code.firstOrderOnly,
       startsAt: code.startsAt,
       expiresAt: code.expiresAt,
       scope: code.scope,
       applicableProductIds: code.applicableProductIds,
+      applicableCategoryIds: code.applicableCategoryIds,
       vendorId: code.vendorId,
       createdAt: code.createdAt,
       updatedAt: code.updatedAt,
     };
+  }
+
+  // ============================================================
+  // PUBLIC STOREFRONT PROMOTIONS & DEALS
+  // ============================================================
+
+  async getPublicPlatformPromos(): Promise<PublicPlatformPromoDto[]> {
+    const fetcher = async () => {
+      const now = new Date();
+      const codes = await this.prisma.discountCode.findMany({
+        where: {
+          isActive: true,
+          deletedAt: null,
+          platformwide: true,
+          scope: DiscountCodeScope.PLATFORM,
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          ],
+        },
+        orderBy: [{ value: 'desc' }, { createdAt: 'desc' }],
+        take: 10,
+      });
+
+      return codes
+        .filter((c) => c.usageLimit === null || c.usageCount < c.usageLimit)
+        .map((c) => ({
+          id: c.id,
+          code: c.code,
+          description: c.description,
+          type: c.type,
+          value: Number(c.value),
+          maxDiscountAmount: c.maxDiscountAmount
+            ? Number(c.maxDiscountAmount)
+            : null,
+          minOrderAmount: Number(c.minOrderAmount),
+          expiresAt: c.expiresAt,
+          isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+        }));
+    };
+
+    if (this.cacheService) {
+      return this.cacheService.wrap('discounts:platform-promos', 120, fetcher);
+    }
+    return fetcher();
+  }
+
+  async getPublicProductDeals(
+    productId: string,
+  ): Promise<PublicProductDealDto> {
+    const fetcher = async (): Promise<PublicProductDealDto> => {
+      const product = await this.prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+          vendorId: true,
+          categoryId: true,
+          price: true,
+          isActive: true,
+          isDeleted: true,
+        },
+      });
+
+      if (!product || !product.isActive || product.isDeleted) {
+        return { productId, bestDiscount: null, allVouchers: [] };
+      }
+
+      const now = new Date();
+      const productPrice = Number(product.price);
+
+      const codes = await this.prisma.discountCode.findMany({
+        where: {
+          isActive: true,
+          deletedAt: null,
+          AND: [
+            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+          ],
+          OR: [
+            { platformwide: true },
+            { vendorId: product.vendorId },
+            { applicableProductIds: { has: productId } },
+            { applicableCategoryIds: { has: product.categoryId } },
+          ],
+        },
+        orderBy: [{ value: 'desc' }],
+      });
+
+      const validCodes = codes.filter(
+        (c) => c.usageLimit === null || c.usageCount < c.usageLimit,
+      );
+
+      const allVouchers: ProductVoucherSummaryDto[] = validCodes.map((c) => {
+        const val = Number(c.value);
+        let estimatedSavings = 0;
+        if (c.type === DiscountCodeType.PERCENTAGE) {
+          estimatedSavings = (productPrice * val) / 100;
+          if (c.maxDiscountAmount) {
+            estimatedSavings = Math.min(
+              estimatedSavings,
+              Number(c.maxDiscountAmount),
+            );
+          }
+        } else {
+          estimatedSavings = Math.min(productPrice, val);
+        }
+
+        return {
+          id: c.id,
+          code: c.code,
+          description: c.description,
+          type: c.type,
+          value: val,
+          scope: c.scope,
+          minOrderAmount: Number(c.minOrderAmount),
+          maxDiscountAmount: c.maxDiscountAmount
+            ? Number(c.maxDiscountAmount)
+            : null,
+          estimatedSavings: Math.round(estimatedSavings * 100) / 100,
+          expiresAt: c.expiresAt,
+          isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+        };
+      });
+
+      allVouchers.sort((a, b) => b.estimatedSavings - a.estimatedSavings);
+
+      const top = allVouchers[0];
+      const bestDiscount =
+        top && top.estimatedSavings > 0
+          ? {
+              ...top,
+              dealPrice: Math.max(
+                0,
+                Math.round((productPrice - top.estimatedSavings) * 100) / 100,
+              ),
+            }
+          : null;
+
+      return {
+        productId,
+        bestDiscount,
+        allVouchers,
+      };
+    };
+
+    if (this.cacheService) {
+      return this.cacheService.wrap(
+        `discounts:product:${productId}`,
+        60,
+        fetcher,
+      );
+    }
+    return fetcher();
+  }
+
+  async getBatchProductDeals(dto: BatchProductDiscountsDto): Promise<
+    Record<
+      string,
+      {
+        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+      }
+    >
+  > {
+    const productIds = [...new Set(dto.productIds)];
+    if (productIds.length === 0) return {};
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        isActive: true,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        vendorId: true,
+        categoryId: true,
+        price: true,
+      },
+    });
+
+    const vendorIds = [...new Set(products.map((p) => p.vendorId))];
+    const now = new Date();
+
+    const codes = await this.prisma.discountCode.findMany({
+      where: {
+        isActive: true,
+        deletedAt: null,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        ],
+        OR: [
+          { platformwide: true },
+          { vendorId: { in: vendorIds } },
+          { applicableProductIds: { hasSome: productIds } },
+          {
+            applicableCategoryIds: {
+              hasSome: [...new Set(products.map((p) => p.categoryId))],
+            },
+          },
+        ],
+      },
+    });
+
+    const validCodes = codes.filter(
+      (c) => c.usageLimit === null || c.usageCount < c.usageLimit,
+    );
+
+    const result: Record<
+      string,
+      {
+        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+      }
+    > = {};
+
+    for (const prod of products) {
+      const prodPrice = Number(prod.price);
+      const matchingCodes = validCodes.filter(
+        (c) =>
+          c.platformwide ||
+          c.vendorId === prod.vendorId ||
+          c.applicableProductIds.includes(prod.id) ||
+          c.applicableCategoryIds.includes(prod.categoryId),
+      );
+
+      let best: (ProductVoucherSummaryDto & { dealPrice: number }) | null =
+        null;
+      let maxSavings = 0;
+
+      for (const c of matchingCodes) {
+        const val = Number(c.value);
+        let savings = 0;
+        if (c.type === DiscountCodeType.PERCENTAGE) {
+          savings = (prodPrice * val) / 100;
+          if (c.maxDiscountAmount) {
+            savings = Math.min(savings, Number(c.maxDiscountAmount));
+          }
+        } else {
+          savings = Math.min(prodPrice, val);
+        }
+
+        if (savings > maxSavings) {
+          maxSavings = savings;
+          best = {
+            id: c.id,
+            code: c.code,
+            description: c.description,
+            type: c.type,
+            value: val,
+            scope: c.scope,
+            minOrderAmount: Number(c.minOrderAmount),
+            maxDiscountAmount: c.maxDiscountAmount
+              ? Number(c.maxDiscountAmount)
+              : null,
+            estimatedSavings: Math.round(savings * 100) / 100,
+            dealPrice: Math.max(
+              0,
+              Math.round((prodPrice - savings) * 100) / 100,
+            ),
+            expiresAt: c.expiresAt,
+            isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+          };
+        }
+      }
+
+      result[prod.id] = { bestDiscount: best };
+    }
+
+    return result;
   }
 }

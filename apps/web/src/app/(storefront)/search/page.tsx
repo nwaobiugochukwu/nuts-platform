@@ -47,6 +47,7 @@ export default async function SearchPage({
 
   return (
     <ProductCatalogView
+      key={search}
       initialCategories={categories}
       initialProducts={productsResult.data}
       initialMeta={productsResult.meta ?? undefined}

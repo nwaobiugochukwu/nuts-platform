@@ -13,7 +13,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { AxiosError } from "axios";
 import {
   ArrowLeft,

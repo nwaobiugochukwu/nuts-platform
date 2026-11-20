@@ -205,7 +205,7 @@ export function VendorsPageView({
             {isLoadingVendors ? (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-56 animate-pulse rounded-2xl bg-neutral-100" />
+                  <div key={i} className="h-56 animate-pulse rounded-2xl bg-neutral-100 dark:bg-neutral-800" />
                 ))}
               </div>
             ) : !displayedVendors || displayedVendors.length === 0 ? (

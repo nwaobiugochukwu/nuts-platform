@@ -1,3 +1,4 @@
+name: nuts
 services:
   postgres:
     image: postgres:16-alpine
@@ -65,10 +66,17 @@ services:
 
 volumes:
   nuts_dev_postgres_data:
+    external: true
     name: nuts_dev_postgres_data
+
   nuts_dev_redis_data:
+    external: true
     name: nuts_dev_redis_data
+
   nuts_dev_redisinsight_data:
+    external: true
     name: nuts_dev_redisinsight_data
+
   nuts_dev_rabbitmq_data:
+    external: true
     name: nuts_dev_rabbitmq_data

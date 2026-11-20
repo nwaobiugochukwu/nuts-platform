@@ -28,6 +28,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo,useRef,useState } from "react";
 import { toast } from "sonner";
 import { useVendorFollowing } from "@/hooks/use-vendor-following";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { useAuthStore } from "@/zustand/auth";
 import { getRecommendationSessionId, getRecommendationVisitorId } from "@/lib/recommendation-session";
 
@@ -68,7 +69,7 @@ export function VendorStoreView({
   const slug = (params?.slug as string) || propSlug;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isCustomer = useAuthStore((state) => state.isAuthenticated && (state.capabilities?.canPurchase ?? false));
-  const { followedIds, isLoading: isLoadingFollows, isPending: isFollowPending, setFollowing } = useVendorFollowing();
+  const { followedIds, isPending: isFollowPending, setFollowing } = useVendorFollowing();
 
   // State
   const [searchInput, setSearchInput] = useState("");
@@ -126,7 +127,7 @@ export function VendorStoreView({
   });
 
   useEffect(() => {
-    if (!store?.id || (isAuthenticated && !isCustomer)) return;
+    if (!store?.id) return;
     const sessionId = getRecommendationSessionId();
     const visitorId = getRecommendationVisitorId();
     if (!sessionId || !visitorId) return;
@@ -180,6 +181,8 @@ export function VendorStoreView({
     () => productsData?.products ?? initialProducts,
     [productsData, initialProducts],
   );
+  const productIds = useMemo(() => rawProducts.map(({ id }) => id), [rawProducts]);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   // Group products strictly by Root Category
   const rootCategoryGroups: RootCategoryGroup[] = useMemo(() => {
@@ -501,16 +504,12 @@ export function VendorStoreView({
                   <button
                     type="button"
                     onClick={() => void handleFollowStore()}
-                    disabled={isCustomer && (isLoadingFollows || isFollowPending(store.id))}
+                    disabled={isCustomer && isFollowPending(store.id)}
                     className="rounded-full bg-foreground px-4 py-2 text-xs font-semibold text-background transition-opacity hover:opacity-85 disabled:opacity-50"
                   >
-                    {isCustomer && isLoadingFollows
-                      ? "Checking…"
-                      : isCustomer && isFollowPending(store.id)
-                        ? (followedIds.has(store.id) ? "Following…" : "Unfollowing…")
-                        : isCustomer && followedIds.has(store.id)
-                          ? "Following"
-                          : "Follow store"}
+                    {isCustomer && followedIds.has(store.id)
+                      ? "Following"
+                      : "Follow store"}
                   </button>
                 )}
               </div>
@@ -741,6 +740,7 @@ export function VendorStoreView({
                         parentSubcategory: product.parentSubcategory,
                         subcategory: product.subcategory,
                       }}
+                      deal={dealsMap?.[product.id]?.bestDiscount ?? null}
                       addedFrom="PRODUCT_PAGE"
                       priority={groupIndex === 0 && pIdx < 4}
                     />

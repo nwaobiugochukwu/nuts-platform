@@ -1,6 +1,7 @@
-﻿import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import Redis from 'ioredis';
+import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import { EmailTemplatesService } from '@api/infrastructure/mail/email-templates.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
@@ -8,8 +9,12 @@ import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
 import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
 import { LOW_STOCK } from '@api/common/constants';
 import { generateJobId } from '@api/common/utils';
+import { NotificationsService } from '@api/modules/notifications/notifications.service';
+import { NotificationPreferencesService } from '@api/modules/notifications/preferences/preferences.service';
 
 interface LowStockEmailJob {
+  vendorId: string;
+  productId: string;
   productName: string;
   currentStock: number;
   vendorStoreName: string;
@@ -27,6 +32,9 @@ export class LowStockCron {
     private readonly rabbitmq: RabbitMQService,
     private readonly emailTemplates: EmailTemplatesService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    @Optional() private readonly notifications?: NotificationsService,
+    @Optional()
+    private readonly preferencesService?: NotificationPreferencesService,
   ) {}
 
   private formatVariantName(options: unknown): string | undefined {
@@ -83,6 +91,7 @@ export class LowStockCron {
           stock: true,
           vendor: {
             select: {
+              id: true,
               email: true,
               storeName: true,
             },
@@ -110,9 +119,11 @@ export class LowStockCron {
           stock: true,
           product: {
             select: {
+              id: true,
               name: true,
               vendor: {
                 select: {
+                  id: true,
                   email: true,
                   storeName: true,
                 },
@@ -126,20 +137,24 @@ export class LowStockCron {
 
       for (const product of lowStockProducts) {
         jobs.push({
-          to: product.vendor.email,
-          vendorStoreName: product.vendor.storeName,
+          vendorId: product.vendor.id,
+          productId: product.id,
           productName: product.name,
           currentStock: product.stock,
+          vendorStoreName: product.vendor.storeName,
+          to: product.vendor.email,
           deduplicationId: generateJobId('low-stock-product', product.id),
         });
       }
 
       for (const variant of lowStockVariants) {
         jobs.push({
-          to: variant.product.vendor.email,
-          vendorStoreName: variant.product.vendor.storeName,
+          vendorId: variant.product.vendor.id,
+          productId: variant.product.id,
           productName: variant.product.name,
           currentStock: variant.stock,
+          vendorStoreName: variant.product.vendor.storeName,
+          to: variant.product.vendor.email,
           variantName: this.formatVariantName(variant.options),
           deduplicationId: generateJobId('low-stock-variant', variant.id),
         });
@@ -159,24 +174,66 @@ export class LowStockCron {
           continue;
         }
 
-        const html = this.emailTemplates.lowStockAlert({
-          vendorStoreName: job.vendorStoreName,
-          productName: job.productName,
-          currentStock: job.currentStock,
-          variantName: job.variantName,
-        });
+        // 1. In-app / Push notification (checks user preference internally)
+        if (this.notifications) {
+          try {
+            await this.notifications.create({
+              userId: job.vendorId,
+              role: ROLE.VENDOR,
+              type: NotificationType.LOW_STOCK_ALERT,
+              title: 'Low Stock Alert',
+              message: `${job.productName}${job.variantName ? ` (${job.variantName})` : ''} is running low (${job.currentStock} remaining).`,
+              priority: NotificationPriority.HIGH,
+              link: '/vendor/products',
+              dedupeKey: `lowstock:inapp:${job.deduplicationId}`,
+              metadata: {
+                productId: job.productId,
+                currentStock: job.currentStock,
+                variantName: job.variantName,
+              },
+            });
+          } catch (notifErr) {
+            this.logger.warn(
+              `Failed creating in-app low stock alert for vendor ${job.vendorId}: ${notifErr instanceof Error ? notifErr.message : String(notifErr)}`,
+            );
+          }
+        }
 
-        await this.rabbitmq.publish(RABBITMQ_QUEUES.EMAILS, {
-          to: job.to,
-          subject: `Low Stock Alert - ${job.productName}`,
-          html,
-          type: 'low_stock_alert',
-          metadata: {
+        // 2. Email delivery (respects emailEnabled and inventoryAlerts preferences)
+        let canSendEmail = true;
+        if (this.preferencesService) {
+          canSendEmail = await this.preferencesService.canSend(
+            job.vendorId,
+            ROLE.VENDOR,
+            'email',
+            'inventoryAlerts',
+          );
+        }
+
+        if (canSendEmail) {
+          const html = this.emailTemplates.lowStockAlert({
+            vendorStoreName: job.vendorStoreName,
             productName: job.productName,
             currentStock: job.currentStock,
             variantName: job.variantName,
-          },
-        });
+          });
+
+          await this.rabbitmq.publish(RABBITMQ_QUEUES.EMAILS, {
+            to: job.to,
+            subject: `Low Stock Alert - ${job.productName}`,
+            html,
+            type: 'low_stock_alert',
+            metadata: {
+              productName: job.productName,
+              currentStock: job.currentStock,
+              variantName: job.variantName,
+            },
+          });
+        } else {
+          this.logger.debug(
+            `Skipping low stock email for vendor ${job.vendorId}: opted out of inventoryAlerts or email`,
+          );
+        }
 
         await this.redis.set(dedupKey, 'sent', 'EX', duplicateWindowSeconds);
         alertsQueued++;
