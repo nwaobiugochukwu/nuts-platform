@@ -52,16 +52,24 @@ export const setCsrfToken = (token: string | null | undefined) => {
 };
 
 export const getApiBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith("http")) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
-  }
+  const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
   // In the browser, always use the relative path so requests flow through Next.js BFF proxy.
   // This keeps all cookies (refresh token, session, csrf) strictly same-origin and avoids CORS / Lax drops.
   if (typeof window !== "undefined") {
-    return (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/+$/, "");
+    const relativeApiPrefix =
+      configuredApiUrl && !/^https?:\/\//i.test(configuredApiUrl)
+        ? `/${configuredApiUrl.replace(/^\/+/, "")}`
+        : "/api/v1";
+    return relativeApiPrefix.replace(/\/+$/, "");
   }
+
+  if (configuredApiUrl && /^https?:\/\//i.test(configuredApiUrl)) {
+    return configuredApiUrl.replace(/\/+$/, "");
+  }
+
   const backend = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "");
-  const prefix = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/+$/, "");
+  const prefix = (configuredApiUrl || "/api/v1").replace(/\/+$/, "");
   if (backend && backend.startsWith("http")) {
     return `${backend}${prefix.startsWith("/") ? prefix : `/${prefix}`}`;
   }

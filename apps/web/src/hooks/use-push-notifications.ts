@@ -9,11 +9,8 @@ import { toast } from "sonner";
 export { PushNotificationHost } from "@/components/notification/PushNotificationHost";
 
 const PUSH_DISABLED_KEY = "nuts_push_disabled";
-const DEFAULT_VAPID_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-  "BG7iC_hNvLZ6zu3e1sFiAHxIypBSkQuQYhD0LmJX4T0lRoQHQjkToLROdPvbxc32U9rxXkHK5WWsmNHWK6a8r1k";
 
-let inMemoryVapidKey: string = DEFAULT_VAPID_PUBLIC_KEY;
+let inMemoryVapidKey = "";
 let vapidFetchPromise: Promise<string> | null = null;
 
 // Module-level deduplication to prevent duplicate background syncs across multiple hook instances
@@ -53,14 +50,23 @@ async function getOrFetchVapidKey(api: ReturnType<typeof notificationsApiForRole
   vapidFetchPromise = api
     .getVapidKey()
     .then((res) => {
-      if (res.data?.publicKey) {
-        inMemoryVapidKey = res.data.publicKey.trim().replace(/^["']|["']$/g, "");
+      const publicKey = res.data?.publicKey?.trim().replace(/^["']|["']$/g, "");
+      if (!publicKey) {
+        throw new Error("Push notifications are not configured on the server.");
       }
+
+      if (urlBase64ToUint8Array(publicKey).byteLength !== 65) {
+        throw new Error("The server returned an invalid push notification key.");
+      }
+
+      inMemoryVapidKey = publicKey;
       return inMemoryVapidKey;
     })
     .catch((err) => {
       console.warn("[usePushNotifications] Failed fetching VAPID key:", err);
-      return inMemoryVapidKey || DEFAULT_VAPID_PUBLIC_KEY;
+      throw err instanceof Error
+        ? err
+        : new Error("Could not load the push notification key from the server.");
     })
     .finally(() => {
       vapidFetchPromise = null;
