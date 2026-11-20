@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { PaystackScript } from "@/components/paystack-script";
 import { RouteProgressBar } from "@/components/feedback/RouteProgressBar";
 import { Provider } from "@/provider";
@@ -72,6 +72,8 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
   let initialThemeClass = "";
   let initialColorScheme: "dark" | "light" | undefined = undefined;
 
@@ -101,6 +103,7 @@ export default async function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <script
           id="theme-head-initializer"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: THEME_INITIALIZER_SCRIPT,
           }}
@@ -120,6 +123,7 @@ export default async function RootLayout({
       >
         <script
           id="theme-body-initializer"
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: THEME_INITIALIZER_SCRIPT,
           }}
