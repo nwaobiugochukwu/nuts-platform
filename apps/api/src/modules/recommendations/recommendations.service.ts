@@ -497,7 +497,6 @@ export class RecommendationsService {
         is: {
           isActive: true,
           isApproved: true,
-          ...(userId ? { follows: { none: { userId } } } : {}),
         },
       },
       images: { some: {} },
@@ -576,7 +575,6 @@ export class RecommendationsService {
         where: {
           isActive: true,
           isApproved: true,
-          ...(userId ? { follows: { none: { userId } } } : {}),
           ...(selectedVendorIds.length
             ? { id: { notIn: selectedVendorIds } }
             : {}),
@@ -1424,7 +1422,6 @@ export class RecommendationsService {
       where: {
         isActive: true,
         isApproved: true,
-        ...(userId ? { follows: { none: { userId } } } : {}),
         products: {
           some: {
             isActive: true,

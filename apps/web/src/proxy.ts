@@ -50,17 +50,21 @@ export function buildContentSecurityPolicy(nonce: string): string {
     if (origin) connectSources.add(origin);
   }
 
-  const scriptSources = [
-    "'self'",
-    `'nonce-${nonce}'`,
-    "'strict-dynamic'",
-    "https://js.paystack.co",
-    "https://accounts.google.com/gsi/client",
-  ];
-
-  if (!isSecureContext) {
-    scriptSources.push("'unsafe-eval'");
-  }
+  const scriptSources = isSecureContext
+    ? [
+        "'self'",
+        `'nonce-${nonce}'`,
+        "'strict-dynamic'",
+        "https://js.paystack.co",
+        "https://accounts.google.com/gsi/client",
+      ]
+    : [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://js.paystack.co",
+        "https://accounts.google.com/gsi/client",
+      ];
 
   const imageSources = new Set<string>([
     "'self'",

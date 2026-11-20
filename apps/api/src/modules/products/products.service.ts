@@ -561,6 +561,7 @@ export class ProductsService {
         storeName: true,
         storeSlug: true,
         storeLogoUrl: true,
+        storeDescription: true,
       },
     },
 
@@ -602,6 +603,7 @@ export class ProductsService {
         storeName: true,
         storeSlug: true,
         storeLogoUrl: true,
+        storeDescription: true,
       },
     },
 

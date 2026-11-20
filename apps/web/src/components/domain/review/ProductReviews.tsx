@@ -2,12 +2,12 @@
 
 import { reviewService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import type { ProductReviewsMetaDto,ReviewResponseDto } from "@/api/dto/review";
+import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
 import { Button } from "@/component/ui/button";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
-import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2,MessageSquarePlus,Star,Trash2,X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, MessageSquarePlus, Star, Trash2, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -37,24 +37,20 @@ export function ProductReviews({
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState("");
 
-  const hasInitialData = Boolean(initialReviews && initialReviews.data);
-
   const { data: reviewResponse, isLoading } = useQuery({
     queryKey: queryKey.product.review(productId),
-    enabled: Boolean(productId) && !hasInitialData,
+    enabled: Boolean(productId),
     queryFn: ({ signal }) => reviewService.listByProduct(productId, signal),
     initialData: initialReviews ? { data: initialReviews.data, meta: initialReviews.meta } : undefined,
-    staleTime: 1000 * 60 * 15,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 1000 * 30,
   });
 
   const createReviewMutation = useMutation({
     mutationFn: (payload: { productId: string; rating: number; comment?: string }) =>
       reviewService.create(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKey.product.review(productId) });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKey.product.review(productId) });
+      await queryClient.invalidateQueries({ queryKey: queryKey.product.all });
       toast.success("Review submitted successfully!");
       setFormOpen(false);
       setComment("");
@@ -67,8 +63,9 @@ export function ProductReviews({
 
   const removeReviewMutation = useMutation({
     mutationFn: (id: string) => reviewService.remove(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKey.product.review(productId) });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKey.product.review(productId) });
+      await queryClient.invalidateQueries({ queryKey: queryKey.product.all });
       toast.success("Review deleted");
     },
     onError: (error: unknown) => {
@@ -86,6 +83,10 @@ export function ProductReviews({
       ? reviewsList.reduce((sum, r) => sum + r.rating, 0) / reviewsList.length
       : 0);
   const ratingBreakdown = meta?.ratingBreakdown ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+  const userExistingReview = currentUserId
+    ? reviewsList.find((r) => r.userId === currentUserId)
+    : undefined;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,8 +128,8 @@ export function ProductReviews({
                   key={i}
                   className={`h-4 w-4 ${
                     i < Math.round(average)
-                      ? "fill-black text-black"
-                      : "text-neutral-200"
+                      ? "fill-amber-400 text-amber-400"
+                      : "text-neutral-200 dark:text-neutral-700"
                   }`}
                 />
               ))}
@@ -149,11 +150,11 @@ export function ProductReviews({
                 return (
                   <div key={star} className="flex items-center gap-2.5 text-xs text-muted-foreground">
                     <span className="w-10 font-medium flex items-center gap-1">
-                      {star} <Star className="h-3 w-3 fill-primary text-primary inline" />
+                      {star} <Star className="h-3 w-3 fill-amber-400 text-amber-400 inline" />
                     </span>
                     <div className="flex-1 h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary rounded-full transition-all duration-300"
+                        className="h-full bg-amber-400 rounded-full transition-all duration-300"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
@@ -168,7 +169,14 @@ export function ProductReviews({
         </div>
 
         <div>
-          {isAuthenticated ? (
+          {userExistingReview ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                You've reviewed this product
+              </span>
+            </div>
+          ) : isAuthenticated ? (
             <Button
               type="button"
               onClick={() => setFormOpen((prev) => !prev)}
@@ -181,7 +189,7 @@ export function ProductReviews({
             <Button
               asChild
               variant="outline"
-              className="rounded-full text-sm font-medium border-neutral-300"
+              className="rounded-full text-sm font-medium border-border"
             >
               <Link href="/auth/login">Sign in to Review</Link>
             </Button>
@@ -190,10 +198,10 @@ export function ProductReviews({
       </div>
 
       {/* Write a Review Form */}
-      {formOpen && (
+      {formOpen && !userExistingReview && (
         <form
           onSubmit={handleSubmit}
-          className="my-8 rounded-2xl border border-border bg-[#fafafa] p-6 shadow-xs animate-in fade-in-0 duration-200"
+          className="my-8 rounded-2xl border border-border bg-card p-6 shadow-xs animate-in fade-in-0 duration-200"
         >
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-foreground">Write Your Review</h3>
@@ -216,11 +224,12 @@ export function ProductReviews({
                       onMouseEnter={() => setHoverRating(star)}
                       onMouseLeave={() => setHoverRating(0)}
                       onClick={() => setRating(star)}
-                      className="p-1 text-neutral-300 hover:scale-110 transition-transform focus:outline-none"
+                      className="p-1 text-neutral-300 dark:text-neutral-600 hover:scale-110 transition-transform focus:outline-none"
+                      aria-label={`${star} star${star > 1 ? "s" : ""}`}
                     >
                       <Star
-                        className={`h-6 w-6 ${
-                          isFilled ? "fill-black text-black" : "text-neutral-300"
+                        className={`h-6 w-6 transition-colors ${
+                          isFilled ? "fill-amber-400 text-amber-400" : "text-neutral-300 dark:text-neutral-600"
                         }`}
                       />
                     </button>
@@ -243,7 +252,7 @@ export function ProductReviews({
               rows={4}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="What did you love about this product?"
+              placeholder="What did you love about this product? How was the quality and delivery?"
               className="w-full rounded-xl border border-input bg-background p-3 text-sm sm:text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary"
               maxLength={1000}
             />
@@ -274,13 +283,13 @@ export function ProductReviews({
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-neutral-100 dark:bg-neutral-800" />
+              <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
             ))}
           </div>
         ) : reviewsList.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border py-12 text-center">
             <p className="font-semibold text-foreground">No reviews yet</p>
-            <p className="mt-1 font-semibold text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               Be the first to share your thoughts on this product.
             </p>
           </div>
@@ -305,7 +314,7 @@ export function ProductReviews({
                           key={i}
                           className={`h-3.5 w-3.5 ${
                             i < review.rating
-                              ? "fill-primary text-primary"
+                              ? "fill-amber-400 text-amber-400"
                               : "text-neutral-200 dark:text-neutral-700"
                           }`}
                         />
@@ -350,7 +359,7 @@ export function ProductReviews({
                 </div>
 
                 {review.comment && (
-                  <p className="mt-3 text-sm leading-relaxed text-neutral-700 whitespace-pre-line">
+                  <p className="mt-3 text-sm sm:text-base leading-relaxed text-foreground/90 dark:text-neutral-200 whitespace-pre-line">
                     {review.comment}
                   </p>
                 )}

@@ -4,11 +4,12 @@ import type { ProductCardDto } from "@/api/dto/product";
 import type { AddedFromType } from "@/api/dto/cart";
 import { ProductCard } from "@/component/product/ProductCard";
 import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import type { RecommendationSurface } from "@/api/modules/analytics";
 import { createRecommendationRequestId } from "@/lib/recommendation-session";
 import { ChevronLeft,ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface TrendingCarouselProps {
   initialProducts: ProductCardDto[];
@@ -36,6 +37,9 @@ export function TrendingCarousel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [requestId, setRequestId] = useState("");
   const products = initialProducts ?? [];
+
+  const productIds = useMemo(() => products.map((p) => p.id), [products]);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   useEffect(() => {
     if (!recommendationSurface) return;
@@ -111,6 +115,7 @@ export function TrendingCarousel({
               {recommendationSurface ? (
                 <RecommendationProductCard
                   product={product}
+                  deal={dealsMap?.[product.id]?.bestDiscount}
                   surface={recommendationSurface}
                   requestId={requestId}
                   sessionId={recommendationSessionId}
@@ -121,6 +126,7 @@ export function TrendingCarousel({
               ) : (
                 <ProductCard
                   product={product}
+                  deal={dealsMap?.[product.id]?.bestDiscount}
                   addedFrom={addedFrom}
                   size="lg"
                   priority={index < 2}

@@ -607,9 +607,19 @@ model DiscountCode {
   applicableProductIds String[] @default([])
 
   /**
+   * Empty array means the discount is not restricted to specific categories.
+   */
+  applicableCategoryIds String[] @default([])
+
+  /**
    * true = applies to every product allowed by the scope.
    */
   platformwide Boolean @default(false)
+
+  /**
+   * true = exclusively reserved for first-time shoppers who have no prior orders.
+   */
+  firstOrderOnly Boolean @default(false)
 
   scope DiscountCodeScope
 

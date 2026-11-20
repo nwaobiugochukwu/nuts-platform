@@ -17,22 +17,26 @@ DialogFooter,
 DialogHeader,
 DialogTitle,
 } from "@/component/ui/dialog";
+import { categoryService } from "@/api/modules/category";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import {
-Ban,
-Check,
-Copy,
-Pencil,
-Plus,
-RotateCcw,
-Tag,
-Trash2
+  Ban,
+  Check,
+  Copy,
+  FolderTree,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Tag,
+  Trash2,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo,useState } from "react";
 import { FormProvider,useForm,useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -44,6 +48,10 @@ interface AdminDiscount {
   value: number;
   usageCount: number;
   isActive: boolean;
+  platformwide?: boolean;
+  firstOrderOnly?: boolean;
+  applicableCategoryIds?: string[];
+  perUserUsageLimit?: number | null;
   minOrderAmount?: number | null;
   maxDiscountAmount?: number | null;
   usageLimit?: number | null;
@@ -51,22 +59,246 @@ interface AdminDiscount {
   description?: string | null;
 }
 
-const createDiscountSchema = z.object({
-  code: z
-    .string()
-    .min(3, "Code must be at least 3 characters")
-    .max(64)
-    .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
-  type: z.enum(["PERCENTAGE", "FIXED"]),
-  value: z.coerce.number().positive("Value must be greater than 0"),
-  description: z.string().max(256).optional().or(z.literal("")),
-  minOrderAmount: z.coerce.number().min(0).optional(),
-  maxDiscountAmount: z.coerce.number().min(0).optional(),
-  usageLimit: z.coerce.number().int().positive().optional(),
-  expiresAt: z.string().optional().or(z.literal("")),
-});
+const optionalNumber = (minVal = 0, label = "Value") =>
+  z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === "" || val === null || val === undefined) return undefined;
+      const num = typeof val === "string" ? Number(val.trim()) : Number(val);
+      if (isNaN(num)) return undefined;
+      return num;
+    })
+    .pipe(
+      z
+        .number()
+        .min(minVal, `${label} cannot be negative`)
+        .optional()
+    );
+
+const optionalPositiveInt = (label: string) =>
+  z
+    .union([z.number(), z.string(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === "" || val === null || val === undefined) return null;
+      if (typeof val === "string") {
+        const trimmed = val.trim();
+        if (trimmed === "") return null;
+        const num = Number(trimmed);
+        if (isNaN(num)) return null;
+        if (num === 0) return null;
+        return num;
+      }
+      if (typeof val === "number") {
+        if (isNaN(val) || val === 0) return null;
+        return val;
+      }
+      return null;
+    })
+    .pipe(
+      z.union([
+        z
+          .number()
+          .int(`${label} must be a whole number`)
+          .positive(`${label} must be greater than 0`),
+        z.null(),
+      ])
+    );
+
+const createDiscountSchema = z
+  .object({
+    code: z
+      .string()
+      .min(3, "Code must be at least 3 characters")
+      .max(64)
+      .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
+    type: z.enum(["PERCENTAGE", "FIXED"]),
+    value: z.coerce.number().positive("Value must be greater than 0"),
+    description: z.string().max(256).optional().or(z.literal("")),
+    minOrderAmount: optionalNumber(0, "Minimum basket size"),
+    maxDiscountAmount: optionalNumber(0, "Maximum discount cap"),
+    usageLimit: optionalPositiveInt("Global usage limit"),
+    perUserUsageLimit: optionalPositiveInt("Per-customer usage limit"),
+    expiresAt: z.string().optional().or(z.literal("")),
+    platformwide: z.boolean().default(true),
+    firstOrderOnly: z.boolean().default(false),
+    applicableCategoryIds: z.array(z.string()).default([]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PERCENTAGE" && data.value > 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Percentage discount cannot exceed 100%",
+        path: ["value"],
+      });
+    }
+
+    if (
+      data.usageLimit &&
+      data.perUserUsageLimit &&
+      data.perUserUsageLimit > data.usageLimit
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Per-customer limit (${data.perUserUsageLimit}) cannot exceed global limit (${data.usageLimit})`,
+        path: ["perUserUsageLimit"],
+      });
+    }
+  });
 
 type CreateDiscountFormData = z.infer<typeof createDiscountSchema>;
+
+function CategorySelector({
+  categories,
+  selectedCategoryIds,
+  onChange,
+}: {
+  categories: any[];
+  selectedCategoryIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  const flatList = useMemo(() => {
+    const list: { id: string; name: string; path: string }[] = [];
+    const traverse = (nodes: any[], prefix = "") => {
+      if (!Array.isArray(nodes)) return;
+      for (const node of nodes) {
+        if (node.status === "ARCHIVED" || node.isActive === false) continue;
+        const currentPath = prefix ? `${prefix} › ${node.name}` : node.name;
+        list.push({ id: node.id, name: node.name, path: currentPath });
+        const children = node.children || node.subCategories || [];
+        if (Array.isArray(children) && children.length > 0) {
+          traverse(children, currentPath);
+        }
+      }
+    };
+    traverse(categories);
+    return list;
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return flatList;
+    return flatList.filter((item) =>
+      item.path.toLowerCase().includes(q) || item.name.toLowerCase().includes(q)
+    );
+  }, [flatList, search]);
+
+  const selectedItems = useMemo(
+    () => flatList.filter((c) => selectedCategoryIds.includes(c.id)),
+    [flatList, selectedCategoryIds]
+  );
+
+  const toggleCategory = (id: string) => {
+    if (selectedCategoryIds.includes(id)) {
+      onChange(selectedCategoryIds.filter((item) => item !== id));
+    } else {
+      onChange([...selectedCategoryIds, id]);
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border border-border/80 bg-neutral-50/70 p-3.5 dark:bg-neutral-900/50">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+          <FolderTree className="h-3.5 w-3.5" />
+          Restricted Categories (Optional)
+        </label>
+        {selectedCategoryIds.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="text-[11px] font-medium text-rose-500 hover:underline"
+          >
+            Clear all ({selectedCategoryIds.length})
+          </button>
+        )}
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        If any categories are chosen, this discount will strictly apply ONLY to items in those categories. Leave empty to allow all categories across the platform.
+      </p>
+
+      {selectedItems.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+          {selectedItems.map((cat) => (
+            <span
+              key={cat.id}
+              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary border border-primary/20"
+            >
+              <span className="truncate max-w-[130px] sm:max-w-[200px]" title={cat.path}>{cat.name}</span>
+              <button
+                type="button"
+                onClick={() => toggleCategory(cat.id)}
+                className="hover:text-rose-500 focus:outline-none shrink-0"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div className="relative">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (!isOpen) setIsOpen(true);
+            }}
+            onFocus={() => setIsOpen(true)}
+            placeholder="Search categories to select..."
+            className="w-full rounded-lg border border-border bg-background pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        {isOpen && (
+          <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-md p-1">
+            <div className="flex items-center justify-between px-2 py-1 border-b border-border/50 text-[11px] text-muted-foreground">
+              <span>{filtered.length} categories found</span>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-primary hover:underline font-medium"
+              >
+                Done
+              </button>
+            </div>
+            {filtered.length === 0 ? (
+              <div className="p-3 text-center text-xs text-muted-foreground">
+                No matching categories found
+              </div>
+            ) : (
+              <div className="py-1">
+                {filtered.map((cat) => {
+                  const isSelected = selectedCategoryIds.includes(cat.id);
+                  return (
+                    <div
+                      key={cat.id}
+                      onClick={() => toggleCategory(cat.id)}
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs cursor-pointer select-none transition-colors ${
+                        isSelected
+                          ? "bg-primary/15 text-primary font-medium"
+                          : "hover:bg-accent text-foreground"
+                      }`}
+                    >
+                      <span className="truncate pr-2">{cat.path}</span>
+                      {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminDiscountPage() {
   const [open, setOpen] = useState(false);
@@ -91,6 +323,16 @@ export default function AdminDiscountPage() {
     },
   });
 
+  const { data: categoriesData } = useQuery({
+    queryKey: queryKey.category.list(),
+    queryFn: async () => {
+      const res = await categoryService.getAll();
+      return res.data;
+    },
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+  });
+
   const methods = useForm<CreateDiscountFormData>({
     resolver: zodResolver(createDiscountSchema),
     defaultValues: {
@@ -101,11 +343,19 @@ export default function AdminDiscountPage() {
       minOrderAmount: 0,
       maxDiscountAmount: undefined,
       usageLimit: undefined,
+      perUserUsageLimit: 1,
       expiresAt: "",
+      platformwide: true,
+      firstOrderOnly: false,
+      applicableCategoryIds: [],
     },
   });
 
   const selectedType = useWatch({ control: methods.control, name: "type" });
+  const selectedCategoryIds = useWatch({
+    control: methods.control,
+    name: "applicableCategoryIds",
+  }) as string[] | undefined;
 
   const discountPayload = (values: CreateDiscountFormData) => ({
     code: values.code.trim().toUpperCase(),
@@ -117,8 +367,20 @@ export default function AdminDiscountPage() {
       values.type === "PERCENTAGE" && values.maxDiscountAmount
         ? values.maxDiscountAmount
         : null,
-    usageLimit: values.usageLimit || null,
+    usageLimit:
+      values.usageLimit !== null && values.usageLimit !== undefined && values.usageLimit > 0
+        ? values.usageLimit
+        : null,
+    perUserUsageLimit:
+      values.perUserUsageLimit !== null &&
+      values.perUserUsageLimit !== undefined &&
+      values.perUserUsageLimit > 0
+        ? values.perUserUsageLimit
+        : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+    platformwide: values.platformwide ?? true,
+    firstOrderOnly: values.firstOrderOnly ?? false,
+    applicableCategoryIds: values.applicableCategoryIds ?? [],
   });
 
   const refreshDiscounts = () =>
@@ -207,7 +469,11 @@ export default function AdminDiscountPage() {
       minOrderAmount: 0,
       maxDiscountAmount: undefined,
       usageLimit: undefined,
+      perUserUsageLimit: 1,
       expiresAt: "",
+      platformwide: true,
+      firstOrderOnly: false,
+      applicableCategoryIds: [],
     });
     setOpen(true);
   };
@@ -222,7 +488,11 @@ export default function AdminDiscountPage() {
       minOrderAmount: discount.minOrderAmount ?? 0,
       maxDiscountAmount: discount.maxDiscountAmount ?? undefined,
       usageLimit: discount.usageLimit ?? undefined,
+      perUserUsageLimit: discount.perUserUsageLimit ?? undefined,
       expiresAt: discount.expiresAt ? discount.expiresAt.slice(0, 10) : "",
+      platformwide: discount.platformwide ?? true,
+      firstOrderOnly: discount.firstOrderOnly ?? false,
+      applicableCategoryIds: discount.applicableCategoryIds ?? [],
     });
     setOpen(true);
   };
@@ -231,19 +501,20 @@ export default function AdminDiscountPage() {
     {
       key: "code",
       header: "Coupon Code",
+      className: "min-w-[160px]",
       render: (r) => (
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 shrink-0">
             <Tag className="h-4 w-4" />
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white truncate">
               {r.code}
             </span>
             <button
               type="button"
               onClick={() => copyToClipboard(r.code)}
-              className="p-1 text-neutral-400 hover:text-foreground transition-colors"
+              className="p-1 text-neutral-400 hover:text-foreground transition-colors shrink-0"
               title="Copy coupon code"
             >
               {copiedCode === r.code ? (
@@ -259,8 +530,9 @@ export default function AdminDiscountPage() {
     {
       key: "type",
       header: "Discount Type",
+      className: "min-w-[130px]",
       render: (r) => (
-        <Badge variant="outline" className="text-xs font-semibold">
+        <Badge variant="outline" className="text-xs font-semibold whitespace-nowrap">
           {r.type === "PERCENTAGE" ? "Percentage Off" : "Fixed Discount"}
         </Badge>
       ),
@@ -268,17 +540,62 @@ export default function AdminDiscountPage() {
     {
       key: "value",
       header: "Value / Rate",
+      className: "min-w-[110px]",
       render: (r) => (
-        <span className="text-sm font-semibold text-neutral-900 dark:text-white">
+        <span className="text-sm font-semibold text-neutral-900 dark:text-white whitespace-nowrap">
           {r.type === "PERCENTAGE" ? `${r.value}% Off` : formatPrice(r.value)}
         </span>
       ),
     },
     {
+      key: "targeting",
+      header: "Audience & Placement",
+      className: "min-w-[200px]",
+      render: (r) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {r.firstOrderOnly ? (
+            <Badge
+              variant="outline"
+              className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold text-[11px] whitespace-nowrap"
+            >
+              First-Time Buyers
+            </Badge>
+          ) : (
+            <Badge
+              variant="outline"
+              className="border-neutral-500/30 text-neutral-600 dark:text-neutral-400 text-[11px] whitespace-nowrap"
+            >
+              All Customers
+            </Badge>
+          )}
+
+          {r.platformwide && (
+            <Badge
+              variant="outline"
+              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] whitespace-nowrap"
+            >
+              Header Banner
+            </Badge>
+          )}
+
+          {r.applicableCategoryIds && r.applicableCategoryIds.length > 0 && (
+            <Badge
+              variant="outline"
+              className="border-blue-500/40 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold text-[11px] whitespace-nowrap"
+            >
+              {r.applicableCategoryIds.length}{" "}
+              {r.applicableCategoryIds.length === 1 ? "Category" : "Categories"}
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
       key: "usedCount",
       header: "Usage Count",
+      className: "min-w-[110px]",
       render: (r) => (
-        <span className="text-xs text-neutral-700 dark:text-neutral-300">
+        <span className="text-xs text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
           {r.usageCount ?? 0} {r.usageLimit ? `/ ${r.usageLimit}` : "uses"}
         </span>
       ),
@@ -286,6 +603,7 @@ export default function AdminDiscountPage() {
     {
       key: "isActive",
       header: "Status",
+      className: "min-w-[90px]",
       render: (r) =>
         r.isActive ? (
           <Badge variant="success">
@@ -300,8 +618,9 @@ export default function AdminDiscountPage() {
     {
       key: "expiresAt",
       header: "Expiration",
+      className: "min-w-[120px]",
       render: (r) => (
-        <span className="text-xs text-neutral-400">
+        <span className="text-xs text-neutral-400 whitespace-nowrap">
           {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "Never Expires"}
         </span>
       ),
@@ -309,8 +628,10 @@ export default function AdminDiscountPage() {
     {
       key: "actions",
       header: "Actions",
+      className: "min-w-[110px] text-right",
+      headerClassName: "text-right",
       render: (r) => (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -366,7 +687,7 @@ export default function AdminDiscountPage() {
         />
         <Button
           onClick={openCreate}
-          className="gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
+          className="w-full sm:w-auto justify-center gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
         >
           <Plus className="h-4 w-4" />
           Create Coupon
@@ -431,9 +752,9 @@ export default function AdminDiscountPage() {
 
       {/* CREATE / EDIT DISCOUNT MODAL */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg rounded-3xl p-6 sm:p-8">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
+          <DialogHeader className="pb-3 border-b border-border/50 shrink-0">
+            <DialogTitle className="text-base sm:text-lg font-bold pr-6">
               {editingDiscount
                 ? `Edit Coupon: ${editingDiscount.code}`
                 : "Create Promotion Coupon"}
@@ -442,15 +763,27 @@ export default function AdminDiscountPage() {
 
           <FormProvider {...methods}>
             <form
-              onSubmit={methods.handleSubmit((data) =>
-                editingDiscount
+              onSubmit={methods.handleSubmit((data) => {
+                if (
+                  editingDiscount &&
+                  data.usageLimit !== null &&
+                  data.usageLimit !== undefined &&
+                  data.usageLimit < editingDiscount.usageCount
+                ) {
+                  methods.setError("usageLimit", {
+                    type: "manual",
+                    message: `Global limit (${data.usageLimit}) cannot be less than current redemptions (${editingDiscount.usageCount})`,
+                  });
+                  return;
+                }
+                return editingDiscount
                   ? updateMutation.mutate({
                       id: editingDiscount.id,
                       values: data,
                     })
-                  : createMutation.mutate(data)
-              )}
-              className="space-y-4 pt-2"
+                  : createMutation.mutate(data);
+              })}
+              className="space-y-4 pt-3 overflow-y-auto pr-1 sm:pr-2 flex-1 overscroll-contain"
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
@@ -503,17 +836,72 @@ export default function AdminDiscountPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormInput
                   name="usageLimit"
-                  label="Total Usage Limit"
+                  label="Global Usage Limit"
                   type="number"
-                  placeholder="Leave empty for unlimited"
+                  placeholder="Leave empty or 0 for unlimited"
+                  hint={
+                    editingDiscount && editingDiscount.usageCount > 0
+                      ? `Already redeemed: ${editingDiscount.usageCount} times`
+                      : "Empty or 0 = unlimited"
+                  }
                 />
 
                 <FormInput
-                  name="expiresAt"
-                  label="Expiry Date"
-                  type="date"
+                  name="perUserUsageLimit"
+                  label="Per-Customer Usage Limit"
+                  type="number"
+                  placeholder="e.g. 1 (once per user)"
+                  hint="Empty or 0 = unlimited"
                 />
               </div>
+
+              <FormInput
+                name="expiresAt"
+                label="Expiry Date"
+                type="date"
+              />
+
+              <div className="space-y-3 rounded-xl border border-border/80 bg-neutral-50/70 p-3.5 dark:bg-neutral-900/50">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Audience & Storefront Targeting
+                </h4>
+
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="firstOrderOnly"
+                    {...methods.register("firstOrderOnly")}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                  />
+                  <label htmlFor="firstOrderOnly" className="text-xs cursor-pointer select-none">
+                    <span className="font-semibold text-foreground block">First-Time Buyers Only</span>
+                    <span className="text-muted-foreground block text-[11px] mt-0.5">
+                      Strictly limit this discount code to new shoppers who haven&apos;t bought any item before. Existing buyers will be rejected at checkout.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3 pt-1 border-t border-border/50">
+                  <input
+                    type="checkbox"
+                    id="platformwide"
+                    {...methods.register("platformwide")}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                  />
+                  <label htmlFor="platformwide" className="text-xs cursor-pointer select-none">
+                    <span className="font-semibold text-foreground block">Feature in Storefront Announcement Ticker</span>
+                    <span className="text-muted-foreground block text-[11px] mt-0.5">
+                      Display this campaign code in the top sticky promotion bar on the storefront for shoppers to claim in one click.
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <CategorySelector
+                categories={categoriesData ?? []}
+                selectedCategoryIds={selectedCategoryIds ?? []}
+                onChange={(ids) => methods.setValue("applicableCategoryIds", ids)}
+              />
 
               <FormTextarea
                 name="description"
@@ -521,19 +909,19 @@ export default function AdminDiscountPage() {
                 placeholder="Optional notes for campaign tracking..."
               />
 
-              <DialogFooter className="mt-6 flex flex-row items-center justify-end gap-2 pt-2">
+              <DialogFooter className="mt-4 pt-3 border-t border-border/50 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setOpen(false)}
-                  className="rounded-xl text-xs h-9 px-4 font-semibold"
+                  className="rounded-xl text-xs h-9 px-4 font-semibold w-full sm:w-auto"
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
                   disabled={createMutation.isPending || updateMutation.isPending}
-                  className="rounded-xl text-xs h-9 px-4 font-bold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 shadow-xs"
+                  className="rounded-xl text-xs h-9 px-4 font-bold bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 shadow-xs w-full sm:w-auto"
                 >
                   {editingDiscount
                     ? updateMutation.isPending

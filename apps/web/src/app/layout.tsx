@@ -35,6 +35,19 @@ export const metadata: Metadata = {
 const THEME_INITIALIZER_SCRIPT = `
 (function() {
   try {
+    if (typeof window !== 'undefined' && window.performance && typeof window.performance.measure === 'function') {
+      var _origMeasure = window.performance.measure.bind(window.performance);
+      window.performance.measure = function(name, startOrMeasureOptions, endMark) {
+        try {
+          return _origMeasure(name, startOrMeasureOptions, endMark);
+        } catch (e) {
+          // Suppress Next.js Turbopack internal User Timing negative timestamp bugs in dev
+          return undefined;
+        }
+      };
+    }
+  } catch (e) {}
+  try {
     var d = document.documentElement;
     var stored = localStorage.getItem('nuts_theme');
     var isDark = false;

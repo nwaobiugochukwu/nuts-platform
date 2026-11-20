@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Get,
@@ -148,7 +148,7 @@ export class PushSubscriptionsController {
     const delivered = await this.webPushService.sendToUser(user.id, user.role, {
       title: 'NUTS Push Notifications Active',
       body: 'Your device is connected! You will receive real-time order, payment, and security alerts.',
-      icon: '/icon-192x192.png',
+      icon: '/favicon.svg',
       url: '/notifications',
       data: {
         type: 'SYSTEM_ANNOUNCEMENT',

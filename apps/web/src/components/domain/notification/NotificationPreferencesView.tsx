@@ -77,6 +77,7 @@ export function NotificationPreferencesContent() {
     isSupported: isPushSupported,
     permission: pushPermission,
     isLoading: isPushLoading,
+    isSubscribed,
     subscribe: subscribePush,
     unsubscribe: unsubscribePush,
     sendTestPush,
@@ -170,12 +171,31 @@ export function NotificationPreferencesContent() {
                 <Smartphone className="h-4 w-4" />
               </div>
               <div className="space-y-0.5">
-                <label
-                  htmlFor="push-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
-                >
-                  Push Notifications
-                </label>
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="push-toggle"
+                    className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  >
+                    Push Notifications
+                  </label>
+                  {!isPushSupported ? (
+                    <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      Unsupported
+                    </span>
+                  ) : pushPermission === "denied" ? (
+                    <span className="text-[10px] font-semibold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                      Blocked in browser
+                    </span>
+                  ) : pushPermission === "granted" && isSubscribed ? (
+                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      Active on this device
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                      Setup required
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Receive real-time push alerts on your device for incoming orders, payments, and account activity.
                 </p>
@@ -192,7 +212,7 @@ export function NotificationPreferencesContent() {
                   onClick={() => sendTestPush()}
                   className="h-8 px-2.5 text-xs font-semibold rounded-lg border-primary/30 text-primary hover:bg-primary/10 cursor-pointer"
                 >
-                  Send Test Alert
+                  {isPushLoading ? "Sending..." : "Send Test Alert"}
                 </Button>
               )}
 
@@ -203,23 +223,23 @@ export function NotificationPreferencesContent() {
               ) : (
                 <SwitchToggle
                   id="push-toggle"
-                  checked={Boolean(prefs.pushEnabled && pushPermission !== "denied")}
-                  disabled={isUpdating}
-                  onChange={(checked) => {
+                  checked={Boolean(isSubscribed && pushPermission === "granted")}
+                  disabled={isUpdating || isPushLoading}
+                  onChange={async (checked) => {
                     if (checked) {
                       if (pushPermission === "denied") {
                         toast.error(
-                          "Push notifications are blocked in your browser settings. Please allow notifications in your browser address bar.",
+                          "Push notifications are blocked in your browser settings. Please click the lock icon in your URL address bar to allow notifications.",
                         );
                         return;
                       }
-                      updatePreferences({ pushEnabled: true });
-                      if (isPushSupported) {
-                        void subscribePush({ silent: true });
+                      const ok = await subscribePush({ silent: false });
+                      if (ok) {
+                        updatePreferences({ pushEnabled: true });
                       }
                     } else {
+                      await unsubscribePush();
                       updatePreferences({ pushEnabled: false });
-                      void unsubscribePush();
                     }
                   }}
                 />
@@ -229,10 +249,10 @@ export function NotificationPreferencesContent() {
         </div>
 
         {pushPermission === "denied" && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 flex items-start gap-2.5 text-xs text-muted-foreground">
-            <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 flex items-start gap-2.5 text-xs text-muted-foreground">
+            <Info className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
             <p>
-              Push notifications are blocked in your browser settings. To enable them, click the lock/settings icon in your browser address bar and set Notifications to &quot;Allow&quot;.
+              Push notifications are blocked in your browser settings. To enable them, click the lock/tune icon in your browser address bar next to the URL and set Notifications to &quot;Allow&quot;.
             </p>
           </div>
         )}

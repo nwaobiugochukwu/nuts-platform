@@ -29,7 +29,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { formatPrice } from "@/lib/util";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
 Ban,
@@ -509,7 +509,7 @@ export default function DashboardProductPage() {
 
       <DataTable
         columns={columns}
-        data={data?.data ?? []}
+        data={Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []}
         isLoading={isLoading}
         isFetching={isFetching}
         emptyMessage="No product listings found in your store."

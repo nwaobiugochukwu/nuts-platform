@@ -20,6 +20,7 @@ import { useEffect,useRef,useState } from "react";
 
 import { NotificationBell } from "@/component/notification/NotificationBell";
 import { CategoryNavMenu } from "@/component/category/CategoryNavMenu";
+import { PlatformPromoTicker } from "@/components/storefront/PlatformPromoTicker";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import { useCart } from "@/hooks/use-cart";
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -29,7 +30,6 @@ import { useAuthStore } from "@/zustand/auth";
 import { logoutWithFeedback } from "@/lib/logout";
 
 import { SearchDrawer } from "@/components/search/SearchDrawer";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function Navbar({
   categories = [],
@@ -99,8 +99,10 @@ export function Navbar({
   const DashboardIcon = canAdminister ? Shield : LayoutDashboard;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-50 flex w-full flex-col">
+      <PlatformPromoTicker />
+      <div className="w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
         {/* Brand Logo and primary navigation */}
         <div className="flex items-center gap-2.5 sm:gap-5 min-w-0">
           {showCategoryNavigation && <CategoryNavMenu categories={categoryItems} />}
@@ -210,9 +212,6 @@ export function Navbar({
               <NotificationBell />
             </div>
           )}
-
-          {/* Theme Quick Toggle */}
-          <ThemeToggle />
 
 
           {!isMounted ? (
@@ -442,6 +441,7 @@ export function Navbar({
         isOpen={searchDrawerOpen}
         onClose={() => setSearchDrawerOpen(false)}
       />
+      </div>
     </header>
   );
 }

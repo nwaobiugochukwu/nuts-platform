@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   Injectable,
@@ -1534,6 +1534,7 @@ export class OrdersService {
                     isActive: true,
                     isDeleted: true,
                     vendorId: true,
+                    categoryId: true,
                     images: {
                       select: {
                         url: true,
@@ -1708,6 +1709,23 @@ export class OrdersService {
             if (!applicable) {
               throw new BadRequestException(
                 'This discount code does not apply to any products in your cart.',
+              );
+            }
+          }
+
+          /**
+           * Category-scoped discounts must match at least one product's category.
+           */
+          if (discountRecord.applicableCategoryIds.length > 0) {
+            const applicable = cart.cartItems.some((item) =>
+              discountRecord!.applicableCategoryIds.includes(
+                (item.product as any).categoryId ?? '',
+              ),
+            );
+
+            if (!applicable) {
+              throw new BadRequestException(
+                'This discount code does not apply to any categories in your cart.',
               );
             }
           }

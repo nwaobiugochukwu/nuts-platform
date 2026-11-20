@@ -194,23 +194,19 @@ function notificationsApiForCurrentRole() {
 function getSseUrl(): string {
   const targetRoute = "notifications/sse/stream";
   const apiUrl = (process.env.NEXT_PUBLIC_API_URL || "/api/v1").replace(/\/+$/, "");
-  const backend = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "") || "";
 
   if (typeof window !== "undefined") {
-    // 1. Direct absolute API URL
+    // 1. Direct absolute API URL if explicitly configured
     if (apiUrl.startsWith("http")) {
       return `${apiUrl}/${targetRoute}`;
     }
-    // 2. Direct origin connection when backend URL is configured (Render/Cloud staging/production)
-    // Bypasses Next.js node-proxy rewrites which drop or buffer long-lived SSE streams.
-    if (backend.startsWith("http")) {
-      const cleanPrefix = apiUrl.startsWith("/") ? apiUrl : `/${apiUrl}`;
-      return `${backend}${cleanPrefix}/${targetRoute}`;
-    }
-    // 3. Fallback to same-origin relative path for local dev setups
-    return `${apiUrl.startsWith("/") ? apiUrl : `/${apiUrl}`}/${targetRoute}`;
+    // 2. Same-origin relative path through Next.js rewrite BFF proxy
+    // Keeps all cookies (refresh token, session cookies) same-origin and avoids CORS / cross-port isolation
+    const cleanPrefix = apiUrl.startsWith("/") ? apiUrl : `/${apiUrl}`;
+    return `${cleanPrefix}/${targetRoute}`;
   }
 
+  const backend = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "") || "";
   const base = apiUrl.startsWith("http")
     ? apiUrl
     : backend
@@ -334,6 +330,22 @@ async function consumeNotificationStream(
     }
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
+    // Build URL with query params for token & lastEventId (ensures auth works even if headers are stripped)
+    let requestUrl = url;
+    try {
+      const baseOrigin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+      const parsedUrl = new URL(url, baseOrigin);
+      if (token) {
+        parsedUrl.searchParams.set("token", token);
+      }
+      if (latestEventId) {
+        parsedUrl.searchParams.set("lastEventId", latestEventId);
+      }
+      requestUrl = parsedUrl.toString();
+    } catch {
+      // Fallback to url
+    }
+
     let response: Response;
     let connectTimedOut = false;
     const connectController = new AbortController();
@@ -344,7 +356,7 @@ async function consumeNotificationStream(
       connectController.abort();
     }, SSE_CONNECT_TIMEOUT_MS);
     try {
-      response = await fetch(url, {
+      response = await fetch(requestUrl, {
         method: "GET",
         headers,
         credentials: "include",
@@ -383,19 +395,18 @@ async function consumeNotificationStream(
         if (!(await retryAfterFailure("authentication service unavailable"))) return;
         continue;
       }
-      console.error("Notification stream unauthorized; session refresh failed");
-      onConnectionChange(false);
-      onRetryExhausted();
-      return;
+      console.warn("Notification stream unauthorized; session refresh failed. Retrying with backoff...");
+      if (!(await retryAfterFailure("unauthorized - refresh failed"))) return;
+      continue;
     }
 
     if ([401, 403, 404].includes(response.status)) {
-      console.error(
-        `Notification stream stopped with HTTP ${response.status}; check the session and deployed API route`,
+      await response.body?.cancel().catch(() => undefined);
+      console.warn(
+        `Notification stream received HTTP ${response.status}; retrying with backoff...`,
       );
-      onConnectionChange(false);
-      onRetryExhausted();
-      return;
+      if (!(await retryAfterFailure(`HTTP ${response.status}`))) return;
+      continue;
     }
 
     if (!response.ok) {

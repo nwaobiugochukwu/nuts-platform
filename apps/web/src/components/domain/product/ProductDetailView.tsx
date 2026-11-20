@@ -13,6 +13,7 @@ import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review"
 import { CustomerLayout } from "@/component/layout/CustomerLayout";
 import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
 import { ProductReviews } from "@/component/review/ProductReviews";
+import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDock";
 import { Button } from "@/component/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
@@ -37,6 +38,7 @@ Plus,
 Share2,
 Shield,
 ShoppingBag,
+Star,
 Truck
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
@@ -143,7 +145,7 @@ export function ProductDetailView({
   }, [product?.id]);
 
   useEffect(() => {
-    if (!product?.id || !isAuthInitialized || (isAuthenticated && !canPurchase)) return;
+    if (!product?.id || !isAuthInitialized) return;
     let trackedView = trackedProductViewRef.current;
     if (!trackedView || trackedView.productId !== product.id) {
       trackedView = {
@@ -643,7 +645,7 @@ export function ProductDetailView({
                   >
                     <Heart
                       className={`h-5 w-5 ${
-                        isLiked ? "fill-black text-black" : "stroke-[1.6]"
+                        isLiked ? "fill-rose-500 text-rose-500" : "stroke-[1.6]"
                       }`}
                     />
                   </button>
@@ -672,6 +674,27 @@ export function ProductDetailView({
                 >
                   {p.vendor.storeName}
                 </Link>
+              </div>
+            )}
+
+            {/* Rating Jump Link */}
+            {Boolean(p.reviewCount && p.reviewCount > 0) && (
+              <div className="mt-2.5 flex items-center gap-2">
+                <a
+                  href="#reviews-heading"
+                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground hover:text-foreground transition-colors group"
+                >
+                  <div className="flex items-center gap-0.5">
+                    <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                    <span className="font-semibold text-foreground">
+                      {Number(p.averageRating || 0).toFixed(1)}
+                    </span>
+                  </div>
+                  <span>•</span>
+                  <span className="group-hover:underline underline-offset-4">
+                    {p.reviewCount} {p.reviewCount === 1 ? "review" : "reviews"}
+                  </span>
+                </a>
               </div>
             )}
 
@@ -707,6 +730,9 @@ export function ProductDetailView({
                 </div>
               )}
             </div>
+
+            {/* Interactive Deals & Voucher Dock */}
+            <ProductVoucherDock productId={p.id} currentPrice={basePrice} />
 
             {/* Variants Selector (if applicable) */}
             {variantOptionGroups.length > 0 && (

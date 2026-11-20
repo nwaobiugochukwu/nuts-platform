@@ -7,7 +7,8 @@
   "scripts": {
     "db:generate": "prisma generate --schema=./schema.prisma",
     "db:push": "prisma db push --schema=./schema.prisma",
-    "db:migrate": "prisma migrate dev --schema=./schema.prisma"
+    "db:migrate": "prisma migrate dev --schema=./schema.prisma",
+    "db:seed": "node --experimental-strip-types scripts/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

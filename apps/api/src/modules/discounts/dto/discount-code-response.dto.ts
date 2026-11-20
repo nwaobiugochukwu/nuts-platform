@@ -82,6 +82,12 @@ export class DiscountCodeResponseDto {
   })
   platformwide!: boolean;
 
+  @ApiProperty({
+    description: 'Whether the code is strictly reserved for first-time shoppers.',
+    example: false,
+  })
+  firstOrderOnly!: boolean;
+
   @ApiPropertyOptional({
     description: 'Timestamp when the discount code becomes valid.',
     example: '2025-06-01T00:00:00.000Z',
@@ -109,6 +115,13 @@ export class DiscountCodeResponseDto {
     example: ['b5f7c3e1-a2b4-4d6e-8f0a-123456789abc'],
   })
   applicableProductIds!: string[];
+
+  @ApiProperty({
+    description: 'List of category IDs this code applies to.',
+    type: [String],
+    example: ['b5f7c3e1-a2b4-4d6e-8f0a-123456789abc'],
+  })
+  applicableCategoryIds!: string[];
 
   @ApiPropertyOptional({
     description: 'ID of the vendor this code belongs to, if vendor-scoped.',

@@ -98,15 +98,6 @@ export function HomeProductShelves({
   const displayedStarterPicks =
     visibleStarterPicks.length > 0 ? visibleStarterPicks : initialProducts;
 
-  // Show a skeleton for "Continue where you left off" only while actively
-  // loading. Once loaded with 0 items, omit the shelf entirely.
-  const showRecentSkeleton = clientHydrating || isLoadingRecentlyViewed;
-  const recentSettled = !clientHydrating && !isLoadingRecentlyViewed;
-
-  // "Picked for you" follows the same pattern.
-  const showForYouSkeleton = clientHydrating || isLoadingForYou;
-  const forYouSettled = !clientHydrating && !isLoadingForYou;
-
   // "New from followed vendors" — customer-only shelf.
   const showFollowingSkeleton = isCustomer && (clientHydrating || isLoadingFollowing);
   const followingSettled = isCustomer && !clientHydrating && !isLoadingFollowing;
@@ -188,15 +179,10 @@ export function HomeProductShelves({
 
       {/* ------------------------------------------------------------------ */}
       {/* 2. Continue where you left off (recently viewed)                    */}
-      {/* Show skeleton while loading; omit once settled with no items.       */}
+      {/* Renders when recently viewed products exist, without layout flash.  */}
       {/* ------------------------------------------------------------------ */}
-      {showRecentSkeleton && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="Recently viewed — loading">
-          <TrendingSkeleton />
-        </section>
-      )}
-      {recentSettled && visibleRecent.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      {visibleRecent.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300">
           <TrendingCarousel
             title="Continue where you left off"
             eyebrow="Recently viewed"
@@ -209,15 +195,10 @@ export function HomeProductShelves({
 
       {/* ------------------------------------------------------------------ */}
       {/* 3. Picked for you                                                   */}
-      {/* Show skeleton while loading; omit once settled with < 4 items.     */}
+      {/* Renders when activity-based recommendations are available.          */}
       {/* ------------------------------------------------------------------ */}
-      {showForYouSkeleton && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="Picked for you — loading" aria-labelledby="for-you-skeleton-heading">
-          <TrendingSkeleton />
-        </section>
-      )}
-      {forYouSettled && visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
-        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-labelledby="for-you-heading">
+      {visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300" aria-labelledby="for-you-heading">
           <TrendingCarousel
             title="Picked for you"
             eyebrow="Based on your activity"

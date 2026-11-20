@@ -73,9 +73,15 @@ export function parseDateRange(
     ? parseBound(startDate, false)
     : new Date(end.getTime() - defaultDaysAgo * 86_400_000);
 
-  // Clamp end to now if it's in the future
+  // Clamp end to now if it's in the future, but never clamp below start
   const now = new Date();
-  if (end > now) end.setTime(now.getTime());
+  if (end > now) {
+    if (start <= now) {
+      end.setTime(now.getTime());
+    } else {
+      end.setTime(Math.max(start.getTime(), now.getTime()));
+    }
+  }
 
   if (start > end) {
     throw new BadRequestException(

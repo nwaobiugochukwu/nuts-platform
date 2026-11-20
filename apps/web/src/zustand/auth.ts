@@ -237,10 +237,6 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   clearSession: () => {
-    if (get().role === "user") {
-      rotateRecommendationSessionId();
-      rotateRecommendationVisitorId();
-    }
     clearAuthTokens();
     markSessionUnauthenticated();
     set({

@@ -5,7 +5,7 @@ import { getApiErrorMessage } from "@/api/core/error";
 import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
 import { FormInput } from "@/component/form/FormInput";
 import { Button } from "@/component/ui/button";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useRouter } from "next/navigation";

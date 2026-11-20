@@ -1,6 +1,6 @@
 // public-store.controller.ts
 
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import {
   ApiNotFoundResponse,
   ApiExtraModels,
@@ -22,6 +22,21 @@ import {
 } from '../dto/vendor-response.dto';
 import { VendorsService } from '../vendors.service';
 import { VendorFollowsService } from '../vendor-follows.service';
+
+const RESERVED_VENDOR_SLUGS = new Set([
+  'analytics',
+  'products',
+  'auth',
+  'account',
+  'follows',
+  'me',
+  'featured',
+  'wallet',
+  'discounts',
+  'orders',
+  'search',
+  'store',
+]);
 
 @ApiTags('VENDORS - ACCOUNT')
 @ApiExtraModels(ApiResponseDto, FeaturedVendorDto, ProductCardDto)
@@ -153,6 +168,9 @@ export class PublicStoreController {
   async findStoreBySlug(
     @Param('storeSlug') storeSlug: string,
   ): Promise<VendorProfileDto> {
+    if (RESERVED_VENDOR_SLUGS.has(storeSlug.toLowerCase())) {
+      throw new NotFoundException('Store not found');
+    }
     return this.vendorsService.findStoreBySlug(storeSlug);
   }
 
@@ -178,6 +196,9 @@ export class PublicStoreController {
     description: 'Store not found',
   })
   async findStoreProducts(@Param('storeSlug') storeSlug: string) {
+    if (RESERVED_VENDOR_SLUGS.has(storeSlug.toLowerCase())) {
+      throw new NotFoundException('Store not found');
+    }
     return this.vendorsService.findStoreProducts(storeSlug);
   }
 }

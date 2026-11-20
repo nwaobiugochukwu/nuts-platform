@@ -21,7 +21,7 @@ Tag,
 Trash2,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export interface CartPageViewProps {
@@ -32,10 +32,36 @@ export interface CartPageViewProps {
 export function CartPageView({ initialCart, categories }: CartPageViewProps) {
   const { items, cart, isLoading, updateItem, removeItem, clearCart } = useCart(initialCart);
   const [discountCode, setDiscountCode] = useState("");
-  const { appliedDiscount, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const effectiveDiscount = appliedDiscount;
-  const effectiveDiscountCode = discountCode || appliedDiscount?.code || "";
+  const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
+
+  // Auto-apply claimed discount code when arriving on cart page with items
+  useEffect(() => {
+    if (
+      claimedCode &&
+      !appliedDiscount &&
+      !isApplyingDiscount &&
+      (items.length > 0 || (cart?.totalItemCount ?? 0) > 0)
+    ) {
+      void (async () => {
+        setIsApplyingDiscount(true);
+        try {
+          const res = await cartService.previewDiscount(claimedCode);
+          setAppliedDiscount({
+            code: res.data.code,
+            amount: res.data.discountAmount,
+          });
+          toast.success(`Claimed code "${res.data.code}" auto-applied!`);
+        } catch {
+          // If code doesn't meet minimum spend yet, leave in input without disruptive error
+        } finally {
+          setIsApplyingDiscount(false);
+        }
+      })();
+    }
+  }, [claimedCode, appliedDiscount, isApplyingDiscount, items.length, cart?.totalItemCount, setAppliedDiscount]);
 
   const handleApplyDiscount = async () => {
     if (!effectiveDiscountCode.trim()) return;

@@ -13,7 +13,7 @@ import { Button } from "@/component/ui/button";
 import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
 AlertTriangle,

@@ -6,7 +6,10 @@ import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import { create } from "zustand";
 import { toast } from "sonner";
 
+export { PushNotificationHost } from "@/components/notification/PushNotificationHost";
+
 const PUSH_DISABLED_KEY = "nuts_push_disabled";
+const PUSH_PROMPT_DISMISSED_KEY = "nuts_push_prompt_dismissed";
 const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
   "BG7iC_hNvLZ6zu3e1sFiAHxIypBSkQuQYhD0LmJX4T0lRoQHQjkToLROdPvbxc32U9rxXkHK5WWsmNHWK6a8r1k";
@@ -18,7 +21,7 @@ let vapidFetchPromise: Promise<string> | null = null;
 let globalSyncPromise: Promise<boolean> | null = null;
 let lastSyncedUserId: string | null = null;
 let lastSyncTimestamp = 0;
-const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
+const SYNC_COOLDOWN_MS = 30_000;
 
 interface PushNotificationState {
   isSubscribed: boolean;
@@ -113,6 +116,7 @@ export function usePushNotifications() {
       if (!silent) setIsLoading(true);
 
       try {
+        // 1. Request notification permission from the browser
         let perm = Notification.permission;
         if (perm !== "granted") {
           perm = await Notification.requestPermission();
@@ -120,13 +124,18 @@ export function usePushNotifications() {
         }
 
         if (perm !== "granted") {
+          setIsSubscribed(false);
           if (!silent) {
-            toast.error("Notification permission was denied in your browser settings");
+            toast.error(
+              perm === "denied"
+                ? "Notifications are blocked. Please allow notifications in your browser address bar."
+                : "Notification permission was not granted.",
+            );
           }
           return false;
         }
 
-        // Clear local opt-out flag when subscribing
+        // Clear local opt-out flag when user is actively subscribing
         try {
           localStorage.removeItem(PUSH_DISABLED_KEY);
         } catch {
@@ -135,54 +144,80 @@ export function usePushNotifications() {
 
         const api = notificationsApiForRole(activeRole);
 
-        // 1. Ensure Service Worker is registered
+        // 2. Ensure Service Worker is registered and active
         await navigator.serviceWorker.register("/sw.js", { scope: "/" });
         const readyReg = await navigator.serviceWorker.ready;
 
-        // 2. Resolve VAPID key
+        // 3. Resolve VAPID server key
         const publicKey = await getOrFetchVapidKey(api);
         const applicationServerKey = urlBase64ToUint8Array(publicKey) as unknown as BufferSource;
 
-        // 3. Inspect existing subscription or create new one
+        // 4. Inspect existing browser subscription or subscribe
         let subscription = await readyReg.pushManager.getSubscription().catch(() => null);
 
-        if (!subscription) {
+        if (subscription) {
+          // Verify existing subscription against current VAPID key
           try {
-            subscription = await readyReg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey,
-            });
-          } catch (subErr) {
-            console.warn("[usePushNotifications] Push subscription handshake skipped:", subErr);
-            setIsSubscribed(true);
-            return true;
+            const rawKey = subscription.options.applicationServerKey;
+            const currentSubKey = rawKey
+              ? btoa(String.fromCharCode(...new Uint8Array(rawKey)))
+              : "";
+            const expectedKey = btoa(String.fromCharCode(...urlBase64ToUint8Array(publicKey)));
+            if (currentSubKey && expectedKey && currentSubKey !== expectedKey) {
+              await subscription.unsubscribe();
+              subscription = null;
+            }
+          } catch {
+            // Re-subscribe if inspection fails
+            await subscription?.unsubscribe().catch(() => null);
+            subscription = null;
           }
         }
 
-        // 4. Extract cryptographic keys and sync with backend
-        if (subscription) {
-          const p256dh = subscription.getKey("p256dh");
-          const auth = subscription.getKey("auth");
-          if (p256dh && auth) {
-            await api.subscribePush({
-              endpoint: subscription.endpoint,
-              keys: {
-                p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
-                auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
-              },
-              userAgent: navigator.userAgent,
-            });
-          }
+        if (!subscription) {
+          subscription = await readyReg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey,
+          });
         }
+
+        if (!subscription) {
+          throw new Error("Unable to create browser push subscription");
+        }
+
+        // 5. Extract subscription keys and register with backend
+        const p256dh = subscription.getKey("p256dh");
+        const auth = subscription.getKey("auth");
+        if (!p256dh || !auth) {
+          throw new Error("Could not extract push encryption keys from browser");
+        }
+
+        await api.subscribePush({
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: btoa(String.fromCharCode(...new Uint8Array(p256dh))),
+            auth: btoa(String.fromCharCode(...new Uint8Array(auth))),
+          },
+          userAgent: navigator.userAgent,
+        });
 
         setIsSubscribed(true);
         lastSyncedUserId = user?.id ?? null;
         lastSyncTimestamp = Date.now();
+
+        if (!silent) {
+          toast.success("Push notifications enabled on this device");
+        }
         return true;
-      } catch (err) {
-        console.warn("[usePushNotifications] Failed to enable push notifications:", err);
-        setIsSubscribed(true);
-        return true;
+      } catch (err: unknown) {
+        console.error("[usePushNotifications] Failed to enable push notifications:", err);
+        setIsSubscribed(false);
+        if (!silent) {
+          const msg =
+            err instanceof Error ? err.message : "Failed to enable push notifications";
+          toast.error(msg);
+        }
+        return false;
       } finally {
         if (!silent) setIsLoading(false);
       }
@@ -201,9 +236,19 @@ export function usePushNotifications() {
         // ignore
       }
 
+      const readyReg = await navigator.serviceWorker.ready.catch(() => null);
+      const subscription = await readyReg?.pushManager.getSubscription().catch(() => null);
+      if (subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe().catch(() => null);
+        const api = notificationsApiForRole(activeRole);
+        await api.unsubscribePush(endpoint).catch(() => null);
+      }
+
       setIsSubscribed(false);
       lastSyncedUserId = user?.id ?? null;
       lastSyncTimestamp = Date.now();
+      toast.info("Push notifications disabled on this device");
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to disable notifications";
@@ -212,7 +257,7 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported, isAuthenticated, user, setIsLoading, setIsSubscribed]);
+  }, [isSupported, isAuthenticated, activeRole, user, setIsLoading, setIsSubscribed]);
 
   useEffect(() => {
     let mounted = true;
@@ -245,7 +290,6 @@ export function usePushNotifications() {
             return false;
           }
 
-          // Check if user explicitly turned off push notifications locally
           let isLocalOptOut = false;
           try {
             isLocalOptOut = localStorage.getItem(PUSH_DISABLED_KEY) === "true";
@@ -257,7 +301,6 @@ export function usePushNotifications() {
             return false;
           }
 
-          // Register worker to ensure PushManager is reachable
           await navigator.serviceWorker.register("/sw.js", { scope: "/" });
           const readyReg = await navigator.serviceWorker.ready;
           const subscription = await readyReg.pushManager.getSubscription().catch(() => null);
@@ -271,7 +314,6 @@ export function usePushNotifications() {
           const status = await api.getPushStatus(subscription.endpoint).catch(() => null);
 
           if (status?.data && status.data.pushEnabled === false) {
-            // User turned off push notifications in their profile
             if (mounted) usePushStore.getState().setIsSubscribed(false);
             lastSyncedUserId = user?.id ?? null;
             lastSyncTimestamp = Date.now();
@@ -285,7 +327,7 @@ export function usePushNotifications() {
             return true;
           }
 
-          // If device has an active subscription in the browser, silently register it with backend
+          // Device has active browser subscription but backend doesn't know it yet: register it
           const p256dh = subscription.getKey("p256dh");
           const auth = subscription.getKey("auth");
           if (p256dh && auth) {
@@ -327,17 +369,30 @@ export function usePushNotifications() {
   }, [isSupported, isAuthenticated, activeRole, user]);
 
   const sendTestPush = useCallback(async () => {
-    if (!isAuthenticated) return false;
+    if (!isAuthenticated) {
+      toast.error("Please log in to test push notifications");
+      return false;
+    }
 
     setIsLoading(true);
     try {
+      // If the device is not registered yet, attempt subscription on this direct user gesture
+      if (permission !== "granted" || !isSubscribed) {
+        toast.info("Enabling notifications on this browser first...");
+        const ok = await subscribe({ silent: false });
+        if (!ok) {
+          return false;
+        }
+      }
+
       const api = notificationsApiForRole(activeRole);
       const result = await api.sendTestPush();
-      if ((result.data?.delivered ?? 0) < 1) {
-        toast.error("No active push device received the test notification");
+      const count = result.data?.delivered ?? 0;
+      if (count < 1) {
+        toast.error("No active push device received the test notification. Try enabling push notifications again.");
         return false;
       }
-      toast.success("Test notification sent to your active device");
+      toast.success(`Test alert sent successfully to ${count} active device(s)!`);
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to send test alert";
@@ -346,7 +401,7 @@ export function usePushNotifications() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, activeRole, setIsLoading]);
+  }, [isAuthenticated, activeRole, permission, isSubscribed, subscribe, setIsLoading]);
 
   return {
     isSupported,
@@ -357,39 +412,4 @@ export function usePushNotifications() {
     unsubscribe,
     sendTestPush,
   };
-}
-
-export function PushNotificationHost() {
-  const { isSupported, permission, isSubscribed, subscribe } = usePushNotifications();
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-
-  useEffect(() => {
-    if (!isSupported || !isAuthenticated || typeof window === "undefined") return;
-
-    let isOptedOut = false;
-    try {
-      isOptedOut = localStorage.getItem(PUSH_DISABLED_KEY) === "true";
-    } catch {
-      // ignore
-    }
-    if (isOptedOut) return;
-
-    // When permission is default (user has not been prompted yet), trigger permission
-    // request upon the first user interaction anywhere on the document.
-    if (permission === "default" && !isSubscribed) {
-      const handleUserGesture = () => {
-        void subscribe({ silent: true });
-      };
-
-      window.addEventListener("click", handleUserGesture, { once: true });
-      window.addEventListener("touchend", handleUserGesture, { once: true });
-
-      return () => {
-        window.removeEventListener("click", handleUserGesture);
-        window.removeEventListener("touchend", handleUserGesture);
-      };
-    }
-  }, [isSupported, isAuthenticated, permission, isSubscribed, subscribe]);
-
-  return null;
 }

@@ -26,8 +26,8 @@ import { RegistrationsGuard } from '@api/common/guards/registrations.guard';
     VendorAuthController,
     VendorAccountController,
     VendorFollowsController,
-    PublicStoreController,
     AdminVendorsController,
+    PublicStoreController,
   ],
   providers: [
     VendorsService,

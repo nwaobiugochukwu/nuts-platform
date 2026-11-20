@@ -126,7 +126,7 @@ export function VendorStoreView({
   });
 
   useEffect(() => {
-    if (!store?.id || (isAuthenticated && !isCustomer)) return;
+    if (!store?.id) return;
     const sessionId = getRecommendationSessionId();
     const visitorId = getRecommendationVisitorId();
     if (!sessionId || !visitorId) return;

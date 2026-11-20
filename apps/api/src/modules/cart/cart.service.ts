@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Injectable,
   Logger,
@@ -188,6 +188,19 @@ export class CartService {
     ) {
       throw new BadRequestException(
         'This discount code does not apply to any products in your cart',
+      );
+    }
+
+    if (
+      discountCode.applicableCategoryIds.length > 0 &&
+      !response.cartItems.some((item) =>
+        discountCode.applicableCategoryIds.includes(
+          (item.product as any)?.categoryId ?? '',
+        ),
+      )
+    ) {
+      throw new BadRequestException(
+        'This discount code does not apply to any categories in your cart',
       );
     }
 

@@ -2,6 +2,7 @@
 
 import type { ProductCardDto } from "@/api/dto/product";
 import { RecommendationProductCard } from "@/components/domain/product/RecommendationProductCard";
+import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import Link from "@/components/navigation/AppLink";
 import { createRecommendationRequestId } from "@/lib/recommendation-session";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -37,6 +38,9 @@ export function GoodPlaceToStartSection({
     }).slice(0, 12);
   }, [products]);
   const productSignature = diverseProducts.map(({ id }) => id).join(":");
+
+  const productIds = useMemo(() => diverseProducts.map((p) => p.id), [diverseProducts]);
+  const { data: dealsMap } = useBatchProductDeals(productIds);
 
   useEffect(() => {
     if (!productSignature) return;
@@ -105,6 +109,7 @@ export function GoodPlaceToStartSection({
           <div key={product.id} className="w-[220px] shrink-0 snap-start sm:w-[250px]">
             <RecommendationProductCard
               product={product}
+              deal={dealsMap?.[product.id]?.bestDiscount}
               surface="HOME_MARKETPLACE_MIX"
               requestId={requestId}
               sessionId={sessionId}
