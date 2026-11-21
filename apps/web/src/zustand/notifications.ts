@@ -46,6 +46,7 @@ let globalStreamKey: string | null = null;
 let globalStreamRole: AuthRole | null = null;
 let streamRefCount = 0;
 let streamGeneration = 0;
+let streamShutdownTimer: ReturnType<typeof setTimeout> | null = null;
 let listRequestSequence = 0;
 let listRequestController: AbortController | null = null;
 const unreadCountCache = new Map<string, number>();
@@ -741,6 +742,11 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => ({
   initStream: (role, sessionKey) => {
     if (typeof window === "undefined") return () => {};
 
+    if (streamShutdownTimer) {
+      clearTimeout(streamShutdownTimer);
+      streamShutdownTimer = null;
+    }
+
     if (globalStreamKey !== null && globalStreamKey !== sessionKey) {
       globalStreamController?.abort();
       globalStreamController = null;
@@ -779,13 +785,20 @@ function createStreamCleanup(
     released = true;
     if (globalStreamKey !== sessionKey) return;
     streamRefCount = Math.max(0, streamRefCount - 1);
-    if (streamRefCount === 0) {
-      globalStreamController?.abort();
-      globalStreamController = null;
-      globalStreamKey = null;
-      globalStreamRole = null;
-      streamGeneration++;
-      set({ sseConnected: false, sseRetryExhausted: false });
+    if (streamRefCount === 0 && !streamShutdownTimer) {
+      // React Strict Mode immediately replays effects in development. Keep the
+      // shared stream alive briefly so its replayed mount can reuse the same
+      // connection instead of opening a second SSE request.
+      streamShutdownTimer = setTimeout(() => {
+        streamShutdownTimer = null;
+        if (streamRefCount !== 0 || globalStreamKey !== sessionKey) return;
+        globalStreamController?.abort();
+        globalStreamController = null;
+        globalStreamKey = null;
+        globalStreamRole = null;
+        streamGeneration++;
+        set({ sseConnected: false, sseRetryExhausted: false });
+      }, 100);
     }
   };
 }

@@ -138,6 +138,7 @@ export default function CheckoutPage() {
 
       // Automatically purge client cart state upon order creation
       clearClientCart(queryClient);
+      queryClient.removeQueries({ queryKey: ["discounts"] });
 
       // 1. Direct Paystack URL from checkout response
       if (directUrl) {

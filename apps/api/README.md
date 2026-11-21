@@ -35,7 +35,7 @@ The API is not a microservice per module and does not implement system-wide CQRS
 - **Catalog & discovery:** `/api/v1/products`, `/api/v1/categories`, `/api/v1/discover`, `/api/v1/search`.
 - **Customer commerce:** `/api/v1/cart`, `/api/v1/orders`, `/api/v1/payments`, `/api/v1/wallet`, `/api/v1/wishlist`, `/api/v1/reviews`.
 - **Marketplace engagement & telemetry:** `/api/v1/recommendations`, `/api/v1/analytics`, `/api/v1/vendors/follows`, and referral routes.
-- **Public discount discovery:** `GET /api/v1/discounts/public/platform-promos` returns active platform campaigns; `POST /api/v1/discounts/public/batch-for-products` calculates card deals for up to 100 product IDs; `GET /api/v1/discounts/public/for-product/:productId` returns the full voucher list for a product detail page. Use the batch route for product feeds to avoid one request per card.
+- **Public discount discovery:** `GET /api/v1/public/discounts` returns active platform campaigns; `POST /api/v1/public/discounts/products/batch` calculates card deals for up to 100 product IDs; `GET /api/v1/public/discounts/products/:productId` returns the full voucher list for a product detail page. Use the batch route for product feeds to avoid one request per card. Optional authentication hides first order offers from shoppers with a non-cancelled order.
 - **Notifications & health:** `/api/v1/notifications` (inbox, preferences, push, SSE stream) and `/api/v1/health`.
 
 The notification stream is `GET /api/v1/notifications/sse/stream`. It authenticates with the standard bearer `Authorization` header or HttpOnly access cookie; JWTs in query parameters are not accepted. `Last-Event-ID` may be sent as a header, with `lastEventId` as a non-secret replay fallback.

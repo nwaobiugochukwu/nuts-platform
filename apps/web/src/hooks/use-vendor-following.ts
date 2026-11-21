@@ -39,7 +39,7 @@ export function useVendorFollowing() {
   const keys = useMemo(() => vendorFollowKeys(userId), [userId]);
   const followsQuery = useQuery({
     queryKey: keys.list,
-    queryFn: async ({ signal }) => (await vendorFollowingService.list(signal)).data,
+    queryFn: async () => (await vendorFollowingService.list()).data,
     enabled: isCustomer,
     staleTime: 60_000,
     placeholderData: (previous) => previous ?? [],

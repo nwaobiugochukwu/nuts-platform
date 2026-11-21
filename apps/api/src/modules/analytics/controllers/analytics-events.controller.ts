@@ -14,6 +14,7 @@ import {
   RecommendationEventsBatchDto,
 } from '../tracking/recommendation-events.dto';
 import { RecommendationEventsService } from '../tracking/recommendation-events.service';
+import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 
 @ApiTags('ANALYTICS EVENTS')
 @Controller('analytics/events')
@@ -58,48 +59,28 @@ export class AnalyticsEventsController {
   }
 
   @Post('recommendations')
-  @Public()
-  @HttpCode(HttpStatus.ACCEPTED)
-  @Message('Recommendation event accepted')
-  @ApiOperation({ summary: 'Record an anonymous recommendation interaction' })
-  recordGuestRecommendation(@Body() event: RecommendationEventDto) {
-    return this.recommendationEvents.record(undefined, event);
-  }
-
-  @Post('recommendations/batch')
-  @Public()
-  @HttpCode(HttpStatus.ACCEPTED)
-  @Message('Recommendation events accepted')
-  @ApiOperation({
-    summary: 'Record anonymous recommendation interactions in a batch',
-  })
-  recordGuestRecommendations(@Body() batch: RecommendationEventsBatchDto) {
-    return this.recommendationEvents.recordMany(undefined, batch.events);
-  }
-
-  @Post('recommendations/authenticated')
-  @Roles(ROLE.USER)
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.ACCEPTED)
   @Message('Recommendation event accepted')
-  @ApiOperation({ summary: 'Record a customer recommendation interaction' })
-  recordCustomerRecommendation(
-    @GetUser('id') userId: string,
+  @ApiOperation({ summary: 'Record a recommendation interaction' })
+  recordRecommendation(
+    @GetUser('id') userId: string | undefined,
     @Body() event: RecommendationEventDto,
   ) {
     return this.recommendationEvents.record(userId, event);
   }
 
-  @Post('recommendations/authenticated/batch')
-  @Roles(ROLE.USER)
+  @Post('recommendations/batch')
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.ACCEPTED)
   @Message('Recommendation events accepted')
   @ApiOperation({
-    summary: 'Record customer recommendation interactions in a batch',
+    summary: 'Record recommendation interactions in a batch',
   })
-  recordCustomerRecommendations(
-    @GetUser('id') userId: string,
+  recordRecommendations(
+    @GetUser('id') userId: string | undefined,
     @Body() batch: RecommendationEventsBatchDto,
   ) {
     return this.recommendationEvents.recordMany(userId, batch.events);

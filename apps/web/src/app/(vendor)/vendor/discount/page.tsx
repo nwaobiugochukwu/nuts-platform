@@ -141,7 +141,7 @@ export default function DashboardDiscountPage() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
     queryFn: async () => {
-      const res = await vendorApi.get<VendorDiscount[]>("/vendors/discounts");
+      const res = await vendorApi.get<VendorDiscount[]>("/vendor/discounts");
       return res.data;
     },
   });
@@ -184,7 +184,7 @@ export default function DashboardDiscountPage() {
 
   const createMutation = useMutation({
     mutationFn: (values: CreateDiscountFormData) =>
-      vendorApi.post("/vendors/discounts", discountPayload(values)),
+      vendorApi.post("/vendor/discounts", discountPayload(values)),
     onSuccess: () => {
       toast.success("Store discount coupon created successfully!");
       refreshDiscounts();
@@ -201,7 +201,7 @@ export default function DashboardDiscountPage() {
     }: {
       id: string;
       values: CreateDiscountFormData;
-    }) => vendorApi.patch(`/vendors/discounts/${id}`, discountPayload(values)),
+    }) => vendorApi.patch(`/vendor/discounts/${id}`, discountPayload(values)),
     onSuccess: () => {
       toast.success("Store discount updated successfully!");
       refreshDiscounts();
@@ -212,7 +212,7 @@ export default function DashboardDiscountPage() {
   });
 
   const deactivateMutation = useMutation({
-    mutationFn: (id: string) => vendorApi.patch(`/vendors/discounts/${id}/deactivate`),
+    mutationFn: (id: string) => vendorApi.patch(`/vendor/discounts/${id}/deactivate`),
     onSuccess: () => {
       toast.success("Discount coupon deactivated");
       refreshDiscounts();
@@ -222,7 +222,7 @@ export default function DashboardDiscountPage() {
   });
 
   const reactivateMutation = useMutation({
-    mutationFn: (id: string) => vendorApi.patch(`/vendors/discounts/${id}/reactivate`),
+    mutationFn: (id: string) => vendorApi.patch(`/vendor/discounts/${id}/reactivate`),
     onSuccess: () => {
       toast.success("Discount coupon reactivated successfully");
       refreshDiscounts();
@@ -232,7 +232,7 @@ export default function DashboardDiscountPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => vendorApi.delete(`/vendors/discounts/${id}`),
+    mutationFn: (id: string) => vendorApi.delete(`/vendor/discounts/${id}`),
     onSuccess: () => {
       toast.success("Discount coupon deleted");
       refreshDiscounts();

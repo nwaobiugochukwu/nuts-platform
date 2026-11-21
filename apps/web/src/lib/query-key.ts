@@ -68,8 +68,11 @@ export const queryKey = {
     address: ["user", "address"] as const,
   },
   discounts: {
-    platformPromos: ["discounts", "platform-promos"] as const,
-    forProduct: (productId: string) => ["discounts", "product", productId] as const,
-    batch: (idsKey: string) => ["discounts", "batch", idsKey] as const,
+    platformPromos: (shopperKey = "guest") =>
+      ["discounts", "platform-promos", shopperKey] as const,
+    forProduct: (productId: string, shopperKey = "guest") =>
+      ["discounts", "product", productId, shopperKey] as const,
+    batch: (idsKey: string, shopperKey = "guest") =>
+      ["discounts", "batch", idsKey, shopperKey] as const,
   },
 };

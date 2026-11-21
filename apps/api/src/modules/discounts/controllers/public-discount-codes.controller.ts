@@ -10,7 +10,8 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Message } from '@api/common/decorators/message.decorator';
-import { Public } from '@api/common/decorators/public.decorator';
+import { GetUser } from '@api/common/decorators/get-user.decorator';
+import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { DiscountCodeService } from '../discount-code.service';
 import {
   BatchProductDiscountsDto,
@@ -19,22 +20,25 @@ import {
 } from '../dto/public-discount.dto';
 
 @ApiTags('DISCOUNTS')
-@Public()
-@Controller('discounts/public')
+@Controller('public/discounts')
 export class PublicDiscountCodesController {
   constructor(private readonly discountCodeService: DiscountCodeService) {}
 
-  @Get('platform-promos')
+  @Get()
+  @OptionalAuth()
   @ApiOperation({
     summary:
       'Get active platform-wide discount codes for storefront announcement banner',
   })
   @Message('Active platform promotions retrieved successfully')
-  getPlatformPromos(): Promise<PublicPlatformPromoDto[]> {
-    return this.discountCodeService.getPublicPlatformPromos();
+  getPlatformPromos(
+    @GetUser('id') userId?: string,
+  ): Promise<PublicPlatformPromoDto[]> {
+    return this.discountCodeService.getPublicPlatformPromos(userId);
   }
 
-  @Get('for-product/:productId')
+  @Get('products/:productId')
+  @OptionalAuth()
   @ApiOperation({
     summary: 'Get highest-saving deal and applicable vouchers for a product',
   })
@@ -42,17 +46,22 @@ export class PublicDiscountCodesController {
   @Message('Product deal details retrieved successfully')
   getProductDeals(
     @Param('productId', ParseUUIDPipe) productId: string,
+    @GetUser('id') userId?: string,
   ): Promise<PublicProductDealDto> {
-    return this.discountCodeService.getPublicProductDeals(productId);
+    return this.discountCodeService.getPublicProductDeals(productId, userId);
   }
 
-  @Post('batch-for-products')
+  @Post('products/batch')
+  @OptionalAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Batch fetch best applicable discount deal for up to 100 products',
   })
   @Message('Batch product discounts retrieved successfully')
-  getBatchProductDeals(@Body() dto: BatchProductDiscountsDto) {
-    return this.discountCodeService.getBatchProductDeals(dto);
+  getBatchProductDeals(
+    @Body() dto: BatchProductDiscountsDto,
+    @GetUser('id') userId?: string,
+  ) {
+    return this.discountCodeService.getBatchProductDeals(dto, userId);
   }
 }
