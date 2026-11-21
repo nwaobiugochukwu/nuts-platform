@@ -219,7 +219,7 @@ export class DiscountCodeService {
     const applicableProductIds = dto.applicableProductIds ?? [];
     const applicableCategoryIds = dto.applicableCategoryIds ?? [];
 
-    return this.prisma.discountCode.create({
+    const created = await this.prisma.discountCode.create({
       data: {
         code,
 
@@ -271,6 +271,9 @@ export class DiscountCodeService {
         scope,
       },
     });
+
+    await this.cacheService?.del('discounts:platform-promos');
+    return created;
   }
 
   // ============================================================
@@ -354,7 +357,7 @@ export class DiscountCodeService {
       }
     }
 
-    return this.prisma.discountCode.update({
+    const updated = await this.prisma.discountCode.update({
       where: {
         id: discountCodeId,
       },
@@ -424,6 +427,9 @@ export class DiscountCodeService {
         }),
       },
     });
+
+    await this.cacheService?.del('discounts:platform-promos');
+    return updated;
   }
 
   // ============================================================
@@ -794,6 +800,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
+    await this.cacheService?.del('discounts:platform-promos');
     return null;
   }
 
@@ -826,6 +833,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
+    await this.cacheService?.del('discounts:platform-promos');
     return null;
   }
 
@@ -872,6 +880,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
+    await this.cacheService?.del('discounts:platform-promos');
     return null;
   }
 
