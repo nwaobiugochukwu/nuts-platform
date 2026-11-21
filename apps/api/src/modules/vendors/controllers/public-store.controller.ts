@@ -47,7 +47,7 @@ const RESERVED_VENDOR_SLUGS = new Set([
 @ApiTags('VENDORS - ACCOUNT')
 @ApiExtraModels(ApiResponseDto, FeaturedVendorDto, ProductCardDto)
 @Public()
-@Controller(['vendors/store', 'vendors'])
+@Controller('vendors')
 export class PublicStoreController {
   constructor(
     private readonly vendorsService: VendorsService,
@@ -142,7 +142,7 @@ export class PublicStoreController {
     );
   }
 
-  @Get([':storeSlug/follower-count', ':storeSlug/followers/count'])
+  @Get(':storeSlug/follower-count')
   @Message('Store follower count retrieved successfully')
   @ApiOperation({
     summary: 'Get the public follower count for an active store',

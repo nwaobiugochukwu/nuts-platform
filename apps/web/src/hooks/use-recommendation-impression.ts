@@ -13,7 +13,7 @@ type RecommendationItem = {
 };
 
 const MINIMUM_VISIBLE_RATIO = 0.5;
-const IMPRESSION_DWELL_TIME_MS = 1_000;
+const IMPRESSION_DWELL_TIME_MS = 800;
 
 export function useRecommendationImpression({
   elementRef,

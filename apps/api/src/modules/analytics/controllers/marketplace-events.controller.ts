@@ -1,10 +1,8 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { Public } from '@api/common/decorators/public.decorator';
-import { Roles } from '@api/common/decorators/role.decorator';
+import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { StoreViewDto } from '../tracking/dto/store-view.dto';
 import { MarketplaceEventsService } from '../tracking/marketplace-events.service';
 
@@ -13,23 +11,14 @@ import { MarketplaceEventsService } from '../tracking/marketplace-events.service
 export class MarketplaceEventsController {
   constructor(private readonly events: MarketplaceEventsService) {}
 
-  @Post('guest')
-  @Public()
-  @HttpCode(HttpStatus.ACCEPTED)
-  @Message('Store view accepted')
-  @ApiOperation({ summary: 'Record an anonymous storefront visit' })
-  recordGuestView(@Body() event: StoreViewDto) {
-    return this.events.recordStoreView(event.vendorId, event);
-  }
-
-  @Post('authenticated')
-  @Roles(ROLE.USER)
-  @HttpCode(HttpStatus.ACCEPTED)
+  @Post()
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.ACCEPTED)
   @Message('Store view accepted')
-  @ApiOperation({ summary: 'Record a customer storefront visit' })
-  recordCustomerView(
-    @GetUser('id') userId: string,
+  @ApiOperation({ summary: 'Record a storefront visit' })
+  recordView(
+    @GetUser('id') userId: string | undefined,
     @Body() event: StoreViewDto,
   ) {
     return this.events.recordStoreView(event.vendorId, event, userId);

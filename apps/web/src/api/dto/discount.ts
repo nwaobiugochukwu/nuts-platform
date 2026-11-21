@@ -50,6 +50,9 @@ export interface ProductVoucherSummaryDto {
   minOrderAmount: number;
   maxDiscountAmount?: number | null;
   estimatedSavings: number;
+  dealPrice?: number;
+  isApplicable?: boolean;
+  minOrderShortfall?: number;
   expiresAt?: string | Date | null;
   isFirstOrderOnly?: boolean;
 }
@@ -57,6 +60,10 @@ export interface ProductVoucherSummaryDto {
 export interface PublicProductDealDto {
   productId: string;
   bestDiscount?: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+  unlockableDiscount?: (ProductVoucherSummaryDto & {
+    minOrderAmount: number;
+    minOrderShortfall: number;
+  }) | null;
   allVouchers: ProductVoucherSummaryDto[];
 }
 

@@ -24,11 +24,11 @@ import {
 export class PublicDiscountCodesController {
   constructor(private readonly discountCodeService: DiscountCodeService) {}
 
-  @Get()
+  @Get('campaigns')
   @OptionalAuth()
   @ApiOperation({
     summary:
-      'Get active platform-wide discount codes for storefront announcement banner',
+      'Get active platform-wide discount campaigns for storefront announcement banner',
   })
   @Message('Active platform promotions retrieved successfully')
   getPlatformPromos(
@@ -37,13 +37,17 @@ export class PublicDiscountCodesController {
     return this.discountCodeService.getPublicPlatformPromos(userId);
   }
 
-  @Get('products/:productId')
+  @Get(':productId/available-product-deals-and-vouchers')
   @OptionalAuth()
   @ApiOperation({
-    summary: 'Get highest-saving deal and applicable vouchers for a product',
+    summary:
+      'Get available deals, vouchers and highest-saving discount for a product',
   })
-  @ApiParam({ name: 'productId', description: 'Product UUID' })
-  @Message('Product deal details retrieved successfully')
+  @ApiParam({
+    name: 'productId',
+    description: 'Product UUID',
+  })
+  @Message('Available product deals and vouchers retrieved successfully')
   getProductDeals(
     @Param('productId', ParseUUIDPipe) productId: string,
     @GetUser('id') userId?: string,
@@ -51,17 +55,27 @@ export class PublicDiscountCodesController {
     return this.discountCodeService.getPublicProductDeals(productId, userId);
   }
 
-  @Post('products/batch')
+  @Post('best-value-deal')
   @OptionalAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Batch fetch best applicable discount deal for up to 100 products',
+    summary:
+      'Fetch best value applicable discount deals (single product or batch up to 100 products)',
   })
-  @Message('Batch product discounts retrieved successfully')
-  getBatchProductDeals(
+  @Message('Best value product deals retrieved successfully')
+  getDeals(
     @Body() dto: BatchProductDiscountsDto,
     @GetUser('id') userId?: string,
   ) {
-    return this.discountCodeService.getBatchProductDeals(dto, userId);
+    if (dto.productId && (!dto.productIds || dto.productIds.length === 0)) {
+      return this.discountCodeService.getPublicProductDeals(
+        dto.productId,
+        userId,
+      );
+    }
+    return this.discountCodeService.getBatchProductDeals(
+      { productIds: dto.productIds ?? (dto.productId ? [dto.productId] : []) },
+      userId,
+    );
   }
 }
