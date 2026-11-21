@@ -53,7 +53,7 @@ export const recommendationService = {
   },
   related(productId: string, signal?: AbortSignal) {
     return publicApi.get<ProductCardDto[]>(
-      `/recommendations/related/${encodeURIComponent(productId)}`,
+      `/recommendations/${encodeURIComponent(productId)}/related`,
       { signal },
     );
   },

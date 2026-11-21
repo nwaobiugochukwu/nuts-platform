@@ -198,7 +198,7 @@
         - `/auth/otp/request`, `/auth/otp/verify`, `/auth/forgot-password/otp/request`, `/auth/reset-password`
         - `/account`, `/account/otp/request`, `/account/wallet`, `/account/wallet/transactions`
         - `/admin/categories`, `/admin/users/request-otp`, `/admin/users/:id/suspend`, `/admin/users/:id/unsuspend`
-        - `/vendors/auth`, `/vendors/analytics`, `/vendors/wallet`, `/vendors/discounts`, `/vendors/orders`, `/vendors/products`, `/vendors/products/variants`
+        - `/vendors/auth`, `/vendors/analytics`, `/vendors/wallet`, `/vendor/discounts`, `/vendors/orders`, `/vendors/products`, `/vendors/products/variants`
         - `/payments`, `/payments/callback`, `/payments/webhook`, `/payments/initialize`, `/payments/order/:orderId`
         - `/notifications/mark-all-read`, `/notifications/clear-all`, `/notifications/preferences`, `/notifications/push`, `/notifications/sse/stream`
       - Aligned frontend API service modules (`auth.ts`, `payment.ts`, `user.ts`, `notifications.ts`) to communicate strictly through these unified contracts.

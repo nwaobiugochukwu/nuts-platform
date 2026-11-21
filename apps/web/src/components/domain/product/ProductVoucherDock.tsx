@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Check, Copy, Sparkles, Tag, Ticket } from "lucide-react";
-import { useFirstTimeShopper, useProductDeal } from "@/hooks/use-product-deals";
+import { useProductDeal } from "@/hooks/use-product-deals";
 import { useDiscountStore } from "@/zustand/discount";
 import { formatPrice } from "@/lib/util";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
@@ -26,20 +26,10 @@ function calculateSavings(voucher: ProductVoucherSummaryDto, price: number): num
 
 export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDockProps) {
   const { data: dealData, isLoading } = useProductDeal(productId);
-  const { hasPurchased } = useFirstTimeShopper();
   const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
   const [justClaimedCode, setJustClaimedCode] = useState<string | null>(null);
 
-  const vouchers = useMemo(() => {
-    if (!dealData?.allVouchers) return [];
-    return dealData.allVouchers.filter((v) => {
-      // Exclude first-order exclusive discounts for customers who have already purchased
-      if (hasPurchased && v.isFirstOrderOnly) {
-        return false;
-      }
-      return true;
-    });
-  }, [dealData, hasPurchased]);
+  const vouchers = dealData?.allVouchers ?? [];
 
   const bestVoucherCode = dealData?.bestDiscount?.code;
 

@@ -5,23 +5,9 @@ import { Check, ChevronLeft, ChevronRight, Clock, Copy, Sparkles, Tag, X } from 
 import { usePlatformPromos } from "@/hooks/use-product-deals";
 import { useDiscountStore } from "@/zustand/discount";
 import { formatPrice } from "@/lib/util";
-import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 
 const DISMISS_KEY = "nuts_promo_ticker_dismissed";
 const ROTATION_INTERVAL_MS = 6000;
-
-const FALLBACK_PROMOS: PublicPlatformPromoDto[] = [
-  {
-    id: "promo-welcome10",
-    code: "WELCOME10",
-    description: "First Order Special: 10% off for first-time shoppers",
-    type: "PERCENTAGE",
-    value: 10,
-    minOrderAmount: 25000,
-    maxDiscountAmount: 15000,
-    isFirstOrderOnly: true,
-  },
-];
 
 function formatTimeRemaining(expiresAt: string | Date, now: number): string | null {
   const diffMs = new Date(expiresAt).getTime() - now;
@@ -71,15 +57,13 @@ export function PlatformPromoTicker() {
   }, []);
 
   const validPromos = useMemo(() => {
-    const activeList = promos.length > 0 ? promos : FALLBACK_PROMOS;
-    const filtered = activeList.filter((p) => {
+    return promos.filter((p) => {
       if (!p.code) return false;
       if (now !== null && p.expiresAt && new Date(p.expiresAt).getTime() <= now) {
         return false;
       }
       return true;
     });
-    return filtered.length > 0 ? filtered : FALLBACK_PROMOS;
   }, [promos, now]);
 
   // Automatic slide rotation
@@ -102,7 +86,8 @@ export function PlatformPromoTicker() {
     return null;
   }
 
-  const activePromo = validPromos[currentIndex] ?? validPromos[0];
+  const activeIndex = Math.min(currentIndex, Math.max(0, validPromos.length - 1));
+  const activePromo = validPromos[activeIndex] ?? validPromos[0];
   if (!activePromo) {
     return null;
   }
@@ -231,7 +216,7 @@ export function PlatformPromoTicker() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="mx-auto flex min-h-[46px] sm:min-h-[50px] max-w-7xl items-center justify-between gap-1.5 px-2 py-2 sm:px-6 sm:py-2.5 lg:px-8">
+      <div className="mx-auto grid min-h-[46px] max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 gap-y-1 px-2 py-2 sm:flex sm:min-h-[50px] sm:justify-between sm:gap-2 sm:px-6 sm:py-2.5 lg:px-8">
         {/* Left: Previous Navigation Button */}
         <div className="flex shrink-0 items-center">
           {validPromos.length > 1 && (
@@ -247,13 +232,13 @@ export function PlatformPromoTicker() {
         </div>
 
         {/* Center: Active Promo Announcement */}
-        <div className="flex flex-1 items-center justify-center overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden px-1 text-center">
+        <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-center px-1 text-center sm:flex-1">
           <div
             key={activePromo.id}
-            className="inline-flex flex-nowrap sm:flex-wrap items-center justify-center gap-2 sm:gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+            className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
           >
             {/* Promo Discount Pill */}
-            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs sm:text-[13px] font-bold shrink-0 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 dark:bg-emerald-600/10 dark:text-emerald-700 dark:border-emerald-600/30">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-400 dark:border-emerald-600/30 dark:bg-emerald-600/10 dark:text-emerald-700 sm:text-[13px]">
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
               <span>
                 {activePromo.type === "PERCENTAGE"
@@ -263,7 +248,7 @@ export function PlatformPromoTicker() {
             </span>
 
             {/* Campaign Description */}
-            <span className="text-xs sm:text-sm font-semibold tracking-tight whitespace-nowrap sm:whitespace-normal text-neutral-100 dark:text-neutral-950">
+            <span className="min-w-0 max-w-full break-words text-xs font-semibold leading-snug tracking-tight text-neutral-100 dark:text-neutral-950 sm:text-sm">
               {activePromo.description || "Limited-time platform discount"}
             </span>
 
@@ -287,14 +272,14 @@ export function PlatformPromoTicker() {
               type="button"
               onClick={handleClaim}
               title={`Click to copy and claim code ${activePromo.code}`}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs sm:text-[13px] font-mono font-bold transition-all shrink-0 cursor-pointer ${
+              className={`inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono font-bold transition-all cursor-pointer sm:px-3 sm:text-[13px] ${
                 copiedCode === activePromo.code || isCurrentlyClaimed
                   ? "bg-emerald-500 text-white shadow-xs"
                   : "bg-neutral-800 text-amber-300 hover:bg-neutral-700 hover:text-amber-200 border border-neutral-700 dark:bg-neutral-900 dark:text-amber-400 dark:hover:bg-neutral-800 dark:border-neutral-800 active:scale-95"
               }`}
             >
               <Tag className="h-3.5 w-3.5" />
-              <span>{activePromo.code}</span>
+              <span className="max-w-[28vw] truncate sm:max-w-none">{activePromo.code}</span>
               {copiedCode === activePromo.code || isCurrentlyClaimed ? (
                 <Check className="h-3.5 w-3.5 stroke-[2.5]" />
               ) : (
@@ -324,7 +309,7 @@ export function PlatformPromoTicker() {
         </div>
 
         {/* Right: Next Navigation Button + Dismiss 'X' */}
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="col-start-3 row-start-1 flex shrink-0 items-center justify-end gap-0.5 sm:gap-1">
           {validPromos.length > 1 && (
             <button
               type="button"
