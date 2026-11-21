@@ -24,7 +24,7 @@ import { MarketplaceMixResponseDto } from './dto/marketplace-mix-response.dto';
 export class RecommendationsController {
   constructor(private readonly recommendations: RecommendationsService) {}
 
-  @Get(['for-you', 'for-you/session'])
+  @Get('for-you')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Personalized recommendations retrieved successfully')
@@ -42,7 +42,7 @@ export class RecommendationsController {
     return this.recommendations.forYou(userId, sessionId, visitorId);
   }
 
-  @Get(['search-discover', 'search-discover/session'])
+  @Get('search-discover')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Personalized search discovery retrieved successfully')
@@ -60,7 +60,7 @@ export class RecommendationsController {
     return this.recommendations.searchDiscover(userId, sessionId, visitorId);
   }
 
-  @Get(['marketplace-mix', 'marketplace-mix/session'])
+  @Get('marketplace-mix')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Marketplace mix retrieved successfully')
@@ -83,7 +83,7 @@ export class RecommendationsController {
     return this.recommendations.marketplaceMix(userId, sessionId, visitorId);
   }
 
-  @Get(['recently-viewed', 'recently-viewed/session'])
+  @Get('recently-viewed')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Recently viewed products retrieved successfully')
@@ -119,7 +119,7 @@ export class RecommendationsController {
     return this.recommendations.following(userId);
   }
 
-  @Get(['stores', 'stores/session'])
+  @Get('stores')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message(

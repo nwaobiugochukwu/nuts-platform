@@ -22,6 +22,7 @@ import { NotificationBell } from "@/component/notification/NotificationBell";
 import { CategoryNavMenu } from "@/component/category/CategoryNavMenu";
 import { PlatformPromoTicker } from "@/components/storefront/PlatformPromoTicker";
 import type { CategoryResponseDto } from "@/api/dto/category";
+import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 import { useCart } from "@/hooks/use-cart";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useWishlist } from "@/hooks/use-wishlist";
@@ -34,9 +35,11 @@ import { SearchDrawer } from "@/components/search/SearchDrawer";
 export function Navbar({
   categories = [],
   showCategoryNavigation = true,
+  initialPromos,
 }: {
   categories?: CategoryResponseDto[];
   showCategoryNavigation?: boolean;
+  initialPromos?: PublicPlatformPromoDto[];
 }) {
   const pathname = usePathname();
   const { user, isAuthenticated, role, logout } = useAuthStore();
@@ -100,7 +103,7 @@ export function Navbar({
 
   return (
     <header className="sticky top-0 z-50 flex w-full flex-col">
-      <PlatformPromoTicker />
+      <PlatformPromoTicker initialPromos={initialPromos} />
       <div className="w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
         {/* Brand Logo and primary navigation */}

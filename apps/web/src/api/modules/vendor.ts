@@ -32,7 +32,7 @@ export const publicVendorService = {
     return publicApi.get<FeaturedVendorDto[]>("/vendors/featured", { params: { limit }, signal });
   },
   followerCount(slug: string, signal?: AbortSignal) {
-    return publicApi.get<VendorFollowerCountDto>(`/vendors/${encodeURIComponent(slug)}/followers/count`, { signal });
+    return publicApi.get<VendorFollowerCountDto>(`/vendors/${encodeURIComponent(slug)}/follower-count`, { signal });
   },
 };
 

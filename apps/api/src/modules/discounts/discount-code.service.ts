@@ -71,6 +71,21 @@ export class DiscountCodeService {
 
   private async hasPriorNonCancelledOrders(userId?: string): Promise<boolean> {
     if (!userId) return false;
+    if (this.cacheService) {
+      return this.cacheService.wrap(
+        `user:has-prior-orders:${userId}`,
+        300,
+        async () => {
+          const count = await this.prisma.order.count({
+            where: {
+              userId,
+              status: { not: OrderStatus.CANCELLED },
+            },
+          });
+          return count > 0;
+        },
+      );
+    }
     const count = await this.prisma.order.count({
       where: {
         userId,
@@ -1094,7 +1109,6 @@ export class DiscountCodeService {
         where: {
           isActive: true,
           deletedAt: null,
-          platformwide: true,
           scope: DiscountCodeScope.PLATFORM,
           AND: [
             { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
@@ -1155,6 +1169,7 @@ export class DiscountCodeService {
         return {
           productId,
           bestDiscount: null,
+          unlockableDiscount: null,
           allVouchers: [],
           productPrice: 0,
         };
@@ -1187,6 +1202,12 @@ export class DiscountCodeService {
 
       const allVouchers: ProductVoucherSummaryDto[] = validCodes.map((c) => {
         const val = Number(c.value);
+        const minOrder = Number(c.minOrderAmount);
+        const meetsMinSpend = productPrice >= minOrder || minOrder <= 0;
+        const shortfall = meetsMinSpend
+          ? 0
+          : Math.max(0, minOrder - productPrice);
+
         let estimatedSavings = 0;
         if (c.type === DiscountCodeType.PERCENTAGE) {
           estimatedSavings = (productPrice * val) / 100;
@@ -1200,6 +1221,11 @@ export class DiscountCodeService {
           estimatedSavings = Math.min(productPrice, val);
         }
 
+        const dealPrice = Math.max(
+          0,
+          Math.round((productPrice - estimatedSavings) * 100) / 100,
+        );
+
         return {
           id: c.id,
           code: c.code,
@@ -1207,33 +1233,64 @@ export class DiscountCodeService {
           type: c.type,
           value: val,
           scope: c.scope,
-          minOrderAmount: Number(c.minOrderAmount),
+          minOrderAmount: minOrder,
           maxDiscountAmount: c.maxDiscountAmount
             ? Number(c.maxDiscountAmount)
             : null,
           estimatedSavings: Math.round(estimatedSavings * 100) / 100,
+          dealPrice: meetsMinSpend ? dealPrice : undefined,
+          isApplicable: meetsMinSpend,
+          minOrderShortfall: Math.round(shortfall * 100) / 100,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
         };
       });
 
-      allVouchers.sort((a, b) => b.estimatedSavings - a.estimatedSavings);
+      // Prioritize immediately applicable deals first (highest savings),
+      // then conditional/unlockable order vouchers (lowest spend deficit first)
+      allVouchers.sort((a, b) => {
+        if (a.isApplicable && !b.isApplicable) return -1;
+        if (!a.isApplicable && b.isApplicable) return 1;
+        if (a.isApplicable && b.isApplicable) {
+          return b.estimatedSavings - a.estimatedSavings;
+        }
+        const diff = (a.minOrderShortfall ?? 0) - (b.minOrderShortfall ?? 0);
+        if (diff !== 0) return diff;
+        return b.estimatedSavings - a.estimatedSavings;
+      });
 
-      const top = allVouchers[0];
-      const bestDiscount =
-        top && top.estimatedSavings > 0
-          ? {
-              ...top,
-              dealPrice: Math.max(
+      const topApplicable = allVouchers.find(
+        (v) => v.isApplicable && v.estimatedSavings > 0,
+      );
+      const bestDiscount = topApplicable
+        ? {
+            ...topApplicable,
+            dealPrice:
+              topApplicable.dealPrice ??
+              Math.max(
                 0,
-                Math.round((productPrice - top.estimatedSavings) * 100) / 100,
+                Math.round(
+                  (productPrice - topApplicable.estimatedSavings) * 100,
+                ) / 100,
               ),
-            }
-          : null;
+          }
+        : null;
+
+      const topConditional = allVouchers.find(
+        (v) => !v.isApplicable && v.estimatedSavings > 0,
+      );
+      const unlockableDiscount = topConditional
+        ? {
+            ...topConditional,
+            minOrderAmount: topConditional.minOrderAmount,
+            minOrderShortfall: topConditional.minOrderShortfall ?? 0,
+          }
+        : null;
 
       return {
         productId,
         bestDiscount,
+        unlockableDiscount,
         allVouchers,
         productPrice,
       };
@@ -1241,7 +1298,7 @@ export class DiscountCodeService {
 
     const cachedDeal = this.cacheService
       ? await this.cacheService.wrap(
-          `discounts:product:v2:${productId}`,
+          `discounts:product:v3:${productId}`,
           60,
           fetcher,
         )
@@ -1251,28 +1308,43 @@ export class DiscountCodeService {
       const allVouchers = cachedDeal.allVouchers.filter(
         (voucher) => !voucher.isFirstOrderOnly,
       );
-      const top = allVouchers[0];
+      const topApplicable = allVouchers.find(
+        (v) => v.isApplicable && v.estimatedSavings > 0,
+      );
+      const topConditional = allVouchers.find(
+        (v) => !v.isApplicable && v.estimatedSavings > 0,
+      );
       return {
         productId,
         allVouchers,
-        bestDiscount:
-          top && top.estimatedSavings > 0
-            ? {
-                ...top,
-                dealPrice: Math.max(
+        bestDiscount: topApplicable
+          ? {
+              ...topApplicable,
+              dealPrice:
+                topApplicable.dealPrice ??
+                Math.max(
                   0,
                   Math.round(
-                    (cachedDeal.productPrice - top.estimatedSavings) * 100,
+                    (cachedDeal.productPrice - topApplicable.estimatedSavings) *
+                      100,
                   ) / 100,
                 ),
-              }
-            : null,
+            }
+          : null,
+        unlockableDiscount: topConditional
+          ? {
+              ...topConditional,
+              minOrderAmount: topConditional.minOrderAmount,
+              minOrderShortfall: topConditional.minOrderShortfall ?? 0,
+            }
+          : null,
       };
     }
 
     return {
       productId,
       bestDiscount: cachedDeal.bestDiscount,
+      unlockableDiscount: cachedDeal.unlockableDiscount,
       allVouchers: cachedDeal.allVouchers,
     };
   }
@@ -1285,6 +1357,12 @@ export class DiscountCodeService {
       string,
       {
         bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+        unlockableDiscount?:
+          | (ProductVoucherSummaryDto & {
+              minOrderAmount: number;
+              minOrderShortfall: number;
+            })
+          | null;
       }
     >
   > {
@@ -1292,10 +1370,57 @@ export class DiscountCodeService {
     if (productIds.length === 0) return {};
 
     const hasPriorOrders = await this.hasPriorNonCancelledOrders(userId);
+    const audienceKey = hasPriorOrders ? 'repeat' : 'first';
+
+    const result: Record<
+      string,
+      {
+        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+        unlockableDiscount?:
+          | (ProductVoucherSummaryDto & {
+              minOrderAmount: number;
+              minOrderShortfall: number;
+            })
+          | null;
+      }
+    > = {};
+
+    const uncachedIds: string[] = [];
+
+    if (this.cacheService) {
+      await Promise.all(
+        productIds.map(async (id) => {
+          const cached = await this.cacheService?.get<{
+            bestDiscount:
+              | (ProductVoucherSummaryDto & {
+                  dealPrice: number;
+                })
+              | null;
+            unlockableDiscount?:
+              | (ProductVoucherSummaryDto & {
+                  minOrderAmount: number;
+                  minOrderShortfall: number;
+                })
+              | null;
+          }>(`discounts:deal:v3:${id}:${audienceKey}`);
+          if (cached !== undefined) {
+            result[id] = cached;
+          } else {
+            uncachedIds.push(id);
+          }
+        }),
+      );
+    } else {
+      uncachedIds.push(...productIds);
+    }
+
+    if (uncachedIds.length === 0) {
+      return result;
+    }
 
     const products = await this.prisma.product.findMany({
       where: {
-        id: { in: productIds },
+        id: { in: uncachedIds },
         isActive: true,
         isDeleted: false,
       },
@@ -1321,7 +1446,7 @@ export class DiscountCodeService {
         OR: [
           { platformwide: true },
           { vendorId: { in: vendorIds } },
-          { applicableProductIds: { hasSome: productIds } },
+          { applicableProductIds: { hasSome: uncachedIds } },
           {
             applicableCategoryIds: {
               hasSome: [...new Set(products.map((p) => p.categoryId))],
@@ -1337,13 +1462,6 @@ export class DiscountCodeService {
         (!hasPriorOrders || !this.isFirstOrderOnlyDiscount(c)),
     );
 
-    const result: Record<
-      string,
-      {
-        bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
-      }
-    > = {};
-
     for (const prod of products) {
       const prodPrice = Number(prod.price);
       const matchingCodes = validCodes.filter(
@@ -1356,10 +1474,22 @@ export class DiscountCodeService {
 
       let best: (ProductVoucherSummaryDto & { dealPrice: number }) | null =
         null;
-      let maxSavings = 0;
+      let maxApplicableSavings = 0;
+
+      let unlockable:
+        | (ProductVoucherSummaryDto & {
+            minOrderAmount: number;
+            minOrderShortfall: number;
+          })
+        | null = null;
+      let maxConditionalSavings = 0;
 
       for (const c of matchingCodes) {
         const val = Number(c.value);
+        const minOrder = Number(c.minOrderAmount);
+        const meetsMinSpend = prodPrice >= minOrder || minOrder <= 0;
+        const shortfall = meetsMinSpend ? 0 : Math.max(0, minOrder - prodPrice);
+
         let savings = 0;
         if (c.type === DiscountCodeType.PERCENTAGE) {
           savings = (prodPrice * val) / 100;
@@ -1370,31 +1500,59 @@ export class DiscountCodeService {
           savings = Math.min(prodPrice, val);
         }
 
-        if (savings > maxSavings) {
-          maxSavings = savings;
-          best = {
-            id: c.id,
-            code: c.code,
-            description: c.description,
-            type: c.type,
-            value: val,
-            scope: c.scope,
-            minOrderAmount: Number(c.minOrderAmount),
-            maxDiscountAmount: c.maxDiscountAmount
-              ? Number(c.maxDiscountAmount)
-              : null,
-            estimatedSavings: Math.round(savings * 100) / 100,
-            dealPrice: Math.max(
-              0,
-              Math.round((prodPrice - savings) * 100) / 100,
-            ),
-            expiresAt: c.expiresAt,
-            isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
-          };
+        const voucherSummary: ProductVoucherSummaryDto = {
+          id: c.id,
+          code: c.code,
+          description: c.description,
+          type: c.type,
+          value: val,
+          scope: c.scope,
+          minOrderAmount: minOrder,
+          maxDiscountAmount: c.maxDiscountAmount
+            ? Number(c.maxDiscountAmount)
+            : null,
+          estimatedSavings: Math.round(savings * 100) / 100,
+          dealPrice: meetsMinSpend
+            ? Math.max(0, Math.round((prodPrice - savings) * 100) / 100)
+            : undefined,
+          isApplicable: meetsMinSpend,
+          minOrderShortfall: Math.round(shortfall * 100) / 100,
+          expiresAt: c.expiresAt,
+          isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+        };
+
+        if (meetsMinSpend) {
+          if (savings > maxApplicableSavings) {
+            maxApplicableSavings = savings;
+            best = {
+              ...voucherSummary,
+              dealPrice: Math.max(
+                0,
+                Math.round((prodPrice - savings) * 100) / 100,
+              ),
+            };
+          }
+        } else {
+          if (savings > maxConditionalSavings) {
+            maxConditionalSavings = savings;
+            unlockable = {
+              ...voucherSummary,
+              minOrderAmount: minOrder,
+              minOrderShortfall: Math.round(shortfall * 100) / 100,
+            };
+          }
         }
       }
 
-      result[prod.id] = { bestDiscount: best };
+      const dealEntry = { bestDiscount: best, unlockableDiscount: unlockable };
+      result[prod.id] = dealEntry;
+      if (this.cacheService) {
+        void this.cacheService.set(
+          `discounts:deal:v3:${prod.id}:${audienceKey}`,
+          dealEntry,
+          60,
+        );
+      }
     }
 
     return result;

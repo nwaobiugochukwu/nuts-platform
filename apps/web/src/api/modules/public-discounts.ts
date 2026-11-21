@@ -9,12 +9,11 @@ import type {
 export interface BatchProductDealsResult {
   [productId: string]: {
     bestDiscount: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+    unlockableDiscount?: (ProductVoucherSummaryDto & {
+      minOrderAmount: number;
+      minOrderShortfall: number;
+    }) | null;
   };
-}
-
-interface PendingBatch {
-  productIds: Set<string>;
-  authenticated: boolean;
 }
 
 interface ProductDealRequest {
@@ -28,56 +27,57 @@ interface CachedProductDeal {
   expiresAt: number;
 }
 
-const pendingBatches = new Map<string, PendingBatch>();
-const productDealRequests = new Map<string, Map<string, ProductDealRequest>>();
-const productDealCache = new Map<string, Map<string, CachedProductDeal>>();
-const PRODUCT_DEAL_CACHE_MS = 45_000;
-const PRODUCT_DEAL_BATCH_WINDOW_MS = 25;
+const pendingProductIds = new Set<string>();
+let pendingAuthenticated = false;
+let batchFlushTimer: ReturnType<typeof setTimeout> | undefined;
+let batchFirstQueuedAt: number | undefined;
 
-function getOrCreateMap<K, V>(map: Map<string, Map<K, V>>, key: string) {
-  let value = map.get(key);
-  if (!value) {
-    value = new Map<K, V>();
-    map.set(key, value);
+const productDealRequests = new Map<string, ProductDealRequest>();
+const productDealCache = new Map<string, CachedProductDeal>();
+const PRODUCT_DEAL_CACHE_MS = 180_000;
+const PRODUCT_DEAL_BATCH_DEBOUNCE_MS = 300;
+const PRODUCT_DEAL_BATCH_MAX_WAIT_MS = 800;
+
+async function flushProductDealBatch() {
+  if (batchFlushTimer) {
+    clearTimeout(batchFlushTimer);
+    batchFlushTimer = undefined;
   }
-  return value;
-}
+  batchFirstQueuedAt = undefined;
+  if (pendingProductIds.size === 0) return;
 
-async function flushProductDealBatch(shopperKey: string) {
-  const pending = pendingBatches.get(shopperKey);
-  if (!pending) return;
-  pendingBatches.delete(shopperKey);
+  const ids = Array.from(pendingProductIds);
+  pendingProductIds.clear();
 
-  const requests = productDealRequests.get(shopperKey);
-  if (!requests) return;
-  const client = pending.authenticated ? userApi : publicApi;
-  const ids = Array.from(pending.productIds);
+  const client = pendingAuthenticated ? userApi : publicApi;
+  pendingAuthenticated = false;
+
   const result: BatchProductDealsResult = {};
-  const cache = getOrCreateMap(productDealCache, shopperKey);
 
   try {
     for (let offset = 0; offset < ids.length; offset += 100) {
       const chunk = ids.slice(offset, offset + 100);
       const response = await client.post<BatchProductDealsResult>(
-        "/public/discounts/products/batch",
+        "/public/discounts/best-value-deal",
         { productIds: chunk } satisfies BatchProductDiscountsDto,
       );
-      Object.assign(result, response.data);
+      const payload = (response.data as { data?: BatchProductDealsResult })?.data ?? response.data;
+      Object.assign(result, payload);
     }
 
     for (const productId of ids) {
       const value = result[productId];
-      cache.set(productId, { value, expiresAt: Date.now() + PRODUCT_DEAL_CACHE_MS });
-      const request = requests.get(productId);
+      productDealCache.set(productId, { value, expiresAt: Date.now() + PRODUCT_DEAL_CACHE_MS });
+      const request = productDealRequests.get(productId);
       if (!request) continue;
-      requests.delete(productId);
+      productDealRequests.delete(productId);
       request.resolve(value);
     }
   } catch (error) {
     for (const productId of ids) {
-      const request = requests.get(productId);
+      const request = productDealRequests.get(productId);
       if (!request) continue;
-      requests.delete(productId);
+      productDealRequests.delete(productId);
       request.reject(error);
     }
   }
@@ -85,20 +85,22 @@ async function flushProductDealBatch(shopperKey: string) {
 
 function queueBatchProductDeals(
   productIds: string[],
-  authenticated: boolean,
-  shopperKey: string,
+  authenticated = false,
 ): Promise<BatchProductDealsResult> {
   const ids = Array.from(new Set(productIds.filter(Boolean)));
-  const cache = getOrCreateMap(productDealCache, shopperKey);
-  const requests = getOrCreateMap(productDealRequests, shopperKey);
+  if (authenticated) {
+    pendingAuthenticated = true;
+  }
+
+  let newlyQueued = false;
   const resultEntries = ids.map((productId) => {
-    const cached = cache.get(productId);
+    const cached = productDealCache.get(productId);
     if (cached && cached.expiresAt > Date.now()) {
       return [productId, Promise.resolve(cached.value)] as const;
     }
-    if (cached) cache.delete(productId);
+    if (cached) productDealCache.delete(productId);
 
-    let request = requests.get(productId);
+    let request = productDealRequests.get(productId);
     if (!request) {
       let resolve!: ProductDealRequest["resolve"];
       let reject!: ProductDealRequest["reject"];
@@ -107,21 +109,28 @@ function queueBatchProductDeals(
         reject = rej;
       });
       request = { promise, resolve, reject };
-      requests.set(productId, request);
+      productDealRequests.set(productId, request);
 
-      let pending = pendingBatches.get(shopperKey);
-      if (!pending) {
-        pending = {
-          productIds: new Set(),
-          authenticated,
-        };
-        pendingBatches.set(shopperKey, pending);
-        setTimeout(() => void flushProductDealBatch(shopperKey), PRODUCT_DEAL_BATCH_WINDOW_MS);
-      }
-      pending.productIds.add(productId);
+      pendingProductIds.add(productId);
+      newlyQueued = true;
     }
     return [productId, request.promise] as const;
   });
+
+  if (newlyQueued) {
+    const now = Date.now();
+    if (!batchFirstQueuedAt) {
+      batchFirstQueuedAt = now;
+    }
+    const elapsed = now - batchFirstQueuedAt;
+    const remainingMax = Math.max(50, PRODUCT_DEAL_BATCH_MAX_WAIT_MS - elapsed);
+    const delay = Math.min(PRODUCT_DEAL_BATCH_DEBOUNCE_MS, remainingMax);
+
+    if (batchFlushTimer) clearTimeout(batchFlushTimer);
+    batchFlushTimer = setTimeout(() => {
+      void flushProductDealBatch();
+    }, delay);
+  }
 
   return Promise.all(resultEntries.map(async ([productId, promise]) => [productId, await promise] as const))
     .then((entries) => {
@@ -139,7 +148,7 @@ export const publicDiscountService = {
    */
   getPlatformPromos(authenticated = false, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    return client.get<PublicPlatformPromoDto[]>("/public/discounts", { signal });
+    return client.get<PublicPlatformPromoDto[]>("/public/discounts/campaigns", { signal });
   },
 
   /**
@@ -147,7 +156,10 @@ export const publicDiscountService = {
    */
   getProductDeals(productId: string, authenticated = false, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    return client.get<PublicProductDealDto>(`/public/discounts/products/${productId}`, { signal });
+    return client.get<PublicProductDealDto>(
+      `/public/discounts/${encodeURIComponent(productId)}/available-product-deals-and-vouchers`,
+      { signal },
+    );
   },
 
   /**
@@ -156,8 +168,7 @@ export const publicDiscountService = {
   getBatchProductDeals(
     productIds: string[],
     authenticated = false,
-    shopperKey = authenticated ? "authenticated" : "guest",
   ) {
-    return queueBatchProductDeals(productIds, authenticated, shopperKey);
+    return queueBatchProductDeals(productIds, authenticated);
   },
 };
