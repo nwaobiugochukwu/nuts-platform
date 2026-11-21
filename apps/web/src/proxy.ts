@@ -39,6 +39,8 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "https://api.paystack.co",
     "https://standard.paystack.co",
     "https://accounts.google.com/gsi/",
+    "https://nutsonline-api.onrender.com",
+    "https://*.onrender.com",
   ]);
 
   for (const rawUrl of [
@@ -53,7 +55,8 @@ export function buildContentSecurityPolicy(nonce: string): string {
   const scriptSources = [
     "'self'",
     `'nonce-${nonce}'`,
-    ...(isSecureContext ? ["'strict-dynamic'"] : ["'unsafe-inline'", "'unsafe-eval'"]),
+    "'unsafe-eval'",
+    ...(isSecureContext ? ["'strict-dynamic'"] : ["'unsafe-inline'"]),
     "https://js.paystack.co",
     "https://accounts.google.com/gsi/client",
   ];

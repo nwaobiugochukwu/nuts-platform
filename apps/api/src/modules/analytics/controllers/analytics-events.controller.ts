@@ -1,9 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { Roles } from '@api/common/decorators/role.decorator';
 import { ProductViewsService } from '../tracking/product-views/product-views.service';
 import { SearchTrackingService } from '../tracking/search-tracking/search-tracking.service';
 import { TrackEventDto } from '../dto/track-event.dto';
@@ -26,13 +24,13 @@ export class AnalyticsEventsController {
   ) {}
 
   @Post()
-  @Roles(ROLE.USER)
+  @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.ACCEPTED)
   @Message('Analytics event accepted')
   @ApiOperation({ summary: 'Record a supported user behavior event' })
   async track(
-    @GetUser('id') userId: string,
+    @GetUser('id') userId: string | undefined,
     @Body() event: TrackEventDto,
   ): Promise<{ accepted: true }> {
     if (event.event === 'product_view' && event.productId) {
