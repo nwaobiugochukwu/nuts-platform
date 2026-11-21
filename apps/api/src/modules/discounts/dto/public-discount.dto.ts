@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DiscountCodeScope, DiscountCodeType } from '@prisma/client';
-import { ArrayMaxSize, IsArray, IsUUID } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsUUID } from 'class-validator';
 
 export class PublicPlatformPromoDto {
   @ApiProperty({ description: 'Discount code ID', example: 'uuid' })
@@ -81,6 +81,26 @@ export class ProductVoucherSummaryDto {
   expiresAt?: Date | null;
 
   @ApiPropertyOptional({
+    description: 'Calculated deal price for this item if voucher is applied',
+    example: 45000,
+  })
+  dealPrice?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether this product alone satisfies the voucher minimum order spend',
+    example: true,
+  })
+  isApplicable?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Amount needed to reach the minimum order requirement for this voucher',
+    example: 0,
+  })
+  minOrderShortfall?: number;
+
+  @ApiPropertyOptional({
     description: 'Whether this voucher is exclusively for first-time shoppers',
     example: false,
   })
@@ -93,9 +113,22 @@ export class PublicProductDealDto {
 
   @ApiPropertyOptional({
     type: ProductVoucherSummaryDto,
-    description: 'Single highest-saving voucher',
+    description:
+      'Single highest-saving voucher immediately applicable to this product alone',
   })
   bestDiscount?: (ProductVoucherSummaryDto & { dealPrice: number }) | null;
+
+  @ApiPropertyOptional({
+    type: ProductVoucherSummaryDto,
+    description:
+      'Best conditional or unlockable voucher that applies when reaching minimum order spend',
+  })
+  unlockableDiscount?:
+    | (ProductVoucherSummaryDto & {
+        minOrderAmount: number;
+        minOrderShortfall: number;
+      })
+    | null;
 
   @ApiProperty({
     type: [ProductVoucherSummaryDto],
@@ -105,12 +138,23 @@ export class PublicProductDealDto {
 }
 
 export class BatchProductDiscountsDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description: 'Single product ID to calculate deals and vouchers for',
+    example: '1625d433-56d9-4443-80df-a4a6d7999b05',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  productId?: string;
+
+  @ApiPropertyOptional({
     type: [String],
     description: 'List of product IDs to calculate discounts for (max 100)',
   })
+  @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(100)
-  productIds!: string[];
+  productIds?: string[];
 }
+
+export class QueryProductDealsDto extends BatchProductDiscountsDto {}

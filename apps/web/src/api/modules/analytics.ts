@@ -101,17 +101,22 @@ interface QueuedRecommendationImpression {
 
 const queuedRecommendationImpressions: QueuedRecommendationImpression[] = [];
 const recommendationImpressionKeys = new Set<string>();
-const IMPRESSION_BATCH_WINDOW_MS = 5_000;
-const IMPRESSION_BATCH_MAX_WAIT_MS = 10_000;
-const IMPRESSION_BATCH_THRESHOLD = 25;
+const IMPRESSION_BATCH_WINDOW_MS = 3_000;
+const IMPRESSION_BATCH_MAX_WAIT_MS = 7_000;
+const IMPRESSION_BATCH_THRESHOLD = 100;
 const MAX_TRACKED_IMPRESSIONS = 5_000;
 let recommendationImpressionTimer: ReturnType<typeof setTimeout> | undefined;
 let recommendationImpressionFirstQueuedAt: number | undefined;
 
-// Production-grade lifecycle listener: flush remaining queued telemetry on page exit
+// Production-grade lifecycle listener: flush remaining queued telemetry on page exit or visibility hidden
 if (typeof window !== "undefined") {
   window.addEventListener("pagehide", () => {
     if (queuedRecommendationImpressions.length > 0) {
+      void flushRecommendationImpressions();
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && queuedRecommendationImpressions.length > 0) {
       void flushRecommendationImpressions();
     }
   });
@@ -137,20 +142,16 @@ async function flushRecommendationImpressions() {
   const pending = queuedRecommendationImpressions.splice(0);
   if (pending.length === 0) return;
 
-  const groups = [true, false].map((authenticated) => ({
-    authenticated,
-    events: pending.filter((item) => item.authenticated === authenticated),
-  })).filter(({ events }) => events.length > 0);
+  const anyAuthenticated = pending.some((item) => item.authenticated);
+  const client = anyAuthenticated ? userApi : publicApi;
+  const endpoint = "/analytics/events";
+  const chunks: QueuedRecommendationImpression[][] = [];
+  for (let index = 0; index < pending.length; index += 100) {
+    chunks.push(pending.slice(index, index + 100));
+  }
 
-  await Promise.all(groups.flatMap(({ authenticated, events }) => {
-    const client = authenticated ? userApi : publicApi;
-    const endpoint = "/analytics/events/recommendations/batch";
-    const chunks: QueuedRecommendationImpression[][] = [];
-    for (let index = 0; index < events.length; index += 100) {
-      chunks.push(events.slice(index, index + 100));
-    }
-
-    return chunks.map(async (chunk) => {
+  await Promise.all(
+    chunks.map(async (chunk) => {
       try {
         const response = await client.post<{ accepted: boolean }>(endpoint, {
           events: chunk.map(({ payload }) => payload),
@@ -162,8 +163,8 @@ async function flushRecommendationImpressions() {
           item.reject(error);
         }
       }
-    });
-  }));
+    }),
+  );
 
   if (queuedRecommendationImpressions.length > 0) {
     scheduleRecommendationImpressionFlush();
@@ -175,25 +176,28 @@ export const analyticsEventService = {
     vendorId: string,
     sessionId: string,
     visitorId: string,
-    authenticated: boolean,
+    authenticated: boolean = false,
   ) {
     const id = createRecommendationRequestId();
     if (!id) return Promise.resolve({ accepted: false });
     const client = authenticated ? userApi : publicApi;
-    const endpoint = authenticated
-      ? "/analytics/events/store-view/authenticated"
-      : "/analytics/events/store-view/guest";
-    return client.post<{ accepted: boolean }>(endpoint, {
+    return client.post<{ accepted: boolean }>("/analytics/events", {
       id,
+      event: "store_view",
       vendorId,
       sessionId,
       visitorId,
     });
   },
-  trackProductView(productId: string, eventId: string, sessionId: string, authenticated: boolean, visitorId?: string) {
+  trackProductView(
+    productId: string,
+    eventId: string,
+    sessionId: string,
+    authenticated: boolean = false,
+    visitorId?: string,
+  ) {
     const client = authenticated ? userApi : publicApi;
-    const endpoint = authenticated ? "/analytics/events" : "/analytics/events/guest";
-    return client.post<{ accepted: true }>(endpoint, {
+    return client.post<{ accepted: true }>("/analytics/events", {
       event: "product_view",
       id: eventId,
       productId,
@@ -201,10 +205,14 @@ export const analyticsEventService = {
       visitorId,
     });
   },
-  trackSearch(query: string, resultsCount: number, sessionId: string, authenticated: boolean) {
+  trackSearch(
+    query: string,
+    resultsCount: number,
+    sessionId: string,
+    authenticated: boolean = false,
+  ) {
     const client = authenticated ? userApi : publicApi;
-    const endpoint = authenticated ? "/analytics/events" : "/analytics/events/guest";
-    return client.post<{ accepted: true }>(endpoint, {
+    return client.post<{ accepted: true }>("/analytics/events", {
       event: "search",
       query,
       resultsCount,
@@ -251,7 +259,7 @@ export const analyticsEventService = {
     }
 
     const client = authenticated ? userApi : publicApi;
-    const endpoint = "/analytics/events/recommendations";
+    const endpoint = "/analytics/events";
     const request = client.post<{ accepted: boolean }>(endpoint, payload);
     // Product clicks are followed by a product-view event, which refreshes the
     // shelves after durable history is written. Refresh here only for store
@@ -272,7 +280,7 @@ export const analyticsEventService = {
             typeof queryKey[1] === "string" &&
             signalShelves.has(queryKey[1]) &&
             queryKey[3] === attribution.sessionId,
-          refetchType: "all",
+          refetchType: "active",
         });
       }
       return result;

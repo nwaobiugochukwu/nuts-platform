@@ -5,7 +5,7 @@
 
 /* Modern Dynamic Theme Tokens - Facebook & Instagram (Meta) Aesthetic */
 :root {
-  --sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --serif: var(--sans);
   --heading: var(--sans);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

@@ -21,7 +21,7 @@ import { VendorFollowsService } from '../vendor-follows.service';
 export class VendorFollowsController {
   constructor(private readonly follows: VendorFollowsService) {}
 
-  @Get(['follows', 'follows/list'])
+  @Get('follows')
   @Message('Followed vendors retrieved successfully')
   @ApiOperation({ summary: 'List vendors followed by the current customer' })
   list(@GetUser('id') userId: string) {
@@ -46,7 +46,7 @@ export class VendorFollowsController {
     return this.follows.count(userId);
   }
 
-  @Post([':vendorId/follow', 'follows/:vendorId'])
+  @Post(':vendorId/follow')
   @Message('Vendor followed successfully')
   @ApiOperation({ summary: 'Follow an active public vendor store' })
   async follow(
@@ -56,7 +56,7 @@ export class VendorFollowsController {
     return this.follows.follow(userId, vendorId);
   }
 
-  @Delete([':vendorId/follow', 'follows/:vendorId'])
+  @Delete(':vendorId/follow')
   @Message('Vendor unfollowed successfully')
   @ApiOperation({ summary: 'Unfollow a vendor store' })
   async unfollow(

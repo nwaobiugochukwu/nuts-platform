@@ -29,7 +29,10 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
   const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
   const [justClaimedCode, setJustClaimedCode] = useState<string | null>(null);
 
-  const vouchers = dealData?.allVouchers ?? [];
+  const rawVouchers = dealData?.allVouchers;
+  const vouchers: ProductVoucherSummaryDto[] = Array.isArray(rawVouchers)
+    ? rawVouchers
+    : [];
 
   const bestVoucherCode = dealData?.bestDiscount?.code;
 
@@ -103,10 +106,21 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                     </span>
 
                     {/* Best Deal badge */}
-                    {isBest && (
+                    {isBest && meetsMinSpend && (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 dark:text-amber-400">
                         <Sparkles className="h-3 w-3" />
-                        Best Value
+                        Best Value Deal
+                      </span>
+                    )}
+
+                    {/* Applicability status badge */}
+                    {meetsMinSpend ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        ✓ Applies Instantly
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        Add {formatPrice(spendDeficit)} to unlock
                       </span>
                     )}
 
@@ -124,9 +138,14 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                         ? `${voucher.value}% OFF`
                         : `Save ${formatPrice(voucher.value)}`}
                     </span>
-                    {liveSavings > 0 && (
+                    {liveSavings > 0 && meetsMinSpend && (
                       <span className="text-xs text-muted-foreground">
                         (Pay {formatPrice(effectivePrice)} on this item)
+                      </span>
+                    )}
+                    {liveSavings > 0 && !meetsMinSpend && (
+                      <span className="text-xs text-muted-foreground">
+                        (Pay as low as {formatPrice(effectivePrice)} on {formatPrice(voucher.minOrderAmount)}+ orders)
                       </span>
                     )}
                   </div>

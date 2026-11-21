@@ -1,4 +1,4 @@
-﻿import { Controller, Get, Param, Query, Req } from '@nestjs/common';
+import { Controller, Get, Header, Param, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiNotFoundResponse,
@@ -24,6 +24,7 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Get()
+  @Header('Cache-Control', 'public, max-age=300, stale-while-revalidate=600')
   @ApiOperation({
     summary: 'Get public categories',
     description:
@@ -31,16 +32,6 @@ export class CategoriesController {
   })
   @ApiEnvelopeResponse(CategoryResponseDto, { isArray: true })
   async getCategories(): Promise<CategoryResponseDto[]> {
-    return this.categoriesService.getTree(false, false);
-  }
-
-  @Get('tree')
-  @ApiOperation({
-    summary: 'Get public categories (alias)',
-    description: 'Backward-compatible alias for GET /categories.',
-  })
-  @ApiEnvelopeResponse(CategoryResponseDto, { isArray: true })
-  async getTree(): Promise<CategoryResponseDto[]> {
     return this.categoriesService.getTree(false, false);
   }
 

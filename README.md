@@ -35,6 +35,7 @@
    - [Domain 5: Real-Time Notifications, Outbox & Messaging](#domain-5-real-time-notifications-outbox--messaging)
    - [Domain 6: Search, Autocomplete & Multi-Tier Relevance](#domain-6-search-autocomplete--multi-tier-relevance)
    - [Domain 7: Infrastructure, Data Governance & Connection Pooling](#domain-7-infrastructure-data-governance--connection-pooling)
+   - [Domain 8: Dynamic Promotional Engine, Discounts & Telemetry Optimization](#domain-8-dynamic-promotional-engine-discounts--telemetry-optimization)
 4. [The NUTS Engineering & Distributed Systems Field Manual](#4-the-nuts-engineering--distributed-systems-field-manual)
    - [Part I: Networking, Protocols & Web API Architecture](#part-i-networking-protocols--web-api-architecture)
    - [Part II: Database Systems, Query Optimization & Concurrency](#part-ii-database-systems-query-optimization--concurrency)
@@ -558,6 +559,63 @@ Governs how the NestJS API communicates with PostgreSQL, manages connection life
 
 - _Never run Prisma migrations through a transaction-mode connection pooler; migrations require direct session mode._
 - _Cap application connection pool sizes to prevent database connection exhaustion during traffic spikes._
+
+---
+
+### Domain 8: Dynamic Promotional Engine, Discounts & Telemetry Optimization
+
+#### 1. Context & Mental Model
+
+Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers, and recommendation telemetry without performance penalties, cache stampedes, or duplicate client round trips.
+
+#### 2. Problems Solved & Engineering Defenses
+
+- **Cache Stampede on Bulk Catalog Deals:**
+  - _The Failure Mode:_ A traffic spike on a catalog page featuring 50 products causes simultaneous cache misses across replicas, triggering dozens of complex discount evaluations and pounding PostgreSQL.
+  - _How NUTS Solved It:_ Implemented two-tier caching with in-flight request coalescing (`computeOnce`) in `CacheService`, TTL jitter (0–15%) to avoid synchronized expirations, and a unified bulk deal endpoint (`POST /api/v1/public/discounts/batch-deals`). Uncached items are queried in a single merged database lookup and stored with 60s jittered Redis TTLs.
+- **Duplicate Storefront Requests on Session Hydration:**
+  - _The Failure Mode:_ Asynchronous cookie/token hydration alters query keys from `guest` to `authenticated` shortly after mount, causing header banners and deal lookups to fire duplicate network requests.
+  - _How NUTS Solved It:_ Decoupled public promotional campaign hooks (`usePlatformPromos`) from dynamic shopper keys, setting `staleTime: Infinity` to ensure campaigns are retrieved exactly once per session. Client deal batching (`queueBatchProductDeals`) uses a 350ms window and in-memory LRU caching, merging requests from multiple homepage shelves into a single consolidated HTTP call.
+- **Telemetry Fragmentation, Store Views & Optional Server Authentication:**
+  - _The Failure Mode:_ Fragmented endpoints (e.g. `/analytics/events/store-view/authenticated`, `/guest`, `/recommendations/batch`), split client callers based on login state, small impression batch chunks, and broad query invalidations with `refetchType: "all"`.
+  - _How NUTS Solved It:_ Consolidated telemetry into a single unified endpoint `POST /api/v1/analytics/events` (handling behavior events `product_view` and `search`, storefront visits `store_view`, recommendation interactions, and batch payloads). Authentication is handled transparently on the server via `@OptionalAuth()`; clients never split endpoints by authentication status. Tuned impression batching to 100 events with a 2,000ms window, and constrained React Query invalidations to `refetchType: "active"`.
+
+#### 3. Backend Mechanism (With Exact Timings & TTLs)
+
+- **Platform Campaigns (`GET /api/v1/public/discounts/campaigns`):**
+  - Cached in Redis (`discounts:platform-promos`) with a **120-second TTL** and automatic cache invalidation on admin discount create, update, or status changes. Prefetched on the server during SSR via `serverGetPlatformPromos()` to eliminate banner layout shifts and client-side mount requests.
+- **Product Deal Details (`GET /api/v1/public/discounts/:productId/available-product-deals-and-vouchers`):**
+  - Strict canonical endpoint for single-product deal evaluations with comprehensive applicability tiers (`bestDiscount` for immediately applicable vouchers vs. `unlockableDiscount` for conditional spend-tier targets), cached in Redis (`discounts:product:v3:${productId}:${audienceKey}`) with a **60-second TTL** and audience segmentation (repeat shopper vs. first-order).
+  - Prior order checks are cached in Redis (`user:has-prior-orders:${userId}`) with a **300-second TTL**, avoiding repetitive `order.count` queries.
+- **Bulk Product Deals (`POST /api/v1/public/discounts/best-value-deal`):**
+  - Strict canonical endpoint for bulk product deals (and single-deal lookups via payload `{ productId }`), supporting up to 100 product UUIDs per batch; individual deal outcomes cached in Redis (`discounts:deal:v3:${productId}:${audienceKey}`) for **60 seconds**.
+- **Unified Event Ingestion (`POST /api/v1/analytics/events`):**
+  - Single canonical endpoint accepting product views, searches, storefront visits, and recommendation events. Features `@OptionalAuth()` to automatically associate authenticated shopper accounts while gracefully recording guest traffic.
+- **Related Recommendations (`GET /api/v1/recommendations/:productId/related`):**
+  - Cached in Redis (`recommendations:related:${productId}`) with a **180-second TTL**, eliminating heavy co-purchase aggregation queries on hot product pages.
+
+#### 4. Client-Side Architecture & UX Flow
+
+- **Announcement Ticker (`PlatformPromoTicker`):** Smooth horizontal rotating promo bar featuring dynamic countdown timers, one-click code copy, and zero hardcoded fallbacks.
+- **Voucher Dock (`ProductVoucherDock`):** Interactive voucher tray on product pages showing applicable vouchers, minimum spend requirements, and real-time deal pricing.
+- **Mobile Responsive Experience:** Refined touch targets, swipeable carousels, responsive image viewports, and a sticky mobile action bar (`sm:hidden`) ensuring effortless add-to-cart across all viewports (320px–1440px+).
+
+#### 5. Acronym & Concept Glossary
+
+- **Cache Stampede (Dog-piling):** A phenomenon where multiple processes hit a cache miss simultaneously and all attempt to regenerate the expensive resource concurrently.
+- **Promise Coalescing (`computeOnce`):** Deduplicating in-flight asynchronous operations so concurrent callers await a single shared execution promise.
+- **Audience Segmentation:** Conditionally displaying or suppressing first-time customer discounts based on prior confirmed/delivered order history.
+
+#### 6. Edge Cases & Failure Scenarios Handled
+
+- Handling expired or exhausted coupon limits gracefully without breaking product displays.
+- URL-safe RESTful route aliases (`:productId/deals`, `deals/:productId`, `products/:productId`).
+- Browser `pagehide` telemetry guarantees ensuring zero event loss on abrupt tab closures.
+
+#### 7. Jot-Down Notes
+
+- _Always use POST for bulk multi-entity operations to protect against HTTP 414 Request-URI Too Long errors._
+- _Apply TTL jitter to distributed cache keys to guarantee that high-traffic entries do not expire concurrently._
 
 ---
 

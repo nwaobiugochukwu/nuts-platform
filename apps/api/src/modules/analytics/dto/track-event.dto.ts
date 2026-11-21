@@ -11,12 +11,16 @@ import {
 } from 'class-validator';
 
 export class TrackEventDto {
-  @IsIn(['product_view', 'search'])
-  event!: 'product_view' | 'search';
+  @IsIn(['product_view', 'search', 'store_view'])
+  event!: 'product_view' | 'search' | 'store_view';
 
   @ValidateIf((event: TrackEventDto) => event.event === 'product_view')
   @IsUUID()
   productId?: string;
+
+  @ValidateIf((event: TrackEventDto) => event.event === 'store_view')
+  @IsUUID()
+  vendorId?: string;
 
   // Stable across retries of one page visit. Optional for older clients; the
   // service creates an ID when it is absent.
