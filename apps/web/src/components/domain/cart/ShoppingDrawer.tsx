@@ -209,6 +209,7 @@ function CheckoutPanel({ total, discountCode, discountPreview }: { total: number
     onSuccess: async ({ data: order }) => {
       try {
         clearClientCart(queryClient);
+        queryClient.removeQueries({ queryKey: ["discounts"] });
         const initialized = await resolvePaymentInitialization(order);
         if (!initialized.reference) throw new Error("Payment initialization did not return a reference");
 

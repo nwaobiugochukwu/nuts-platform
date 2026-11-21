@@ -2,8 +2,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { publicDiscountService } from "@/api/modules/public-discounts";
-import { orderService } from "@/api/modules/order";
+import {
+  publicDiscountService,
+  type BatchProductDealsResult,
+} from "@/api/modules/public-discounts";
 import { useAuthStore } from "@/zustand/auth";
 import { queryKey } from "@/lib/query-key";
 
@@ -11,12 +13,16 @@ import { queryKey } from "@/lib/query-key";
  * Hook to retrieve site-wide promotional campaigns for the header ticker.
  */
 export function usePlatformPromos() {
+  const { isAuthenticated, isInitialized, user } = useAuthStore();
+  const shopperKey = isAuthenticated ? user?.id ?? "authenticated" : "guest";
+
   return useQuery({
-    queryKey: queryKey.discounts.platformPromos,
-    queryFn: async ({ signal }) => {
-      const res = await publicDiscountService.getPlatformPromos(signal);
+    queryKey: queryKey.discounts.platformPromos(shopperKey),
+    queryFn: async () => {
+      const res = await publicDiscountService.getPlatformPromos(isAuthenticated);
       return res.data;
     },
+    enabled: isInitialized,
     staleTime: 120_000,
     gcTime: 300_000,
     refetchOnWindowFocus: false,
@@ -24,69 +30,23 @@ export function usePlatformPromos() {
 }
 
 /**
- * Hook to determine if the current shopper has never bought any single item before.
- * - Unauthenticated (guest): Considered a first-time shopper (isFirstTime = true).
- * - Authenticated: Queries order history. If total orders > 0, hasPurchased = true.
- */
-export function useFirstTimeShopper() {
-  const { isAuthenticated, isInitialized } = useAuthStore();
-
-  const { data: ordersResponse, isLoading } = useQuery({
-    queryKey: queryKey.order.list({ page: 1, limit: 1 }),
-    queryFn: async () => {
-      const res = await orderService.list({ page: 1, limit: 1 });
-      return res;
-    },
-    enabled: Boolean(isAuthenticated && isInitialized),
-    staleTime: 60_000,
-    gcTime: 300_000,
-    refetchOnWindowFocus: false,
-  });
-
-  if (!isAuthenticated) {
-    return {
-      isFirstTime: true,
-      hasPurchased: false,
-      isLoading: false,
-    };
-  }
-
-  if (isLoading) {
-    return {
-      isFirstTime: false,
-      hasPurchased: false,
-      isLoading: true,
-    };
-  }
-
-  const orders = ordersResponse?.data ?? [];
-  const meta = ordersResponse?.meta;
-  const totalOrders =
-    meta && typeof meta === "object" && "total" in meta
-      ? Number(meta.total)
-      : orders.length;
-
-  const hasPurchased = totalOrders > 0;
-
-  return {
-    isFirstTime: !hasPurchased,
-    hasPurchased,
-    isLoading: false,
-  };
-}
-
-/**
  * Hook to fetch discount intelligence and all available vouchers for a specific product.
  */
 export function useProductDeal(productId?: string) {
+  const { isAuthenticated, isInitialized, user } = useAuthStore();
+  const shopperKey = isAuthenticated ? user?.id ?? "authenticated" : "guest";
+
   return useQuery({
-    queryKey: queryKey.discounts.forProduct(productId ?? ""),
-    queryFn: async ({ signal }) => {
+    queryKey: queryKey.discounts.forProduct(productId ?? "", shopperKey),
+    queryFn: async () => {
       if (!productId) throw new Error("productId is required");
-      const res = await publicDiscountService.getProductDeals(productId, signal);
+      const res = await publicDiscountService.getProductDeals(
+        productId,
+        isAuthenticated,
+      );
       return res.data;
     },
-    enabled: Boolean(productId),
+    enabled: Boolean(productId && isInitialized),
     staleTime: 60_000,
     gcTime: 300_000,
     refetchOnWindowFocus: false,
@@ -97,6 +57,8 @@ export function useProductDeal(productId?: string) {
  * Hook to batch fetch best deal for multiple products at once (e.g., catalog shelves).
  */
 export function useBatchProductDeals(productIds: string[]) {
+  const { isAuthenticated, isInitialized, user } = useAuthStore();
+  const shopperKey = isAuthenticated ? user?.id ?? "authenticated" : "guest";
   const normalizedIds = useMemo(() => {
     return Array.from(new Set(productIds.filter(Boolean))).sort();
   }, [productIds]);
@@ -104,13 +66,16 @@ export function useBatchProductDeals(productIds: string[]) {
   const batchKey = normalizedIds.join(",");
 
   return useQuery({
-    queryKey: queryKey.discounts.batch(batchKey),
-    queryFn: async ({ signal }) => {
+    queryKey: queryKey.discounts.batch(batchKey, shopperKey),
+    queryFn: async (): Promise<BatchProductDealsResult> => {
       if (normalizedIds.length === 0) return {};
-      const res = await publicDiscountService.getBatchProductDeals(normalizedIds, signal);
-      return res.data;
+      return publicDiscountService.getBatchProductDeals(
+        normalizedIds,
+        isAuthenticated,
+        shopperKey,
+      );
     },
-    enabled: normalizedIds.length > 0,
+    enabled: normalizedIds.length > 0 && isInitialized,
     staleTime: 60_000,
     gcTime: 300_000,
     refetchOnWindowFocus: false,

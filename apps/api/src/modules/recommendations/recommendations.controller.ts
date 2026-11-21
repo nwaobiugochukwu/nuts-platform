@@ -145,7 +145,7 @@ export class RecommendationsController {
     return this.recommendations.discover();
   }
 
-  @Get('related/:productId')
+  @Get(':productId/related')
   @Public()
   @Message('Related products retrieved successfully')
   @ApiOperation({ summary: 'Get products related by purchases and category' })

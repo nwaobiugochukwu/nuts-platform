@@ -144,9 +144,7 @@ async function flushRecommendationImpressions() {
 
   await Promise.all(groups.flatMap(({ authenticated, events }) => {
     const client = authenticated ? userApi : publicApi;
-    const endpoint = authenticated
-      ? "/analytics/events/recommendations/authenticated/batch"
-      : "/analytics/events/recommendations/batch";
+    const endpoint = "/analytics/events/recommendations/batch";
     const chunks: QueuedRecommendationImpression[][] = [];
     for (let index = 0; index < events.length; index += 100) {
       chunks.push(events.slice(index, index + 100));
@@ -253,9 +251,7 @@ export const analyticsEventService = {
     }
 
     const client = authenticated ? userApi : publicApi;
-    const endpoint = authenticated
-      ? "/analytics/events/recommendations/authenticated"
-      : "/analytics/events/recommendations";
+    const endpoint = "/analytics/events/recommendations";
     const request = client.post<{ accepted: boolean }>(endpoint, payload);
     // Product clicks are followed by a product-view event, which refreshes the
     // shelves after durable history is written. Refresh here only for store

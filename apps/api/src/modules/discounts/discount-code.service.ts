@@ -64,26 +64,20 @@ export class DiscountCodeService {
    * for first-time shoppers who have never placed an order before.
    */
   private isFirstOrderOnlyDiscount(discount: {
-    code: string;
-    description?: string | null;
     firstOrderOnly?: boolean;
   }): boolean {
-    if (discount.firstOrderOnly) {
-      return true;
-    }
-    const normCode = discount.code.trim().toUpperCase();
-    const normDesc = (discount.description || '').toLowerCase();
-    return (
-      normCode.startsWith('WELCOME') ||
-      normCode.startsWith('FIRST') ||
-      normCode.includes('NEWUSER') ||
-      normCode.includes('FIRSTBUY') ||
-      normDesc.includes('first-time') ||
-      normDesc.includes('first order') ||
-      normDesc.includes('new customer') ||
-      normDesc.includes('first purchase') ||
-      normDesc.includes('first shopper')
-    );
+    return discount.firstOrderOnly === true;
+  }
+
+  private async hasPriorNonCancelledOrders(userId?: string): Promise<boolean> {
+    if (!userId) return false;
+    const count = await this.prisma.order.count({
+      where: {
+        userId,
+        status: { not: OrderStatus.CANCELLED },
+      },
+    });
+    return count > 0;
   }
 
   // ============================================================
@@ -1082,7 +1076,9 @@ export class DiscountCodeService {
   // PUBLIC STOREFRONT PROMOTIONS & DEALS
   // ============================================================
 
-  async getPublicPlatformPromos(): Promise<PublicPlatformPromoDto[]> {
+  async getPublicPlatformPromos(
+    userId?: string,
+  ): Promise<PublicPlatformPromoDto[]> {
     const fetcher = async () => {
       const now = new Date();
       const codes = await this.prisma.discountCode.findMany({
@@ -1117,16 +1113,23 @@ export class DiscountCodeService {
         }));
     };
 
-    if (this.cacheService) {
-      return this.cacheService.wrap('discounts:platform-promos', 120, fetcher);
+    const promos = this.cacheService
+      ? await this.cacheService.wrap('discounts:platform-promos', 120, fetcher)
+      : await fetcher();
+    if (await this.hasPriorNonCancelledOrders(userId)) {
+      return promos.filter((promo) => !promo.isFirstOrderOnly);
     }
-    return fetcher();
+    return promos;
   }
 
   async getPublicProductDeals(
     productId: string,
+    userId?: string,
   ): Promise<PublicProductDealDto> {
-    const fetcher = async (): Promise<PublicProductDealDto> => {
+    type CachedPublicProductDeal = PublicProductDealDto & {
+      productPrice: number;
+    };
+    const fetcher = async (): Promise<CachedPublicProductDeal> => {
       const product = await this.prisma.product.findUnique({
         where: { id: productId },
         select: {
@@ -1140,7 +1143,12 @@ export class DiscountCodeService {
       });
 
       if (!product || !product.isActive || product.isDeleted) {
-        return { productId, bestDiscount: null, allVouchers: [] };
+        return {
+          productId,
+          bestDiscount: null,
+          allVouchers: [],
+          productPrice: 0,
+        };
       }
 
       const now = new Date();
@@ -1218,20 +1226,52 @@ export class DiscountCodeService {
         productId,
         bestDiscount,
         allVouchers,
+        productPrice,
       };
     };
 
-    if (this.cacheService) {
-      return this.cacheService.wrap(
-        `discounts:product:${productId}`,
-        60,
-        fetcher,
+    const cachedDeal = this.cacheService
+      ? await this.cacheService.wrap(
+          `discounts:product:v2:${productId}`,
+          60,
+          fetcher,
+        )
+      : await fetcher();
+
+    if (await this.hasPriorNonCancelledOrders(userId)) {
+      const allVouchers = cachedDeal.allVouchers.filter(
+        (voucher) => !voucher.isFirstOrderOnly,
       );
+      const top = allVouchers[0];
+      return {
+        productId,
+        allVouchers,
+        bestDiscount:
+          top && top.estimatedSavings > 0
+            ? {
+                ...top,
+                dealPrice: Math.max(
+                  0,
+                  Math.round(
+                    (cachedDeal.productPrice - top.estimatedSavings) * 100,
+                  ) / 100,
+                ),
+              }
+            : null,
+      };
     }
-    return fetcher();
+
+    return {
+      productId,
+      bestDiscount: cachedDeal.bestDiscount,
+      allVouchers: cachedDeal.allVouchers,
+    };
   }
 
-  async getBatchProductDeals(dto: BatchProductDiscountsDto): Promise<
+  async getBatchProductDeals(
+    dto: BatchProductDiscountsDto,
+    userId?: string,
+  ): Promise<
     Record<
       string,
       {
@@ -1241,6 +1281,8 @@ export class DiscountCodeService {
   > {
     const productIds = [...new Set(dto.productIds)];
     if (productIds.length === 0) return {};
+
+    const hasPriorOrders = await this.hasPriorNonCancelledOrders(userId);
 
     const products = await this.prisma.product.findMany({
       where: {
@@ -1281,7 +1323,9 @@ export class DiscountCodeService {
     });
 
     const validCodes = codes.filter(
-      (c) => c.usageLimit === null || c.usageCount < c.usageLimit,
+      (c) =>
+        (c.usageLimit === null || c.usageCount < c.usageLimit) &&
+        (!hasPriorOrders || !this.isFirstOrderOnlyDiscount(c)),
     );
 
     const result: Record<

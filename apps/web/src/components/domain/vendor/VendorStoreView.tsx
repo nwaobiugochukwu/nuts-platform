@@ -121,7 +121,7 @@ export function VendorStoreView({
 
   const followerCountQuery = useQuery({
     queryKey: ["vendor-follower-count", slug],
-    queryFn: async ({ signal }) => (await publicVendorService.followerCount(slug, signal)).data,
+    queryFn: async () => (await publicVendorService.followerCount(slug)).data,
     enabled: Boolean(slug),
     staleTime: 60_000,
   });

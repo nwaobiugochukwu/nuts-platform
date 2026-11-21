@@ -39,6 +39,7 @@ export function CheckoutFlow({ onOrderCreated, user }: CheckoutFlowProps) {
       } as CheckoutPayload);
       const orderId = order.id;
       clearClientCart(queryClient);
+      queryClient.removeQueries({ queryKey: ["discounts"] });
       onOrderCreated?.(orderId);
 
       // Initialize Paystack payment directly (Paystack handles 3DS/card/bank verification)

@@ -96,7 +96,6 @@ export default async function RootLayout({
       lang="en"
       className={initialThemeClass}
       style={initialColorScheme ? { colorScheme: initialColorScheme } : undefined}
-      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>

@@ -21,6 +21,8 @@ export function useScrollRestoration() {
   const pathname = usePathname();
   const restoredRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreFrameRef = useRef<number | null>(null);
+  const restoreCommitFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -42,8 +44,10 @@ export function useScrollRestoration() {
         if (!Number.isNaN(targetY) && targetY > 0) {
           // Double rAF ensures the browser has committed the layout before we
           // scroll — single rAF can fire before paint on some browsers.
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+          restoreFrameRef.current = requestAnimationFrame(() => {
+            restoreFrameRef.current = null;
+            restoreCommitFrameRef.current = requestAnimationFrame(() => {
+              restoreCommitFrameRef.current = null;
               window.scrollTo({ top: targetY, behavior: "instant" });
             });
           });
@@ -71,6 +75,19 @@ export function useScrollRestoration() {
       if (saveTimerRef.current !== null) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
+      }
+      if (restoreFrameRef.current !== null) {
+        cancelAnimationFrame(restoreFrameRef.current);
+        restoreFrameRef.current = null;
+      }
+      if (restoreCommitFrameRef.current !== null) {
+        cancelAnimationFrame(restoreCommitFrameRef.current);
+        restoreCommitFrameRef.current = null;
+      }
+      // Home uses manual restoration for its saved shelf position. Restore the
+      // browser default when leaving so later routes start at the top.
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "auto";
       }
     };
   }, [pathname]);

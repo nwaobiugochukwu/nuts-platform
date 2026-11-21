@@ -41,19 +41,19 @@ export const adminDiscountService = {
 
 export const vendorDiscountService = {
   list(params?: ProductQueryParams) {
-    return vendorApi.get<DiscountCodeResponseDto[]>("/vendors/discounts", { params });
+    return vendorApi.get<DiscountCodeResponseDto[]>("/vendor/discounts", { params });
   },
   create(payload: DiscountCodePayload) {
-    return vendorApi.post<DiscountCodeResponseDto>("/vendors/discounts", payload);
+    return vendorApi.post<DiscountCodeResponseDto>("/vendor/discounts", payload);
   },
   update(id: string, payload: Partial<DiscountCodePayload>) {
-    return vendorApi.patch<DiscountCodeResponseDto>(`/vendors/discounts/${id}`, payload);
+    return vendorApi.patch<DiscountCodeResponseDto>(`/vendor/discounts/${id}`, payload);
   },
   deactivate(id: string) {
-    return vendorApi.patch<DiscountCodeResponseDto>(`/vendors/discounts/${id}/deactivate`);
+    return vendorApi.patch<DiscountCodeResponseDto>(`/vendor/discounts/${id}/deactivate`);
   },
   delete(id: string) {
-    return vendorApi.delete<void>(`/vendors/discounts/${id}`);
+    return vendorApi.delete<void>(`/vendor/discounts/${id}`);
   },
 };
 

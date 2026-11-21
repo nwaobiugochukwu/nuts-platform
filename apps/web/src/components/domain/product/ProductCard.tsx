@@ -8,7 +8,6 @@ import type { ProductCardDto,PublicProductResponseDto } from "@/api/dto/product"
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { useFirstTimeShopper } from "@/hooks/use-product-deals";
 import { formatPrice } from "@/lib/util";
 import { resolveProductDetailPath } from "@/lib/product-path";
 import { storeRecommendationAttribution } from "@/lib/recommendation-attribution";
@@ -101,13 +100,9 @@ export function ProductCard({
   const [isWishlistPending, setIsWishlistPending] = useState(false);
   const isLiked = isInWishlist(product.id);
 
-  const { hasPurchased } = useFirstTimeShopper();
-
   // Product cards receive deal data from their parent batch query. Avoid one
   // public discount request per rendered card when a feed is loading.
-  const rawDeal = deal ?? null;
-  // Exclude first-time buyer deal if shopper has already bought before
-  const effectiveDeal = hasPurchased && rawDeal?.isFirstOrderOnly ? null : rawDeal;
+  const effectiveDeal = deal ?? null;
 
   const isDealClaimed =
     effectiveDeal ? (claimedCode === effectiveDeal.code || appliedDiscount?.code === effectiveDeal.code) : false;

@@ -110,8 +110,8 @@ export function ProductDetailView({
 
   const { data: product, isLoading } = useQuery({
     queryKey: queryKey.product.detail(slug),
-    queryFn: async ({ signal }) => {
-      const { data } = await productService.getBySlug(slug, signal);
+    queryFn: async () => {
+      const { data } = await productService.getBySlug(slug);
       return data;
     },
     initialData: initialProduct || undefined,
@@ -121,8 +121,8 @@ export function ProductDetailView({
 
   const relatedProductsQuery = useQuery({
     queryKey: queryKey.product.related(product?.id ?? ""),
-    queryFn: async ({ signal }) => product
-      ? (await recommendationService.related(product.id, signal)).data
+    queryFn: async () => product
+      ? (await recommendationService.related(product.id)).data
       : [],
     enabled: Boolean(product?.id),
     staleTime: 1000 * 60 * 5,

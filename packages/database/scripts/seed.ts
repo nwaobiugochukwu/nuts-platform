@@ -803,18 +803,6 @@ async function main() {
     data: [
       {
         id: randomUUID(),
-        code: "WELCOME10",
-        description: "10% off for first-time shoppers",
-        type: DiscountCodeType.PERCENTAGE,
-        value: 10,
-        maxDiscountAmount: 25000,
-        minOrderAmount: 50000,
-        scope: DiscountCodeScope.PLATFORM,
-        platformwide: true,
-        isActive: true,
-      },
-      {
-        id: randomUUID(),
         code: "FREESHIP50K",
         description: "Flat discount to subsidize local logistics",
         type: DiscountCodeType.FIXED,

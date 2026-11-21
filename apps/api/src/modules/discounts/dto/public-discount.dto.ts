@@ -6,7 +6,7 @@ export class PublicPlatformPromoDto {
   @ApiProperty({ description: 'Discount code ID', example: 'uuid' })
   id!: string;
 
-  @ApiProperty({ description: 'Coupon code', example: 'WELCOME10' })
+  @ApiProperty({ description: 'Coupon code', example: 'SAVE10' })
   code!: string;
 
   @ApiPropertyOptional({
