@@ -15,7 +15,6 @@ import {
   type AdminStaffMember,
   type GovernanceAuditLog,
 } from "@/api";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable, type Column } from "@/component/data/DataTable";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { Badge } from "@/component/ui/badge";
@@ -237,18 +236,14 @@ export default function AdminStaffPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Staff & Platform Governance"
-          description="Manage root administrator accounts, control access privileges, and review critical audit trails."
-        />
-        {activeTab === "staff" && (
+      {activeTab === "staff" && (
+        <div className="flex items-center justify-end">
           <Button onClick={() => setIsCreateOpen(true)} className="gap-2">
             <UserPlus className="h-4 w-4" />
             Add Staff Member
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex border-b border-border">

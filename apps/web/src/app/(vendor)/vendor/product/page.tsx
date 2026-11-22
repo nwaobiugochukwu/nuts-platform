@@ -5,7 +5,6 @@ import { categoryService } from "@/api";
 import { vendorApi } from "@/api/core/client";
 import type { VendorVariantResponseDto } from "@/api/dto/variant";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { CategoryPicker } from "@/component/form/CategoryPicker";
 import { FormInput } from "@/component/form/FormInput";
@@ -147,6 +146,7 @@ export default function DashboardProductPage() {
       const res = await categoryService.getAll();
       return res.data;
     },
+    enabled: open,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
   });
@@ -473,11 +473,7 @@ export default function DashboardProductPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Product Catalog"
-          description="Manage storefront listings, stock inventories, descriptions, and media."
-        />
+      <div className="flex items-center justify-end">
         <Button
           onClick={openCreate}
           className="gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"

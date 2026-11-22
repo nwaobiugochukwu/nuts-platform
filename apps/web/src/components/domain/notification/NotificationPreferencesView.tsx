@@ -113,19 +113,19 @@ export function NotificationPreferencesContent() {
         </h3>
         <div className="divide-y divide-border/60 rounded-2xl border border-border bg-card">
           {/* In-App Notifications */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary mt-0.5">
                 <Bell className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="inapp-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   In-App Notification Bell
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Show badges, notification feeds, and live toast alerts inside the app.
                 </p>
               </div>
@@ -139,19 +139,19 @@ export function NotificationPreferencesContent() {
           </div>
 
           {/* Email Notifications */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-0.5">
                 <Mail className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="email-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   Email Notifications
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Receive transactional receipts, shipping confirmations, and updates to your email.
                 </p>
               </div>
@@ -166,12 +166,12 @@ export function NotificationPreferencesContent() {
 
           {/* Desktop & Push Notifications */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-2">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mt-0.5">
                 <Smartphone className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <label
                     htmlFor="push-toggle"
                     className="text-xs sm:text-sm font-semibold cursor-pointer block"
@@ -265,19 +265,19 @@ export function NotificationPreferencesContent() {
         </h3>
         <div className="divide-y divide-border/60 rounded-2xl border border-border bg-card">
           {/* Order Updates */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-0.5">
                 <Package className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="orders-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   Order Updates & Tracking
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Order confirmations, fulfillment status, dispatched shipments, and delivery receipts.
                 </p>
               </div>
@@ -291,19 +291,19 @@ export function NotificationPreferencesContent() {
           </div>
 
           {isVendor && (
-            <div className="flex items-center justify-between p-4 sm:p-5">
-              <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+            <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+              <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mt-0.5">
                   <Users className="h-4 w-4" />
                 </div>
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 min-w-0 flex-1">
                   <label
                     htmlFor="social-toggle"
-                    className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                    className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                   >
                     Social Activity
                   </label>
-                  <p className="text-[11px] sm:text-xs text-muted-foreground">
+                  <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                     Get notified when someone follows your store.
                   </p>
                 </div>
@@ -318,19 +318,19 @@ export function NotificationPreferencesContent() {
           )}
 
           {/* Payment & Payout Alerts */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mt-0.5">
                 <CreditCard className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="payments-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   {isMerchant ? "Payment & Payout Alerts" : "Payment & Receipt Alerts"}
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   {isMerchant
                     ? "Payment success confirmations, invoice receipts, refund notices, and merchant payouts."
                     : "Payment success confirmations, checkout receipts, and refund notices."}
@@ -346,19 +346,19 @@ export function NotificationPreferencesContent() {
           </div>
 
           {/* Low Stock & Inventory */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 mt-0.5">
                 <Tag className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="inventory-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   Inventory & Stock Alerts
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Alerts when saved items drop in price or come back in stock, plus seller stock warnings.
                 </p>
               </div>
@@ -372,19 +372,19 @@ export function NotificationPreferencesContent() {
           </div>
 
           {/* Marketing & Promos */}
-          <div className="flex items-center justify-between p-4 sm:p-5">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 mt-0.5">
                 <Sparkles className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 min-w-0 flex-1">
                 <label
                   htmlFor="marketing-toggle"
-                  className="text-xs sm:text-sm font-semibold cursor-pointer block"
+                  className="text-xs sm:text-sm font-semibold cursor-pointer block truncate"
                 >
                   Promotions & Special Offers
                 </label>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Discount flash drops, referral bonus reminders, and seasonal campaign perks.
                 </p>
               </div>
@@ -398,13 +398,13 @@ export function NotificationPreferencesContent() {
           </div>
 
           {/* Security Alerts (Always On) */}
-          <div className="flex items-center justify-between p-4 sm:p-5 bg-muted/20">
-            <div className="flex items-start gap-3 sm:gap-3.5 pr-3">
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-5 bg-muted/20">
+            <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1 pr-1 sm:pr-2">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 mt-0.5">
                 <Shield className="h-4 w-4" />
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
+              <div className="space-y-0.5 min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <span className="text-xs sm:text-sm font-semibold block">
                     Security & Account Safeguards
                   </span>
@@ -412,7 +412,7 @@ export function NotificationPreferencesContent() {
                     Always On
                   </span>
                 </div>
-                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed">
                   Password changes, suspicious logins, and fraud protection alerts cannot be disabled.
                 </p>
               </div>
@@ -438,18 +438,22 @@ export function NotificationPreferencesDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-2xl max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-4 sm:p-6 sm:p-8">
-        <DialogHeader className="space-y-1.5 pb-2 text-left">
-          <DialogTitle className="text-lg sm:text-xl font-bold flex items-center gap-2">
-            <Bell className="h-5 w-5 text-primary" />
-            <span>Notification Preferences</span>
+      <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-2xl max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 overscroll-contain">
+        <DialogHeader className="space-y-1 pb-2 sm:pb-3 text-left border-b border-border/50">
+          <DialogTitle className="text-base sm:text-xl font-bold flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary shrink-0" />
+            <span className="truncate">Notification Preferences</span>
           </DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
+          <DialogDescription className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Configure which channels and event types reach your device and inbox.
           </DialogDescription>
         </DialogHeader>
 
-        {open && <NotificationPreferencesContent />}
+        {open && (
+          <div className="pt-2 sm:pt-3">
+            <NotificationPreferencesContent />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,4 +1,5 @@
-﻿import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Prisma, ROLE } from '@prisma/client';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
@@ -42,14 +43,40 @@ export class ProductViewsService {
     sessionId?: string,
     visitorId?: string,
     eventId?: string,
+    userRole?: ROLE,
   ): Promise<void> {
+    if (userRole === ROLE.ADMIN) {
+      return;
+    }
+
+    if (userId) {
+      const product = await this.prisma.product.findUnique({
+        where: { id: productId },
+        select: { vendorId: true },
+      });
+      if (
+        product &&
+        (product.vendorId === userId ||
+          (userRole === ROLE.VENDOR && product.vendorId === userId))
+      ) {
+        return;
+      }
+    }
+
     const resolvedEventId = eventId ?? randomUUID();
     const resolvedSessionId = sessionId || randomUUID();
+    const effectiveUserId = userRole === ROLE.VENDOR ? undefined : userId;
+    const effectiveVisitorId =
+      visitorId ||
+      (userRole === ROLE.VENDOR && userId
+        ? `vendor:${userId}`
+        : resolvedSessionId);
+
     const timestamp = new Date();
     await this.upsertRecentProductView(
       productId,
-      userId,
-      visitorId || resolvedSessionId,
+      effectiveUserId,
+      effectiveVisitorId,
       timestamp,
     );
     if (!this.redis || this.redis.status !== 'ready') {
@@ -60,8 +87,8 @@ export class ProductViewsService {
           {
             id: resolvedEventId,
             productId,
-            userId: userId ?? null,
-            visitorId: visitorId ?? null,
+            userId: effectiveUserId ?? null,
+            visitorId: effectiveVisitorId ?? null,
             sessionId: resolvedSessionId,
             createdAt: timestamp,
           },
@@ -74,8 +101,8 @@ export class ProductViewsService {
     const view: BufferedView = {
       id: resolvedEventId,
       productId,
-      userId,
-      visitorId,
+      userId: effectiveUserId,
+      visitorId: effectiveVisitorId,
       sessionId: resolvedSessionId,
       timestamp: timestamp.toISOString(),
     };
@@ -94,8 +121,8 @@ export class ProductViewsService {
           {
             id: resolvedEventId,
             productId,
-            userId: userId ?? null,
-            visitorId: visitorId ?? null,
+            userId: effectiveUserId ?? null,
+            visitorId: effectiveVisitorId ?? null,
             sessionId: resolvedSessionId,
             createdAt: timestamp,
           },
@@ -105,25 +132,38 @@ export class ProductViewsService {
     }
   }
 
-  private upsertRecentProductView(
+  private async upsertRecentProductView(
     productId: string,
     userId: string | undefined,
     visitorId: string,
     lastViewedAt: Date,
   ) {
-    if (userId) {
-      return this.prisma.recentProductView.upsert({
-        where: { userId_productId: { userId, productId } },
-        create: { userId, productId, lastViewedAt },
+    try {
+      if (userId) {
+        return await this.prisma.recentProductView.upsert({
+          where: { userId_productId: { userId, productId } },
+          create: { userId, productId, lastViewedAt },
+          update: { lastViewedAt },
+        });
+      }
+
+      return await this.prisma.recentProductView.upsert({
+        where: { visitorId_productId: { visitorId, productId } },
+        create: { visitorId, productId, lastViewedAt },
         update: { lastViewedAt },
       });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        (error.code === 'P2003' || error.code === 'P2025')
+      ) {
+        this.logger.warn(
+          `Cannot upsert recent view for missing product/user (${productId} / ${userId}): ${error.message}`,
+        );
+        return null;
+      }
+      throw error;
     }
-
-    return this.prisma.recentProductView.upsert({
-      where: { visitorId_productId: { visitorId, productId } },
-      create: { visitorId, productId, lastViewedAt },
-      update: { lastViewedAt },
-    });
   }
 
   /**

@@ -10,16 +10,64 @@ import { formatPrice } from "@/lib/util";
 const DISMISS_KEY = "nuts_promo_ticker_dismissed";
 const ROTATION_INTERVAL_MS = 6000;
 
-function formatTimeRemaining(expiresAt: string | Date, now: number): string | null {
-  const diffMs = new Date(expiresAt).getTime() - now;
-  if (diffMs <= 0) return null;
-  const diffHours = diffMs / (1000 * 60 * 60);
-  if (diffHours > 72) return null;
+interface CountdownInfo {
+  type: "starts_in" | "ends_in" | "none";
+  label: string;
+  formatted: string;
+  compact: string;
+  isUrgent: boolean;
+}
 
-  const hours = Math.floor(diffHours);
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  if (hours < 1) return `${minutes}m left`;
-  return `${hours}h ${minutes}m left`;
+function computeCountdown(promo: PublicPlatformPromoDto, now: number): CountdownInfo | null {
+  const startsAtTime = promo.startsAt ? new Date(promo.startsAt).getTime() : null;
+  const expiresAtTime = promo.expiresAt ? new Date(promo.expiresAt).getTime() : null;
+
+  let targetTime: number | null = null;
+  let type: "starts_in" | "ends_in" | "none" = "none";
+  let label = "";
+
+  if (startsAtTime && startsAtTime > now) {
+    targetTime = startsAtTime;
+    type = "starts_in";
+    label = "Starts in";
+  } else if (expiresAtTime && expiresAtTime > now) {
+    targetTime = expiresAtTime;
+    type = "ends_in";
+    label = "Ends in";
+  } else {
+    return null;
+  }
+
+  const diffMs = Math.max(0, targetTime - now);
+  if (diffMs <= 0) return null;
+
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+
+  const formatted =
+    days > 0
+      ? `${days}d : ${pad(hours)}h : ${pad(minutes)}m : ${pad(seconds)}s`
+      : `${pad(hours)}h : ${pad(minutes)}m : ${pad(seconds)}s`;
+
+  const compact =
+    days > 0
+      ? `${days}d ${pad(hours)}h`
+      : `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+
+  const isUrgent = type === "ends_in" && diffMs < 24 * 60 * 60 * 1000;
+
+  return {
+    type,
+    label,
+    formatted,
+    compact,
+    isUrgent,
+  };
 }
 
 export function PlatformPromoTicker({
@@ -67,7 +115,7 @@ export function PlatformPromoTicker({
   useEffect(() => {
     const updateNow = () => setNow(Date.now());
     const timeout = window.setTimeout(updateNow, 0);
-    const interval = window.setInterval(updateNow, 60_000);
+    const interval = window.setInterval(updateNow, 1000);
     return () => {
       window.clearTimeout(timeout);
       window.clearInterval(interval);
@@ -110,9 +158,9 @@ export function PlatformPromoTicker({
     return null;
   }
 
-  const timeRemaining =
-    activePromo.expiresAt && now !== null
-      ? formatTimeRemaining(activePromo.expiresAt, now)
+  const countdown =
+    now !== null
+      ? computeCountdown(activePromo, now)
       : null;
   const isCurrentlyClaimed =
     claimedCode === activePromo.code || appliedDiscount?.code === activePromo.code;
@@ -215,7 +263,7 @@ export function PlatformPromoTicker({
     <div
       role="region"
       aria-label="Platform promotional announcements"
-      className={`relative z-50 w-full border-b transition-colors duration-300 select-none bg-neutral-900 text-neutral-100 border-neutral-800/80 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
+      className={`relative z-50 w-full border-b transition-colors duration-300 select-none bg-neutral-100 text-neutral-900 border-neutral-200/90 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
         validPromos.length > 1 ? "cursor-grab active:cursor-grabbing" : ""
       }`}
       onMouseEnter={() => setIsPaused(true)}
@@ -238,7 +286,7 @@ export function PlatformPromoTicker({
               type="button"
               onClick={handlePrev}
               aria-label="Previous promotion"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors active:scale-95 cursor-pointer"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white transition-colors active:scale-95 cursor-pointer"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -252,7 +300,7 @@ export function PlatformPromoTicker({
             className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
           >
             {/* Promo Discount Pill */}
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-2.5 py-1 text-xs font-bold text-emerald-400 sm:text-[13px]">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-100/90 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold sm:text-[13px]">
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
               <span>
                 {activePromo.type === "PERCENTAGE"
@@ -262,22 +310,32 @@ export function PlatformPromoTicker({
             </span>
 
             {/* Campaign Description */}
-            <span className="min-w-0 max-w-full break-words text-xs font-semibold leading-snug tracking-tight text-neutral-100 sm:text-sm">
+            <span className="min-w-0 max-w-full break-words text-xs font-semibold leading-snug tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-sm">
               {activePromo.description || "Limited-time platform discount"}
             </span>
 
             {/* Minimum Spend */}
             {activePromo.minOrderAmount > 0 && (
-              <span className="hidden text-xs font-normal md:inline whitespace-nowrap text-neutral-400">
+              <span className="hidden text-xs font-normal md:inline whitespace-nowrap text-neutral-500 dark:text-neutral-400">
                 (Min. spend {formatPrice(activePromo.minOrderAmount)})
               </span>
             )}
 
-            {/* Expiration Countdown */}
-            {timeRemaining && (
-              <span className="hidden items-center gap-1 text-xs font-medium lg:inline-flex whitespace-nowrap text-amber-400">
-                <Clock className="h-3.5 w-3.5" />
-                <span>{timeRemaining}</span>
+            {/* Live Responsive Countdown Pill */}
+            {countdown && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 sm:gap-1.5 rounded-full border px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-mono font-bold tracking-tight whitespace-nowrap transition-colors ${
+                  countdown.isUrgent
+                    ? "bg-rose-100 border-rose-300 text-rose-800 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-300 animate-pulse"
+                    : countdown.type === "starts_in"
+                      ? "bg-sky-100 border-sky-300 text-sky-800 dark:bg-sky-500/15 dark:border-sky-500/30 dark:text-sky-300"
+                      : "bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-500/15 dark:border-amber-500/30 dark:text-amber-300"
+                }`}
+              >
+                <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
+                <span>
+                  {countdown.label} {countdown.formatted}
+                </span>
               </span>
             )}
 
@@ -288,8 +346,8 @@ export function PlatformPromoTicker({
               title={`Click to copy and claim code ${activePromo.code}`}
               className={`inline-flex max-w-full shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono font-bold transition-all cursor-pointer sm:px-3 sm:text-[13px] ${
                 copiedCode === activePromo.code || isCurrentlyClaimed
-                  ? "bg-emerald-500 text-white shadow-xs"
-                  : "bg-neutral-800 text-amber-300 hover:bg-neutral-700 hover:text-amber-200 border border-neutral-700 active:scale-95"
+                  ? "bg-emerald-600 text-white shadow-xs"
+                  : "bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50 shadow-xs dark:bg-neutral-800 dark:text-amber-300 dark:hover:bg-neutral-700 dark:hover:text-amber-200 dark:border-neutral-700 active:scale-95"
               }`}
             >
               <Tag className="h-3.5 w-3.5" />
@@ -302,7 +360,7 @@ export function PlatformPromoTicker({
             </button>
           </div>
 
-          {/* Dots Indicator for multiple promos */}
+          {/* Dots Indicator for multiple promos on Desktop */}
           {validPromos.length > 1 && (
             <div className="hidden items-center gap-1.5 sm:flex ml-3 shrink-0">
               {validPromos.map((_, idx) => (
@@ -313,8 +371,8 @@ export function PlatformPromoTicker({
                   aria-label={`Go to promotion ${idx + 1}`}
                   className={`h-2 rounded-full transition-all cursor-pointer ${
                     idx === currentIndex
-                      ? "w-5 bg-emerald-400"
-                      : "w-2 bg-neutral-700 hover:bg-neutral-500"
+                      ? "w-5 bg-emerald-600 dark:bg-emerald-400"
+                      : "w-2 bg-neutral-300 hover:bg-neutral-400 dark:bg-neutral-700 dark:hover:bg-neutral-500"
                   }`}
                 />
               ))}
@@ -329,7 +387,7 @@ export function PlatformPromoTicker({
               type="button"
               onClick={handleNext}
               aria-label="Next promotion"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors active:scale-95 cursor-pointer"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white transition-colors active:scale-95 cursor-pointer"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -339,11 +397,30 @@ export function PlatformPromoTicker({
             type="button"
             onClick={handleDismiss}
             aria-label="Dismiss promotion banner"
-            className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors active:scale-95 ml-0.5 sm:ml-1 cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-200 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white transition-colors active:scale-95 ml-0.5 sm:ml-1 cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Dots Indicator for multiple promos on Mobile */}
+        {validPromos.length > 1 && (
+          <div className="col-span-3 flex justify-center items-center gap-1.5 pt-1 sm:hidden">
+            {validPromos.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                aria-label={`Go to promotion ${idx + 1}`}
+                className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                  idx === currentIndex
+                    ? "w-4 bg-emerald-600 dark:bg-emerald-400"
+                    : "w-1.5 bg-neutral-300 hover:bg-neutral-400 dark:bg-neutral-700 dark:hover:bg-neutral-500"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

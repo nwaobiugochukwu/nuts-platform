@@ -104,10 +104,11 @@ export function AdminHeader({ onMobileMenuClick, mobileMenuOpen = false }: { onM
           <Button
             variant="outline"
             size="sm"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-medium rounded-xl border-border/80 hover:bg-secondary"
+            className="flex items-center gap-1.5 text-xs font-medium rounded-xl border-border/80 hover:bg-secondary px-2 sm:px-3 h-8 sm:h-9"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Live Marketplace
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden sm:inline">Live Marketplace</span>
+            <span className="sm:hidden">Market</span>
           </Button>
         </Link>
         {isAuthenticated && <NotificationBell />}
@@ -169,6 +170,19 @@ export function AdminHeader({ onMobileMenuClick, mobileMenuOpen = false }: { onM
                       <Shield className="h-3 w-3" /> Full Access
                     </span>
                   </div>
+                </div>
+
+                <div className="py-1">
+                  <Link
+                    href="/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    Live Marketplace
+                  </Link>
                 </div>
 
                 <div className="border-t border-border/60 mt-1 pt-1">

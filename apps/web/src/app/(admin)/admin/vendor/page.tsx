@@ -5,7 +5,6 @@ import { adminVendorService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AdminVendorResponseDto } from "@/api/dto/vendor";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { Badge } from "@/component/ui/badge";
@@ -297,11 +296,6 @@ export default function AdminVendorPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Vendor Directory"
-        description="Onboard merchants, authorize storefronts, and manage KYC compliance."
-      />
-
       <ManagementToolbar
         value={search}
         onChange={(v) => {

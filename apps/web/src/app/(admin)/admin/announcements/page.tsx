@@ -11,7 +11,6 @@ import {
   type AnnouncementPayload,
   type AnnouncementStatus,
 } from "@/api";
-import { PageHeader } from "@/component/common/PageHeader";
 import { Button } from "@/component/ui/button";
 import { Card } from "@/component/ui/card";
 import { Badge } from "@/component/ui/badge";
@@ -300,11 +299,6 @@ export default function AdminAnnouncementsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 sm:space-y-8">
-      <PageHeader
-        title="Global Announcements"
-        description="Create, schedule, and track in-app campaigns for users or vendors."
-      />
-
       <section aria-label="Announcement overview" className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 sm:gap-4">
         {[
           { label: "Active users", value: counts?.users },

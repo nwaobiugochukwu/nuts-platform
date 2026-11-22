@@ -33,12 +33,17 @@ export function usePlatformPromos(initialPromos?: PublicPlatformPromoDto[]) {
       }
       return [];
     },
+    // Only use SSR data as placeholder when it's non-empty.
+    // An empty SSR result should NOT freeze the client — it must re-fetch
+    // so staging/production with real DB data shows the banner correctly.
     initialData: initialPromos && initialPromos.length > 0 ? initialPromos : undefined,
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60 * 24,
+    // 5 minutes fresh in client cache, preventing random or redundant refetches
+    // when navigating across product pages or opening drawers.
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
   });
 }
 
