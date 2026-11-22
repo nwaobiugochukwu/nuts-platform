@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -66,6 +67,10 @@ export class ReviewsController {
 
   @Get('product/:productId')
   @Public()
+  @Header(
+    'Cache-Control',
+    'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
+  )
   @ApiOperation({
     summary: 'Get review summary and items for a product',
     description:
@@ -116,6 +121,10 @@ export class ProductReviewsCanonicalController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   @Get()
+  @Header(
+    'Cache-Control',
+    'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
+  )
   @ApiOperation({
     summary: 'Get review summary and items for a product (Canonical)',
     description:

@@ -34,6 +34,12 @@ export class PublicPlatformPromoDto {
   minOrderAmount!: number;
 
   @ApiPropertyOptional({
+    description: 'Campaign scheduled start date and time',
+    example: '2026-11-20T00:00:00.000Z',
+  })
+  startsAt?: Date | null;
+
+  @ApiPropertyOptional({
     description: 'Expiration date',
     example: '2026-12-31T23:59:59.000Z',
   })

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -34,6 +35,8 @@ import {
 
 @Injectable()
 export class DiscountCodeService {
+  private readonly logger = new Logger(DiscountCodeService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly auditLog?: AuditLogService,
@@ -173,6 +176,20 @@ export class DiscountCodeService {
     }
   }
 
+  private async purgeDiscountCache(): Promise<void> {
+    if (!this.cacheService) return;
+    try {
+      await Promise.all([
+        this.cacheService.del('discounts:platform-promos'),
+        this.cacheService.delByPattern('discounts:*'),
+      ]);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to purge discount cache: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // ============================================================
   // CREATE
   // ============================================================
@@ -287,7 +304,7 @@ export class DiscountCodeService {
       },
     });
 
-    await this.cacheService?.del('discounts:platform-promos');
+    await this.purgeDiscountCache();
     return created;
   }
 
@@ -443,7 +460,7 @@ export class DiscountCodeService {
       },
     });
 
-    await this.cacheService?.del('discounts:platform-promos');
+    await this.purgeDiscountCache();
     return updated;
   }
 
@@ -815,7 +832,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
-    await this.cacheService?.del('discounts:platform-promos');
+    await this.purgeDiscountCache();
     return null;
   }
 
@@ -848,7 +865,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
-    await this.cacheService?.del('discounts:platform-promos');
+    await this.purgeDiscountCache();
     return null;
   }
 
@@ -895,7 +912,7 @@ export class DiscountCodeService {
       payload: { vendorId, isAdmin },
     });
 
-    await this.cacheService?.del('discounts:platform-promos');
+    await this.purgeDiscountCache();
     return null;
   }
 
@@ -1105,13 +1122,21 @@ export class DiscountCodeService {
   ): Promise<PublicPlatformPromoDto[]> {
     const fetcher = async () => {
       const now = new Date();
+      const upcomingThreshold = new Date(
+        now.getTime() + 7 * 24 * 60 * 60 * 1000,
+      );
       const codes = await this.prisma.discountCode.findMany({
         where: {
           isActive: true,
           deletedAt: null,
           scope: DiscountCodeScope.PLATFORM,
           AND: [
-            { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+            {
+              OR: [
+                { startsAt: null },
+                { startsAt: { lte: upcomingThreshold } },
+              ],
+            },
             { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
           ],
         },
@@ -1131,6 +1156,7 @@ export class DiscountCodeService {
             ? Number(c.maxDiscountAmount)
             : null,
           minOrderAmount: Number(c.minOrderAmount),
+          startsAt: c.startsAt,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
         }));
@@ -1299,7 +1325,7 @@ export class DiscountCodeService {
     const cachedDeal = this.cacheService
       ? await this.cacheService.wrap(
           `discounts:product:v3:${productId}`,
-          60,
+          180,
           fetcher,
         )
       : await fetcher();
@@ -1550,7 +1576,7 @@ export class DiscountCodeService {
         void this.cacheService.set(
           `discounts:deal:v3:${prod.id}:${audienceKey}`,
           dealEntry,
-          60,
+          180,
         );
       }
     }

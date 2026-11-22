@@ -2,7 +2,6 @@
 
 import { adminApi } from "@/api/core/client";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { FormInput } from "@/component/form/FormInput";
 import { FormSelect } from "@/component/form/FormSelect";
@@ -56,8 +55,17 @@ interface AdminDiscount {
   minOrderAmount?: number | null;
   maxDiscountAmount?: number | null;
   usageLimit?: number | null;
+  startsAt?: string | null;
   expiresAt?: string | null;
   description?: string | null;
+}
+
+function toInputDateTime(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const optionalNumber = (minVal = 0, label = "Value") =>
@@ -119,6 +127,7 @@ const createDiscountSchema = z
     maxDiscountAmount: optionalNumber(0, "Maximum discount cap"),
     usageLimit: optionalPositiveInt("Global usage limit"),
     perUserUsageLimit: optionalPositiveInt("Per-customer usage limit"),
+    startsAt: z.string().optional().or(z.literal("")),
     expiresAt: z.string().optional().or(z.literal("")),
     platformwide: z.boolean().default(true),
     firstOrderOnly: z.boolean().default(false),
@@ -326,6 +335,7 @@ export default function AdminDiscountPage() {
 
   const { data: categoriesData } = useQuery({
     queryKey: queryKey.category.list(),
+    enabled: open,
     queryFn: async () => {
       const res = await categoryService.getAll();
       return res.data;
@@ -345,6 +355,7 @@ export default function AdminDiscountPage() {
       maxDiscountAmount: undefined,
       usageLimit: undefined,
       perUserUsageLimit: 1,
+      startsAt: "",
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
@@ -379,6 +390,7 @@ export default function AdminDiscountPage() {
         ? values.perUserUsageLimit
         : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+    startsAt: values.startsAt ? new Date(values.startsAt).toISOString() : null,
     platformwide: values.platformwide ?? true,
     firstOrderOnly: values.firstOrderOnly ?? false,
     applicableCategoryIds: values.applicableCategoryIds ?? [],
@@ -471,6 +483,7 @@ export default function AdminDiscountPage() {
       maxDiscountAmount: undefined,
       usageLimit: undefined,
       perUserUsageLimit: 1,
+      startsAt: "",
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
@@ -490,7 +503,8 @@ export default function AdminDiscountPage() {
       maxDiscountAmount: discount.maxDiscountAmount ?? undefined,
       usageLimit: discount.usageLimit ?? undefined,
       perUserUsageLimit: discount.perUserUsageLimit ?? undefined,
-      expiresAt: discount.expiresAt ? discount.expiresAt.slice(0, 10) : "",
+      startsAt: toInputDateTime(discount.startsAt),
+      expiresAt: toInputDateTime(discount.expiresAt),
       platformwide: discount.platformwide ?? true,
       firstOrderOnly: discount.firstOrderOnly ?? false,
       applicableCategoryIds: discount.applicableCategoryIds ?? [],
@@ -618,12 +632,21 @@ export default function AdminDiscountPage() {
     },
     {
       key: "expiresAt",
-      header: "Expiration",
-      className: "min-w-[120px]",
+      header: "Schedule",
+      className: "min-w-[160px]",
       render: (r) => (
-        <span className="text-xs text-neutral-400 whitespace-nowrap">
-          {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "Never Expires"}
-        </span>
+        <div className="text-xs text-neutral-400 whitespace-nowrap space-y-0.5">
+          {r.startsAt && (
+            <div>
+              <span className="font-medium text-sky-400">Starts: </span>
+              {new Date(r.startsAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}
+            </div>
+          )}
+          <div>
+            <span className="font-medium">Ends: </span>
+            {r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "No Expiry"}
+          </div>
+        </div>
       ),
     },
     {
@@ -681,11 +704,7 @@ export default function AdminDiscountPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Promotions & Discounts"
-          description="Create platform-wide campaign coupon codes, set usage limits, and monitor redemptions."
-        />
+      <div className="flex items-center justify-end">
         <Button
           onClick={openCreate}
           className="w-full sm:w-auto justify-center gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
@@ -856,11 +875,21 @@ export default function AdminDiscountPage() {
                 />
               </div>
 
-              <FormInput
-                name="expiresAt"
-                label="Expiry Date"
-                type="date"
-              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <FormInput
+                  name="startsAt"
+                  label="Campaign Start Date &amp; Time (optional)"
+                  type="datetime-local"
+                  hint="Leave blank for immediate activation. Set to schedule a future launch with countdown timer."
+                />
+
+                <FormInput
+                  name="expiresAt"
+                  label="Campaign Expiry Date &amp; Time (optional)"
+                  type="datetime-local"
+                  hint="Leave blank for no expiry. Set to schedule an end date with live countdown timer."
+                />
+              </div>
 
               <div className="space-y-3 rounded-xl border border-border/80 bg-neutral-50/70 p-3.5 dark:bg-neutral-900/50">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">

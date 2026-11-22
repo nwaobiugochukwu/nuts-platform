@@ -45,12 +45,11 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
   const debouncedQuery = useDebouncedValue(query.trim().toLocaleLowerCase(), 200);
   const isTypingAhead = query.trim().toLocaleLowerCase() !== debouncedQuery;
   const userId = useAuthStore((state) => state.user?.id);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthInitialized = useAuthStore((state) => state.isInitialized);
   const isCustomer = useAuthStore((state) =>
     state.isAuthenticated && (state.capabilities?.canPurchase ?? false),
   );
-  const isShopper = !isAuthenticated || isCustomer;
+  const isShopper = true;
   const sessionId = useRecommendationSessionId();
   const visitorId = useRecommendationVisitorId();
   const { searches: recentSearches, addSearch, removeSearch, clearSearches } = useRecentSearches();

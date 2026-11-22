@@ -6,7 +6,6 @@ import { adminApi } from "@/api/core/client";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { AdminVariantResponseDto } from "@/api/dto/variant";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { CategoryPicker } from "@/component/form/CategoryPicker";
 import { FormInput } from "@/component/form/FormInput";
@@ -171,8 +170,14 @@ export default function AdminProductPage() {
     },
   });
 
+  const [categoriesRequested, setCategoriesRequested] = useState(false);
+
   const { data: categoriesData } = useQuery({
     queryKey: queryKey.admin.category,
+    enabled:
+      open ||
+      categoriesRequested ||
+      Boolean(initialCatId && initialCatId !== "ALL"),
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
     queryFn: async () => {
@@ -541,11 +546,7 @@ export default function AdminProductPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Marketplace Catalog"
-          description="Manage merchant listings, inventory stock controls, and taxonomy bindings."
-        />
+      <div className="flex items-center justify-end">
         <Button
           onClick={openCreate}
           className="gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
@@ -583,6 +584,8 @@ export default function AdminProductPage() {
           name="categoryFilter"
           aria-label="Filter products by category"
           value={selectedCategory}
+          onFocus={() => setCategoriesRequested(true)}
+          onClick={() => setCategoriesRequested(true)}
           onChange={(e) => {
             setSelectedCategory(e.target.value);
             setPage(1);

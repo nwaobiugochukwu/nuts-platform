@@ -36,6 +36,7 @@ export interface PublicPlatformPromoDto {
   value: number;
   maxDiscountAmount?: number | null;
   minOrderAmount: number;
+  startsAt?: string | Date | null;
   expiresAt?: string | Date | null;
   isFirstOrderOnly?: boolean;
 }

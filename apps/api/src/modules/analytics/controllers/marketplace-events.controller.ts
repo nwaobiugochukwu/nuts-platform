@@ -1,5 +1,6 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
@@ -19,8 +20,9 @@ export class MarketplaceEventsController {
   @ApiOperation({ summary: 'Record a storefront visit' })
   recordView(
     @GetUser('id') userId: string | undefined,
+    @GetUser('role') userRole: ROLE | undefined,
     @Body() event: StoreViewDto,
   ) {
-    return this.events.recordStoreView(event.vendorId, event, userId);
+    return this.events.recordStoreView(event.vendorId, event, userId, userRole);
   }
 }

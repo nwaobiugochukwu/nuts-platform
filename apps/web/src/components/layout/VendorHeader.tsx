@@ -125,10 +125,11 @@ export function VendorHeader({ onMobileMenuClick, mobileMenuOpen = false }: Vend
           <Button
             variant="outline"
             size="sm"
-            className="hidden sm:flex items-center gap-1.5 text-xs font-medium rounded-xl border-border/80 hover:bg-secondary"
+            className="flex items-center gap-1.5 text-xs font-medium rounded-xl border-border/80 hover:bg-secondary px-2 sm:px-3 h-8 sm:h-9"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Storefront
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden sm:inline">Storefront</span>
+            <span className="sm:hidden">Store</span>
           </Button>
         </Link>
 
@@ -193,6 +194,29 @@ export function VendorHeader({ onMobileMenuClick, mobileMenuOpen = false }: Vend
                       <span className="truncate">{effectiveStoreName || "Vendor"}</span>
                     </span>
                   </div>
+                </div>
+
+                <div className="py-1 space-y-0.5">
+                  <Link
+                    href={storeHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <Store className="h-4 w-4 text-muted-foreground" />
+                    View My Storefront
+                  </Link>
+                  <Link
+                    href="/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    Live Marketplace
+                  </Link>
                 </div>
 
                 {/* Sign Out */}

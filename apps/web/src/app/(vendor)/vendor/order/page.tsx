@@ -5,7 +5,6 @@ import { getApiErrorMessage } from "@/api/core/error";
 import type { VendorOrderResponseDto } from "@/api/dto/order";
 import type { OrderStatus } from "@/api/core/types";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { OrderDetailsModal } from "@/component/order/OrderDetailsModal";
@@ -160,11 +159,6 @@ export default function DashboardOrderPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Customer Orders"
-        description="Fulfill purchases, update shipping stages, and inspect buyer delivery details."
-      />
-
       <ManagementToolbar
         value={search}
         onChange={(v) => {

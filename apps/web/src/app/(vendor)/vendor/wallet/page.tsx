@@ -2,7 +2,6 @@
 
 import { vendorWalletService } from "@/api/modules/vendor";
 import type { PaginationMeta } from "@/api/core/types";
-import { PageHeader } from "@/component/common/PageHeader";
 import { Badge } from "@/component/ui/badge";
 import { Button } from "@/component/ui/button";
 import { formatPrice } from "@/lib/util";
@@ -52,11 +51,6 @@ export default function DashboardWalletPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Store Wallet & Payouts"
-        description="Monitor real-time merchant balances, escrow settlements, and historical earnings."
-      />
-
       {/* Luxury Fintech Balance Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         {/* Available Balance Card */}

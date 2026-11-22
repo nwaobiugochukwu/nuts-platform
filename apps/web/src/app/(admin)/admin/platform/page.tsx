@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { adminGovernanceService, type PlatformConfig } from "@/api";
-import { PageHeader } from "@/component/common/PageHeader";
 import { Button } from "@/component/ui/button";
 import { Card } from "@/component/ui/card";
 import { Badge } from "@/component/ui/badge";
@@ -123,11 +122,7 @@ export default function AdminPlatformPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 sm:space-y-8">
-      <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <PageHeader
-          title="Platform Controls"
-          description="Manage service availability, account registration, and platform-wide settings."
-        />
+      <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-end md:justify-end">
         <Button
           type="button"
           variant="outline"
