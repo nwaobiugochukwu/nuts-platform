@@ -57,20 +57,23 @@ export function useForYouRecommendations(enabled = true) {
   const isAuthInitialized = useAuthStore((state) => state.isInitialized);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const isCustomer = isAuthenticated && canPurchase;
-  const isShopper = !isAuthenticated || isCustomer;
+  const isShopper = true;
   const sessionId = useRecommendationSessionId();
   const visitorId = useRecommendationVisitorId();
 
   const requestEnabled = enabled && isAuthInitialized && isShopper && Boolean(sessionId);
   const query = useQuery({
     queryKey: ["recommendations", "for-you", userId ?? null, sessionId, visitorId],
-    queryFn: async () =>
-      (await recommendationService.forYou(sessionId, isCustomer, visitorId)).data,
+    queryFn: async ({ signal }) =>
+      (await recommendationService.forYou(sessionId, isCustomer, visitorId, signal)).data,
     enabled: requestEnabled,
-    staleTime: 120_000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    // 90s before data is considered stale — fresh enough so navigating around
+    // the app reuses the response, but short enough to pick up new signals when
+    // the user returns to the page after some browsing.
+    staleTime: 90_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   return {
@@ -101,46 +104,48 @@ export function usePersonalizedRecommendations(enabled = true) {
     enabled && isAuthInitialized && Boolean(sessionId);
   const recentQuery = useQuery({
     queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId, visitorId],
-    queryFn: async () => (await recommendationService.recentlyViewed(sessionId, isCustomer, visitorId)).data,
+    queryFn: async ({ signal }) => (await recommendationService.recentlyViewed(sessionId, isCustomer, visitorId, signal)).data,
     enabled: requestEnabled,
-    staleTime: 120_000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    // Recently viewed should be fresh — 30s so returning to home picks up
+    // any new views from product pages visited in the same session.
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   const followingQuery = useQuery({
     queryKey: ["recommendations", "following", userId],
-    queryFn: async () => (await recommendationService.following()).data,
+    queryFn: async ({ signal }) => (await recommendationService.following(signal)).data,
     enabled: enabled && isCustomer,
     staleTime: 120_000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
 
   const storesQuery = useQuery({
     queryKey: ["recommendations", "stores", userId ?? null, sessionId, visitorId],
-    queryFn: async () =>
-      (await recommendationService.stores(sessionId, isCustomer, visitorId)).data,
+    queryFn: async ({ signal }) =>
+      (await recommendationService.stores(sessionId, isCustomer, visitorId, signal)).data,
     // Store discovery is a separate shelf and must not wait for For You or the
     // cold-start store mix to finish.
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
 
   const marketplaceMixQuery = useQuery({
     queryKey: ["recommendations", "marketplace-mix", userId ?? null, sessionId, visitorId],
-    queryFn: async () =>
-      (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId)).data,
+    queryFn: async ({ signal }) =>
+      (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId, signal)).data,
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
   const starterPicks = useMemo(
     () => selectStarterPicks(forYouQuery.products, marketplaceMixQuery.data?.vendors ?? []),

@@ -4,7 +4,6 @@ import { adminUserService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AdminUserResponseDto } from "@/api/dto/user";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { OtpPromptDialog } from "@/component/modal/OtpPromptDialog";
 import { Badge } from "@/component/ui/badge";
@@ -229,11 +228,6 @@ export default function AdminUserPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="User Accounts"
-        description="Search customer and vendor directories, manage credentials, and audit privileges."
-      />
-
       <ManagementToolbar
         value={search}
         onChange={(v) => {

@@ -1,5 +1,13 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Logger,
+  Post,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { ProductViewsService } from '../tracking/product-views/product-views.service';
@@ -29,6 +37,8 @@ interface StoreViewEventPayload {
 @ApiTags('ANALYTICS EVENTS')
 @Controller('analytics/events')
 export class AnalyticsEventsController {
+  private readonly logger = new Logger(AnalyticsEventsController.name);
+
   constructor(
     private readonly productViews: ProductViewsService,
     private readonly searchTracking: SearchTrackingService,
@@ -47,6 +57,7 @@ export class AnalyticsEventsController {
   })
   async track(
     @GetUser('id') userId: string | undefined,
+    @GetUser('role') userRole: ROLE | undefined,
     @Body()
     payload:
       | TrackEventDto
@@ -55,80 +66,100 @@ export class AnalyticsEventsController {
       | StoreViewDto
       | Record<string, unknown>,
   ): Promise<{ accepted: boolean }> {
-    if (!payload || typeof payload !== 'object') {
-      return { accepted: false };
-    }
+    try {
+      if (!payload || typeof payload !== 'object') {
+        return { accepted: false };
+      }
 
-    // 1. Batch events payload support: { events: [...] }
-    if ('events' in payload && Array.isArray(payload.events)) {
-      return this.recommendationEvents.recordMany(
-        userId,
-        payload.events as RecommendationEventDto[],
-      );
-    }
+      // Administrators viewing their own store or marketplace should never pollute analytics
+      if (userRole === ROLE.ADMIN) {
+        return { accepted: true };
+      }
 
-    // 2. Recommendation events (CLICK, IMPRESSION, CATEGORY_VIEW, etc.)
-    if (
-      'eventType' in payload &&
-      typeof payload.eventType === 'string' &&
-      payload.eventType &&
-      payload.eventType !== 'STORE_VIEW'
-    ) {
-      return this.recommendationEvents.record(
-        userId,
-        payload as RecommendationEventDto,
-      );
-    }
-
-    // 3. Store view event
-    const raw = payload as StoreViewEventPayload;
-    if (
-      raw.event === 'store_view' ||
-      raw.eventType === 'STORE_VIEW' ||
-      (typeof raw.vendorId === 'string' && !raw.productId && !raw.query)
-    ) {
-      if (raw.vendorId) {
-        return this.marketplaceEvents.recordStoreView(
-          raw.vendorId,
-          {
-            id: raw.id || randomUUID(),
-            sessionId: raw.sessionId,
-            visitorId: raw.visitorId,
-          },
+      // 1. Batch events payload support: { events: [...] }
+      if ('events' in payload && Array.isArray(payload.events)) {
+        return await this.recommendationEvents.recordMany(
           userId,
+          payload.events as RecommendationEventDto[],
+          userRole,
         );
       }
-      return { accepted: false };
-    }
 
-    // 4. Product view event
-    const trackEvent = payload as TrackEventDto;
-    if (trackEvent.event === 'product_view' && trackEvent.productId) {
-      await this.productViews.trackView(
-        trackEvent.productId,
-        userId,
-        trackEvent.sessionId,
-        trackEvent.visitorId,
-        trackEvent.id,
+      // 2. Recommendation events (CLICK, IMPRESSION, CATEGORY_VIEW, etc.)
+      if (
+        'eventType' in payload &&
+        typeof payload.eventType === 'string' &&
+        payload.eventType &&
+        payload.eventType !== 'STORE_VIEW'
+      ) {
+        return await this.recommendationEvents.record(
+          userId,
+          payload as RecommendationEventDto,
+          userRole,
+        );
+      }
+
+      // 3. Store view event
+      const raw = payload as StoreViewEventPayload;
+      if (
+        raw.event === 'store_view' ||
+        raw.eventType === 'STORE_VIEW' ||
+        (typeof raw.vendorId === 'string' && !raw.productId && !raw.query)
+      ) {
+        if (raw.vendorId) {
+          // Vendor viewing their own store: drop self-view telemetry
+          if (userRole === ROLE.VENDOR && raw.vendorId === userId) {
+            return { accepted: true };
+          }
+          return await this.marketplaceEvents.recordStoreView(
+            raw.vendorId,
+            {
+              id: raw.id || randomUUID(),
+              sessionId: raw.sessionId,
+              visitorId: raw.visitorId,
+            },
+            userId,
+            userRole,
+          );
+        }
+        return { accepted: false };
+      }
+
+      // 4. Product view event
+      const trackEvent = payload as TrackEventDto;
+      if (trackEvent.event === 'product_view' && trackEvent.productId) {
+        await this.productViews.trackView(
+          trackEvent.productId,
+          userId,
+          trackEvent.sessionId,
+          trackEvent.visitorId,
+          trackEvent.id,
+          userRole,
+        );
+        return { accepted: true };
+      }
+
+      // 5. Search event
+      if (
+        trackEvent.event === 'search' &&
+        trackEvent.query &&
+        trackEvent.resultsCount !== undefined
+      ) {
+        await this.searchTracking.trackSearch(
+          trackEvent.query.trim().slice(0, 100),
+          trackEvent.resultsCount,
+          userRole === ROLE.VENDOR ? undefined : userId,
+          trackEvent.sessionId,
+        );
+        return { accepted: true };
+      }
+
+      return { accepted: true };
+    } catch (error) {
+      this.logger.warn(
+        `Analytics telemetry caught and accepted gracefully: ${error instanceof Error ? error.message : String(error)}`,
       );
       return { accepted: true };
     }
-
-    // 5. Search event
-    if (
-      trackEvent.event === 'search' &&
-      trackEvent.query &&
-      trackEvent.resultsCount !== undefined
-    ) {
-      await this.searchTracking.trackSearch(
-        trackEvent.query.trim().slice(0, 100),
-        trackEvent.resultsCount,
-        userId,
-        trackEvent.sessionId,
-      );
-      return { accepted: true };
-    }
-
-    return { accepted: true };
   }
 }

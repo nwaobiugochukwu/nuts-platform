@@ -3,7 +3,6 @@
 import { vendorApi } from "@/api/core/client";
 import { getApiErrorMessage } from "@/api/core/error";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { FormInput } from "@/component/form/FormInput";
 import { FormSelect } from "@/component/form/FormSelect";
@@ -23,17 +22,19 @@ import { formatPrice } from "@/lib/util";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
-Ban,
-Check,
-Copy,
-Pencil,
-Plus,
-RotateCcw,
-Tag,
-Trash2
+  Ban,
+  Check,
+  Copy,
+  Package,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Search,
+  Tag,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { FormProvider,useForm,useWatch } from "react-hook-form";
+import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -49,6 +50,27 @@ interface VendorDiscount {
   usageLimit?: number | null;
   expiresAt?: string | null;
   description?: string | null;
+  applicableProductIds?: string[];
+}
+
+interface VendorProductOption {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+}
+
+function toInputDateTime(isoString?: string | null): string {
+  if (!isoString) return "";
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return "";
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  } catch {
+    return "";
+  }
 }
 
 const optionalNumber = (minVal = 0, label = "Value") =>
@@ -110,6 +132,7 @@ const createDiscountSchema = z
     maxDiscountAmount: optionalNumber(0, "Maximum discount cap"),
     usageLimit: optionalPositiveInt("Global usage limit"),
     expiresAt: z.string().optional().or(z.literal("")),
+    applicableProductIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
     if (data.type === "PERCENTAGE" && data.value > 100) {
@@ -132,6 +155,8 @@ export default function DashboardDiscountPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [scopeMode, setScopeMode] = useState<"all" | "specific">("all");
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const qc = useQueryClient();
@@ -146,6 +171,27 @@ export default function DashboardDiscountPage() {
     },
   });
 
+  const { data: vendorProducts = [] } = useQuery<VendorProductOption[]>({
+    queryKey: ["vendor", "products", "discount-selector"],
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const res = await vendorApi.get<VendorProductOption[]>("/vendors/products", {
+        params: { limit: 100 },
+      });
+      const raw = res.data;
+      if (Array.isArray(raw)) return raw;
+      if (
+        raw &&
+        typeof raw === "object" &&
+        "data" in raw &&
+        Array.isArray((raw as { data: unknown }).data)
+      ) {
+        return (raw as { data: VendorProductOption[] }).data;
+      }
+      return [];
+    },
+  });
+
   const methods = useForm<CreateDiscountFormData>({
     resolver: zodResolver(createDiscountSchema),
     defaultValues: {
@@ -157,10 +203,12 @@ export default function DashboardDiscountPage() {
       maxDiscountAmount: undefined,
       usageLimit: undefined,
       expiresAt: "",
+      applicableProductIds: [],
     },
   });
 
   const selectedType = useWatch({ control: methods.control, name: "type" });
+  const selectedProductIds = useWatch({ control: methods.control, name: "applicableProductIds" }) ?? [];
 
   const discountPayload = (values: CreateDiscountFormData) => ({
     code: values.code.trim().toUpperCase(),
@@ -177,6 +225,7 @@ export default function DashboardDiscountPage() {
         ? values.usageLimit
         : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+    applicableProductIds: values.applicableProductIds?.length ? values.applicableProductIds : [],
   });
 
   const refreshDiscounts = () =>
@@ -250,6 +299,8 @@ export default function DashboardDiscountPage() {
 
   const openCreate = () => {
     setEditingDiscount(null);
+    setProductSearch("");
+    setScopeMode("all");
     methods.reset({
       code: "",
       type: "PERCENTAGE",
@@ -259,12 +310,18 @@ export default function DashboardDiscountPage() {
       maxDiscountAmount: undefined,
       usageLimit: undefined,
       expiresAt: "",
+      applicableProductIds: [],
     });
     setOpen(true);
   };
 
   const openEdit = (discount: VendorDiscount) => {
     setEditingDiscount(discount);
+    setProductSearch("");
+    const hasSpecific = Boolean(
+      discount.applicableProductIds && discount.applicableProductIds.length > 0,
+    );
+    setScopeMode(hasSpecific ? "specific" : "all");
     methods.reset({
       code: discount.code,
       type: discount.type,
@@ -273,7 +330,8 @@ export default function DashboardDiscountPage() {
       minOrderAmount: discount.minOrderAmount ?? 0,
       maxDiscountAmount: discount.maxDiscountAmount ?? undefined,
       usageLimit: discount.usageLimit ?? undefined,
-      expiresAt: discount.expiresAt ? discount.expiresAt.slice(0, 10) : "",
+      expiresAt: toInputDateTime(discount.expiresAt),
+      applicableProductIds: discount.applicableProductIds ?? [],
     });
     setOpen(true);
   };
@@ -307,6 +365,29 @@ export default function DashboardDiscountPage() {
           </div>
         </div>
       ),
+    },
+    {
+      key: "scope",
+      header: "Applies To",
+      className: "min-w-[140px]",
+      render: (r) => {
+        const count = r.applicableProductIds?.length ?? 0;
+        if (count === 0) {
+          return (
+            <span className="text-xs text-muted-foreground font-medium">
+              All store products
+            </span>
+          );
+        }
+        return (
+          <Badge
+            variant="outline"
+            className="text-xs font-semibold bg-primary/10 text-primary border-primary/20"
+          >
+            {count} {count === 1 ? "Product" : "Products"}
+          </Badge>
+        );
+      },
     },
     {
       key: "type",
@@ -418,11 +499,7 @@ export default function DashboardDiscountPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Discount Coupons"
-          description="Create customized promotions to drive sales for your products."
-        />
+      <div className="flex items-center justify-end">
         <Button
           onClick={openCreate}
           className="w-full sm:w-auto justify-center gap-2 rounded-2xl bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 px-5 shadow-sm"
@@ -584,9 +661,145 @@ export default function DashboardDiscountPage() {
 
               <FormInput
                 name="expiresAt"
-                label="Expiration Date (Optional)"
-                type="date"
+                label="Expiration Date & Time (Optional)"
+                type="datetime-local"
               />
+
+              {/* Product Application Scope */}
+              <div className="space-y-2 rounded-2xl border border-border/80 bg-muted/20 p-3 sm:p-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Package className="h-3.5 w-3.5 text-primary" />
+                    Applicable Products
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {scopeMode === "all"
+                      ? "Applies to entire store catalog"
+                      : `${selectedProductIds.length} of ${vendorProducts.length} selected`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScopeMode("all");
+                      methods.setValue("applicableProductIds", []);
+                    }}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold border transition-all ${
+                      scopeMode === "all"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/80 bg-card text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    All Store Products
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScopeMode("specific")}
+                    className={`rounded-xl px-3 py-2 text-xs font-semibold border transition-all ${
+                      scopeMode === "specific"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border/80 bg-card text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    Specific Products
+                  </button>
+                </div>
+
+                {scopeMode === "specific" && (
+                  <div className="space-y-2 pt-2 border-t border-border/60">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        placeholder="Search your products by name or SKU..."
+                        className="w-full rounded-xl border border-border/80 bg-background py-1.5 pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allIds = vendorProducts.map((p) => p.id);
+                          methods.setValue("applicableProductIds", allIds);
+                        }}
+                        className="text-primary hover:underline font-medium"
+                      >
+                        Select all ({vendorProducts.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => methods.setValue("applicableProductIds", [])}
+                        className="text-muted-foreground hover:text-foreground font-medium"
+                      >
+                        Clear selection
+                      </button>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto divide-y divide-border/40 rounded-xl border border-border/80 bg-background p-1 space-y-0.5">
+                      {vendorProducts.length === 0 ? (
+                        <p className="p-3 text-center text-xs text-muted-foreground">
+                          No products found in your catalog.
+                        </p>
+                      ) : (
+                        vendorProducts
+                          .filter((p) => {
+                            const q = productSearch.trim().toLowerCase();
+                            return (
+                              !q ||
+                              p.name.toLowerCase().includes(q) ||
+                              p.sku.toLowerCase().includes(q)
+                            );
+                          })
+                          .map((product) => {
+                            const isChecked = selectedProductIds.includes(product.id);
+                            return (
+                              <label
+                                key={product.id}
+                                className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-colors text-xs ${
+                                  isChecked
+                                    ? "bg-primary/5 text-foreground font-medium"
+                                    : "text-muted-foreground hover:bg-muted/40"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      methods.setValue("applicableProductIds", [
+                                        ...selectedProductIds,
+                                        product.id,
+                                      ]);
+                                    } else {
+                                      methods.setValue(
+                                        "applicableProductIds",
+                                        selectedProductIds.filter((id) => id !== product.id),
+                                      );
+                                    }
+                                  }}
+                                  className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="truncate font-semibold text-foreground">
+                                    {product.name}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground">
+                                    SKU: {product.sku} • {formatPrice(product.price)}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <FormTextarea
                 name="description"

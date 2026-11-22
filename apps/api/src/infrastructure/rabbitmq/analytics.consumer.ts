@@ -1,4 +1,5 @@
 ﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
 import { RABBITMQ_QUEUES } from './rabbitmq.constants';
@@ -41,29 +42,67 @@ export class AnalyticsConsumer implements OnModuleInit {
             : new Date();
 
           if (payload.type === 'product_view' && payload.productId) {
-            await this.prisma.productView.createMany({
-              data: [
-                {
-                  id:
-                    payload.id ??
-                    productViewEventId({
+            try {
+              await this.prisma.productView.createMany({
+                data: [
+                  {
+                    id:
+                      payload.id ??
+                      productViewEventId({
+                        productId: payload.productId,
+                        userId: payload.userId,
+                        visitorId: payload.visitorId,
+                        sessionId: payload.sessionId,
+                        timestamp: payload.timestamp,
+                      }),
+                    productId: payload.productId,
+                    userId: payload.userId ?? null,
+                    visitorId: payload.visitorId ?? null,
+                    sessionId: payload.sessionId ?? null,
+                    createdAt,
+                  },
+                ],
+                // RabbitMQ may redeliver after the insert succeeded but before
+                // the delivery acknowledgement was recorded.
+                skipDuplicates: true,
+              });
+            } catch (insertErr) {
+              if (
+                insertErr instanceof Prisma.PrismaClientKnownRequestError &&
+                insertErr.code === 'P2003'
+              ) {
+                // If userId does not exist in User table (e.g. vendor browsing as visitor), fallback with visitorId
+                await this.prisma.productView.createMany({
+                  data: [
+                    {
+                      id:
+                        payload.id ??
+                        productViewEventId({
+                          productId: payload.productId,
+                          userId: undefined,
+                          visitorId:
+                            payload.visitorId ??
+                            (payload.userId
+                              ? `visitor:${payload.userId}`
+                              : null),
+                          sessionId: payload.sessionId,
+                          timestamp: payload.timestamp,
+                        }),
                       productId: payload.productId,
-                      userId: payload.userId,
-                      visitorId: payload.visitorId,
-                      sessionId: payload.sessionId,
-                      timestamp: payload.timestamp,
-                    }),
-                  productId: payload.productId,
-                  userId: payload.userId ?? null,
-                  visitorId: payload.visitorId ?? null,
-                  sessionId: payload.sessionId ?? null,
-                  createdAt,
-                },
-              ],
-              // RabbitMQ may redeliver after the insert succeeded but before
-              // the delivery acknowledgement was recorded.
-              skipDuplicates: true,
-            });
+                      userId: null,
+                      visitorId:
+                        payload.visitorId ??
+                        (payload.userId ? `visitor:${payload.userId}` : null),
+                      sessionId: payload.sessionId ?? null,
+                      createdAt,
+                    },
+                  ],
+                  skipDuplicates: true,
+                });
+              } else {
+                throw insertErr;
+              }
+            }
           } else if (payload.type === 'search' && payload.query) {
             await this.prisma.searchQuery.create({
               data: {

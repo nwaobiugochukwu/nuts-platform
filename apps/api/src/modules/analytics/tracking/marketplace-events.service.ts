@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 
@@ -35,19 +35,29 @@ export class MarketplaceEventsService {
     vendorId: string,
     identity: { id: string; visitorId?: string; sessionId?: string },
     userId?: string,
+    userRole?: ROLE,
   ): Promise<{ accepted: boolean }> {
+    if (userRole === ROLE.ADMIN || (userId && vendorId === userId)) {
+      return { accepted: true };
+    }
+
     const vendor = await this.prisma.vendor.findFirst({
       where: { id: vendorId, isActive: true, isApproved: true },
       select: { id: true },
     });
     if (!vendor) return { accepted: false };
 
+    const effectiveUserId = userRole === ROLE.VENDOR ? null : (userId ?? null);
+    const effectiveVisitorId =
+      identity.visitorId ??
+      (userRole === ROLE.VENDOR && userId ? `vendor:${userId}` : null);
+
     return this.record({
       id: identity.id,
       eventType: 'STORE_VIEW',
       vendorId: vendor.id,
-      userId: userId ?? null,
-      visitorId: identity.visitorId ?? null,
+      userId: effectiveUserId,
+      visitorId: effectiveVisitorId,
       sessionId: identity.sessionId ?? null,
       surface: 'VENDOR_STORE',
     });

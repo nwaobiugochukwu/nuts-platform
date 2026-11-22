@@ -10,7 +10,6 @@ import { z } from "zod";
 import { adminCategoryService,adminSystemService } from "@/api";
 import type { CreateCategoryPayload, UpdateCategoryPayload } from "@/api/modules/category";
 import type { CategoryResponseDto,CategoryStatus } from "@/api/dto/category";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { FormInput } from "@/component/form/FormInput";
 import { FormSelect } from "@/component/form/FormSelect";
@@ -803,13 +802,8 @@ export default function AdminCategoryPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="Marketplace Catalog Taxonomy"
-          description="Manage hierarchical category trees, paths, status lifecycles, and cache invalidation."
-        />
-
+      {/* Top Actions */}
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

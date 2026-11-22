@@ -66,11 +66,14 @@ export function HomeProductShelves({
 
   const visibleRecent = uniqueProducts(recentlyViewed, 12);
   const visibleStarterPicks = uniqueProducts(starterPicks, 12);
-  const visibleForYou = uniqueProducts(
+  let visibleForYou = uniqueProducts(
     forYou,
     12,
     new Set([...visibleRecent, ...visibleStarterPicks].map(({ id }) => id)),
   );
+  if (visibleForYou.length === 0 && forYou.length > 0) {
+    visibleForYou = uniqueProducts(forYou, 12, new Set(visibleRecent.map(({ id }) => id)));
+  }
   const visibleFollowing = uniqueProducts(
     fromFollowedVendors,
     12,

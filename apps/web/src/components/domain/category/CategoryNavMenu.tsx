@@ -26,6 +26,24 @@ export function CategoryNavMenu({
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastPointerTypeRef = useRef<string | null>(null);
   const isOpen = openPath === pathname;
+  const [topOffset, setTopOffset] = useState(64);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updateOffset = () => {
+      const header = document.querySelector("header");
+      if (header) {
+        setTopOffset(Math.round(header.getBoundingClientRect().bottom));
+      }
+    };
+    updateOffset();
+    window.addEventListener("resize", updateOffset);
+    window.addEventListener("scroll", updateOffset, { passive: true });
+    return () => {
+      window.removeEventListener("resize", updateOffset);
+      window.removeEventListener("scroll", updateOffset);
+    };
+  }, [isOpen]);
 
   const rootCategories = categories.filter((category) => !category.parentId);
   const activeRoot =
@@ -119,18 +137,30 @@ export function CategoryNavMenu({
             type="button"
             tabIndex={-1}
             aria-label="Close category menu"
-            className="fixed inset-x-0 bottom-0 top-16 z-40 bg-black/25 backdrop-blur-[2px] md:hidden"
+            className="fixed inset-x-0 bottom-0 z-40 bg-black/25 backdrop-blur-[2px] md:hidden cursor-pointer"
+            style={{ top: `${topOffset}px` }}
             onClick={closeMenu}
           />
 
           <section
             id="category-navigation-panel"
             aria-label="Browse product categories"
-            className="fixed inset-x-0 bottom-0 top-16 z-50 flex overflow-hidden border-t border-border bg-background text-foreground shadow-xl md:bottom-auto md:max-h-[75vh] md:bg-background/95 md:backdrop-blur-xl"
+            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden border-t border-border bg-background text-foreground shadow-xl md:bottom-auto md:max-h-[75vh] md:bg-background/95 md:backdrop-blur-xl"
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
-            style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+            style={{
+              top: `${topOffset}px`,
+              fontFamily: "Georgia, 'Times New Roman', serif",
+            }}
           >
+            {/* Mobile Header */}
+            <div className="flex items-center border-b border-border/70 px-4 py-2 bg-secondary/30 md:hidden shrink-0">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Categories
+              </span>
+            </div>
+
+            <div className="flex flex-1 min-h-0 overflow-hidden">
             <nav
               aria-label="Main categories"
               className="min-h-0 w-[clamp(7.25rem,42vw,16rem)] shrink-0 overflow-y-auto overscroll-contain border-r border-border bg-secondary/30 p-2 sm:p-3"
@@ -255,6 +285,7 @@ export function CategoryNavMenu({
                   )}
                 </div>
               )}
+            </div>
             </div>
           </section>
         </>,

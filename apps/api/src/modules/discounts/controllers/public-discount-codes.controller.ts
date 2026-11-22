@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -39,6 +40,10 @@ export class PublicDiscountCodesController {
 
   @Get(':productId/available-product-deals-and-vouchers')
   @OptionalAuth()
+  @Header(
+    'Cache-Control',
+    'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
+  )
   @ApiOperation({
     summary:
       'Get available deals, vouchers and highest-saving discount for a product',

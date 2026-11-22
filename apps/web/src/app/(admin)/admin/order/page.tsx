@@ -5,7 +5,6 @@ import { getApiErrorMessage } from "@/api/core/error";
 import type { AdminOrderResponseDto } from "@/api/dto/order";
 import type { OrderStatus } from "@/api/core/types";
 import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { PageHeader } from "@/component/common/PageHeader";
 import { DataTable,type Column } from "@/component/data/DataTable";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { OrderDetailsModal } from "@/component/order/OrderDetailsModal";
@@ -202,11 +201,6 @@ export default function AdminOrderPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Marketplace Orders"
-        description="Monitor customer purchases, shipping status updates, and settlement audits."
-      />
-
       <ManagementToolbar
         value={search}
         onChange={(v) => {

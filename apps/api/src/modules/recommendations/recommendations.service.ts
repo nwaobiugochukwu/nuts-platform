@@ -292,6 +292,7 @@ export class RecommendationsService {
       const categoryWeights = new Map<string, number>();
       const vendorWeights = new Map<string, number>();
       recentViews.forEach(({ product }, index) => {
+        if (!product) return;
         const weight = Math.pow(0.84, index);
         addWeight(categoryWeights, product.categoryId, weight);
         addWeight(vendorWeights, product.vendorId, weight);
@@ -954,7 +955,7 @@ export class RecommendationsService {
         categoryViews.length === 0 &&
         vendorClicks.length === 0
       ) {
-        return [];
+        return this.discover();
       }
 
       const seedProducts = seedIds.length

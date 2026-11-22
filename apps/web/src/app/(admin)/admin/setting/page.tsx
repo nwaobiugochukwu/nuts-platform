@@ -1,7 +1,6 @@
 "use client";
 
 import { adminSystemService } from "@/api";
-import { PageHeader } from "@/component/common/PageHeader";
 import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
 import { ThemeSelector } from "@/component/theme/ThemeSelector";
 import { Badge } from "@/component/ui/badge";
@@ -84,11 +83,7 @@ export default function AdminSettingPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <PageHeader
-          title="System & Cache Management"
-          description="Manage operational Redis cache invalidation, search index synchronization, and payment parameters."
-        />
+      <div className="flex items-center justify-end">
         <Button
           variant="outline"
           size="sm"
