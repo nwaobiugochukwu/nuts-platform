@@ -68,10 +68,12 @@ export function useForYouRecommendations(enabled = true) {
     queryFn: async ({ signal }) =>
       (await recommendationService.forYou(sessionId, isCustomer, visitorId, signal)).data,
     enabled: requestEnabled,
-    // 90s before data is considered stale — fresh enough so navigating around
-    // the app reuses the response, but short enough to pick up new signals when
-    // the user returns to the page after some browsing.
-    staleTime: 15_000,
+    // Freshness after the shopper DOES something comes from explicit
+    // invalidation (see refreshPersonalizedRecommendations), not from this
+    // timer. The timer only covers "came back to the tab a while later", so it
+    // must be long enough that merely focusing the window never re-sends
+    // requests that are still current.
+    staleTime: 60_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -109,7 +111,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
     // any new views from product pages visited in the same session.
-    staleTime: 5_000,
+    staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -121,7 +123,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     enabled: enabled && isCustomer,
     // Never blank the shelf while a refetch (or auth refresh) is in flight.
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    staleTime: 120_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -134,7 +136,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     // Store discovery is a separate shelf and must not wait for For You or the
     // cold-start store mix to finish.
     enabled: publicDiscoveryEnabled,
-    staleTime: 30_000,
+    staleTime: 120_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,

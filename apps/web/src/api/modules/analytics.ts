@@ -179,13 +179,18 @@ async function flushRecommendationImpressions() {
  */
 export function refreshPersonalizedRecommendations(): void {
   if (typeof window === "undefined") return;
-  void getQueryClient().invalidateQueries({
-    predicate: ({ queryKey }) =>
-      queryKey[0] === "recommendations" &&
-      queryKey[1] !== "marketplace-mix" &&
-      queryKey[1] !== "related",
-    refetchType: "active",
-  });
+  void getQueryClient().invalidateQueries(
+    {
+      predicate: ({ queryKey }) =>
+        queryKey[0] === "recommendations" &&
+        queryKey[1] !== "marketplace-mix" &&
+        queryKey[1] !== "related",
+      refetchType: "active",
+    },
+    // A shelf that is already loading will pick up the signal on its own
+    // request; restarting it would just send the same request twice.
+    { cancelRefetch: false },
+  );
 }
 
 export const analyticsEventService = {

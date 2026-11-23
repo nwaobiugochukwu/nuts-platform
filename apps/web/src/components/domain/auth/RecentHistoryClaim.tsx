@@ -24,14 +24,18 @@ export function RecentHistoryClaim() {
   });
 
   useEffect(() => {
-    if (claimQuery.isSuccess && userId) {
+    // Only refresh the shelves when guest history was actually merged into the
+    // account. Refreshing unconditionally re-fetched three shelves on every
+    // page load, racing the initial requests for no new data.
+    if (claimQuery.isSuccess && userId && (claimQuery.data?.claimed ?? 0) > 0) {
+      const options = { cancelRefetch: false } as const;
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.recentlyViewed(userId), refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.stores(userId), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "active" }, options),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.recentlyViewed(userId), refetchType: "active" }, options),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.stores(userId), refetchType: "active" }, options),
       ]);
     }
-  }, [claimQuery.isSuccess, queryClient, userId]);
+  }, [claimQuery.isSuccess, claimQuery.data?.claimed, queryClient, userId]);
 
   return null;
 }
