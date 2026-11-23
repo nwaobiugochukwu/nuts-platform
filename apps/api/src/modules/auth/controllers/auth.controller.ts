@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -63,6 +64,7 @@ import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
+import { ROLE } from '@prisma/client';
 import { AUTH_REFRESH_COOKIE } from '../constants/auth-cookies.constants';
 
 function getCookieValue(cookies: unknown, name: string): string | undefined {
@@ -298,6 +300,11 @@ export class AuthController {
      * AuthService uses it as a compare-and-swap value so two
      * simultaneous refresh requests cannot both rotate the same session.
      */
+    if (payload.role !== ROLE.USER) {
+      // Vendor and admin refresh tokens are consumed only by their own endpoints.
+      throw new UnauthorizedException('Invalid token role');
+    }
+
     const session = await this.authService.refresh(payload);
 
     this.authCookies.setAuthCookies(res, session.tokens);

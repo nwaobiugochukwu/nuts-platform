@@ -276,7 +276,7 @@ export function NotificationsManager({
           {backHref && (
             <BackLink
               fallbackHref={backHref}
-              fallbackLabel={backLabel || "Home"}
+              fallbackLabel={`Back to ${backLabel || "Home"}`}
               className="mb-1 -ml-1 px-1 text-xs"
             />
           )}

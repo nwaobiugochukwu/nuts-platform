@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ROLE } from '@prisma/client';
 import { Strategy } from 'passport-jwt';
-import { AUTH_REFRESH_COOKIE } from '../../constants/auth-cookies.constants';
+import {
+  AUTH_COOKIE_NAMES,
+  AUTH_REFRESH_COOKIE,
+  authCookieRoleForPath,
+} from '../../constants/auth-cookies.constants';
 import type { RefreshJwtPayload } from '../../types/refresh-jwt-payload.type';
 import { jwtFromCookie } from '../../utils/jwt-cookie.extractor';
 import type { Request } from 'express';
@@ -11,7 +15,15 @@ import type { Request } from 'express';
 function extractRefreshToken(req: Request): string | null {
   if (!req) return null;
 
-  // Standard HttpOnly refreshToken cookie per OWASP token delivery standard
+  // The refresh endpoint's portal decides which role's cookie is read, so one
+  // role can never consume (and rotate) another role's refresh token.
+  const role = authCookieRoleForPath(req.originalUrl ?? req.url);
+  const own = jwtFromCookie(AUTH_COOKIE_NAMES[role].refresh)(req);
+  if (own) return own;
+
+  // Sessions created before per-role cookies carry their token in the shared
+  // cookie; the endpoint-role check in the controller rejects it if it belongs
+  // to a different role. Customers use this cookie natively.
   return (
     jwtFromCookie(AUTH_REFRESH_COOKIE)(req) ??
     jwtFromCookie('refresh_token')(req)

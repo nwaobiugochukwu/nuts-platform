@@ -131,7 +131,7 @@ export class VendorAuthController {
 
     // Unapproved vendors do not receive session tokens
     if (session.tokens) {
-      this.authCookies.setAuthCookies(res, session.tokens);
+      this.authCookies.setAuthCookies(res, session.tokens, 'vendor');
     }
 
     return {
@@ -181,7 +181,7 @@ export class VendorAuthController {
     );
 
     // Login always produces tokens (only register can return null)
-    this.authCookies.setAuthCookies(res, session.tokens!);
+    this.authCookies.setAuthCookies(res, session.tokens!, 'vendor');
 
     return {
       vendor: session.profile,
@@ -233,7 +233,7 @@ export class VendorAuthController {
     );
 
     if (session.tokens) {
-      this.authCookies.setAuthCookies(res, session.tokens);
+      this.authCookies.setAuthCookies(res, session.tokens, 'vendor');
     }
 
     return {
@@ -288,7 +288,7 @@ export class VendorAuthController {
     );
 
     if (session.tokens) {
-      this.authCookies.setAuthCookies(res, session.tokens);
+      this.authCookies.setAuthCookies(res, session.tokens, 'vendor');
     }
 
     return {
@@ -335,10 +335,11 @@ export class VendorAuthController {
     const session = await this.vendorAuthService.refresh(
       payload.sub,
       payload.refreshId,
+      payload.sessionId,
     );
 
     // Refresh always produces tokens
-    this.authCookies.setAuthCookies(res, session.tokens!);
+    this.authCookies.setAuthCookies(res, session.tokens!, 'vendor');
 
     return {
       vendor: session.profile,
@@ -365,6 +366,7 @@ export class VendorAuthController {
   })
   async logout(
     @GetVendor('id') vendorId: string,
+    @GetUser('sessionId') sessionId: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<null> {
@@ -372,9 +374,10 @@ export class VendorAuthController {
       vendorId,
       extractIpAddress(req),
       extractUserAgent(req),
+      sessionId,
     );
 
-    this.authCookies.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res, 'vendor');
 
     return null;
   }

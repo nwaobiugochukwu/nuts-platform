@@ -367,9 +367,6 @@ export function ProductDetailView({
     p.discountPrice && Number(p.discountPrice) > basePrice
       ? Number(p.discountPrice)
       : null;
-  const discountPercent = originalPrice
-    ? Math.round(((originalPrice - basePrice) / originalPrice) * 100)
-    : 0;
 
   const stock = selectedVariant?.stock ?? (p.hasVariants ? 0 : p.stock ?? 0);
   const isOutOfStock = stock <= 0;
@@ -572,14 +569,6 @@ export function ProductDetailView({
               </button>
             )}
 
-            {/* Discount Badge */}
-            {discountPercent > 0 && (
-              <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
-                <span className="rounded-md bg-black dark:bg-white px-2.5 py-1 text-xs font-bold text-white dark:text-black shadow-sm">
-                  -{discountPercent}% OFF
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Thumbnail Strip with Active Line Indicator */}

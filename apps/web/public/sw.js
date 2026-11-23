@@ -10,31 +10,42 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
+  let data;
   try {
-    const data = event.data.json();
-    const title = data.title || 'NUTS Notification';
-    const options = {
-      body: data.body || '',
-      icon: data.icon || '/favicon.svg',
-      badge: data.badge || '/favicon.svg',
-      data: {
-        url: data.url || '/',
-        ...data.data,
-      },
-      tag: data.data?.notificationId || 'nuts-notification',
-      renotify: true,
-    };
-
-    event.waitUntil(self.registration.showNotification(title, options));
+    data = event.data.json();
   } catch {
-    const text = event.data.text();
-    event.waitUntil(
-      self.registration.showNotification('NUTS Notification', {
-        body: text,
-        icon: '/favicon.svg',
-      }),
-    );
+    data = { title: 'NUTS Notification', body: event.data.text() };
   }
+
+  event.waitUntil(
+    (async () => {
+      const notificationId = data.data && data.data.notificationId;
+
+      // The app is open and looking at the user: the in-app notification (live stream)
+      // already shows it, so a system notification would be a duplicate. Only skip when
+      // an in-app copy exists (notificationId) so nothing is ever lost.
+      if (notificationId) {
+        const windows = await self.clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true,
+        });
+        if (windows.some((w) => w.visibilityState === 'visible' && w.focused)) {
+          return;
+        }
+      }
+
+      await self.registration.showNotification(data.title || 'NUTS Notification', {
+        body: data.body || '',
+        icon: data.icon || '/favicon.svg',
+        badge: data.badge || '/favicon.svg',
+        data: { url: data.url || '/', ...data.data },
+        // One notification per id: a repeat delivery replaces it silently instead of
+        // buzzing again, and different notifications never overwrite each other.
+        tag: data.tag || notificationId || `nuts-${Date.now()}`,
+        renotify: false,
+      });
+    })(),
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

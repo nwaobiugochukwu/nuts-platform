@@ -208,7 +208,7 @@ export default function AccountPage() {
           </Card>
         </Link>
 
-        <Link href="/account/vouchers" className="group block">
+        <Link href="/vouchers" className="group block">
           <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
             <CardContent className="p-6 flex items-center justify-between">
               <div>

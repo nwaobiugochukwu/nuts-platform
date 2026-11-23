@@ -600,11 +600,13 @@ export class VendorAuthService {
   async refresh(
     vendorId: string,
     expectedRefreshId: string,
+    sessionId?: string,
   ): Promise<VendorAuthSession> {
     const session = await this.refreshSessionService.refresh({
       sub: vendorId,
       role: ROLE.VENDOR,
       refreshId: expectedRefreshId,
+      ...(sessionId ? { sessionId } : {}),
     });
 
     const vendor = await this.prisma.vendor.findUnique({
@@ -630,8 +632,14 @@ export class VendorAuthService {
     vendorId: string,
     ipAddress?: string,
     userAgent?: string,
+    sessionId?: string,
   ): Promise<void> {
-    await this.refreshSessionService.revokeSession(vendorId, ROLE.VENDOR);
+    // Sign out THIS device only; legacy tokens (no session id) revoke the account's legacy session.
+    if (sessionId) {
+      await this.refreshSessionService.revokeAccountSession(sessionId);
+    } else {
+      await this.refreshSessionService.revokeSession(vendorId, ROLE.VENDOR);
+    }
 
     await this.auditLog.log({
       action: 'VENDOR_LOGOUT',

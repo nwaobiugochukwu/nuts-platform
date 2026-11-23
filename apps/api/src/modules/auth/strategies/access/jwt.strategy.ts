@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import type { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { AUTH_ACCESS_COOKIE } from '../../constants/auth-cookies.constants';
+import {
+  AUTH_COOKIE_NAMES,
+  authCookieRoleForPath,
+  type AuthCookieRole,
+} from '../../constants/auth-cookies.constants';
 import { AuthSessionService } from '../../sessions/auth-session.service';
 import type { JwtPayload } from '../../types/jwt-payload.type';
 import { jwtFromCookie } from '../../utils/jwt-cookie.extractor';
@@ -15,11 +19,19 @@ function extractAccessToken(req: Request): string | null {
   const authHeader = ExtractJwt.fromAuthHeaderAsBearerToken()(req);
   if (authHeader) return authHeader;
 
-  // 2. Standard HttpOnly accessToken cookie
-  const cookieToken =
-    jwtFromCookie(AUTH_ACCESS_COOKIE)(req) ??
-    jwtFromCookie('access_token')(req);
-  if (cookieToken) return cookieToken;
+  // 2. HttpOnly cookie. The portal in the URL picks which role's cookie is tried
+  // first; the others are fallbacks (role guards still decide access).
+  const hint = authCookieRoleForPath(req.originalUrl ?? req.url);
+  const order: AuthCookieRole[] = [
+    hint,
+    ...(['user', 'vendor', 'admin'] as const).filter((role) => role !== hint),
+  ];
+  for (const role of order) {
+    const token = jwtFromCookie(AUTH_COOKIE_NAMES[role].access)(req);
+    if (token) return token;
+  }
+  const legacy = jwtFromCookie('access_token')(req);
+  if (legacy) return legacy;
 
   return null;
 }

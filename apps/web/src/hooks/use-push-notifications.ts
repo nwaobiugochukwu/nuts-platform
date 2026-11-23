@@ -347,12 +347,24 @@ export function usePushNotifications() {
           const readyReg = await navigator.serviceWorker.ready;
           const subscription = await readyReg.pushManager.getSubscription().catch(() => null);
 
+          const api = notificationsApiForRole(activeRole);
+
           if (!subscription) {
-            if (mounted) usePushStore.getState().setIsSubscribed(false);
-            return false;
+            // Permission is already granted but this device is not registered (first
+            // sign-in here, cleared site data, an older build). Push is ON by default,
+            // so register it quietly, unless the user switched push off in preferences.
+            const prefs = await api.getPreferences().catch(() => null);
+            if (prefs?.data?.pushEnabled === false) {
+              if (mounted) usePushStore.getState().setIsSubscribed(false);
+              return false;
+            }
+            const registered = await subscribe({ silent: true });
+            if (mounted) usePushStore.getState().setIsSubscribed(registered);
+            lastSyncedUserId = user?.id ?? null;
+            lastSyncTimestamp = Date.now();
+            return registered;
           }
 
-          const api = notificationsApiForRole(activeRole);
           const status = await api.getPushStatus(subscription.endpoint).catch(() => null);
 
           if (status?.data && status.data.pushEnabled === false) {
@@ -408,7 +420,7 @@ export function usePushNotifications() {
     return () => {
       mounted = false;
     };
-  }, [isSupported, isAuthenticated, activeRole, user]);
+  }, [isSupported, isAuthenticated, activeRole, user, subscribe]);
 
   const sendTestPush = useCallback(async () => {
     if (!isAuthenticated) {

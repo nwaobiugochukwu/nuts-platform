@@ -244,7 +244,7 @@ export function NotificationDetail({ id }: { id: string }) {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 py-3 sm:space-y-5 sm:py-8">
       <div className="flex min-h-10 items-center justify-between gap-3">
-        <BackLink fallbackHref={backHref} fallbackLabel="All notifications" className="-ml-2 px-2" />
+        <BackLink fallbackHref={backHref} fallbackLabel="Back to notifications" className="-ml-2 px-2" />
         <Button
           type="button"
           variant="ghost"

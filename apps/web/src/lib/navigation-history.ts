@@ -41,26 +41,53 @@ export function resetNavigationHistory(): void {
   stack = [];
 }
 
+/**
+ * Names for "Back to ...". Order matters: the first match wins, so specific pages
+ * (an order, a message) come before their list pages, and a label is only given when
+ * it is accurate; otherwise the link just says "Back".
+ */
 const LABELS: Array<[RegExp, string]> = [
-  [/^\/(vendor|admin)\/notifications/, "notifications"],
-  [/^\/notifications/, "notifications"],
-  [/^\/cart/, "cart"],
-  [/^\/checkout/, "checkout"],
-  [/^\/order-success/, "order confirmation"],
-  [/^\/(vendor|admin)\/order(\/|$)/, "orders"],
-  [/^\/order(\/|$)/, "your orders"],
-  [/^\/account\/vouchers/, "your vouchers"],
+  // Notifications: the inbox vs one message.
+  [/^\/(vendor\/|admin\/)?notifications\/[^/]+/, "the notification"],
+  [/^\/(vendor\/|admin\/)?notifications/, "notifications"],
+  // Orders: one order vs the list, per portal.
+  [/^\/(vendor|admin)\/order\/[^/]+/, "the order"],
+  [/^\/(vendor|admin)\/order/, "orders"],
+  [/^\/order-success/, "your order confirmation"],
+  [/^\/order\/[^/]+/, "your order"],
+  [/^\/order/, "your orders"],
+  // Vendor portal pages.
+  [/^\/vendor\/analytic/, "analytics"],
+  [/^\/vendor\/product/, "your products"],
+  [/^\/vendor\/discount/, "your discounts"],
+  [/^\/vendor\/wallet/, "your wallet"],
+  [/^\/vendor\/setting/, "store settings"],
+  // Admin portal pages.
+  [/^\/admin\/analytic/, "analytics"],
+  [/^\/admin\/announcements/, "announcements"],
+  [/^\/admin\/category/, "categories"],
+  [/^\/admin\/discount/, "discounts"],
+  [/^\/admin\/platform/, "platform settings"],
+  [/^\/admin\/product/, "products"],
+  [/^\/admin\/setting/, "settings"],
+  [/^\/admin\/staff/, "staff"],
+  [/^\/admin\/user/, "users"],
+  [/^\/admin\/vendor/, "vendors"],
+  [/^\/admin\/?$/, "the dashboard"],
+  // Storefront.
+  [/^\/vouchers/, "your vouchers"],
+  [/^\/account\/following/, "followed stores"],
   [/^\/account/, "your account"],
+  [/^\/cart/, "your cart"],
+  [/^\/checkout/, "checkout"],
   [/^\/wishlist/, "your wishlist"],
   [/^\/wallet/, "your wallet"],
   [/^\/search/, "search results"],
   [/^\/discover/, "discover"],
   [/^\/category/, "the category"],
-  [/^\/product/, "the product"],
-  [/^\/vendor\/analytic/, "analytics"],
-  [/^\/vendor\/(product|discount|wallet|setting)/, "your dashboard"],
-  [/^\/admin/, "the admin panel"],
-  [/^\/vendor(\/|$)/, "the store"],
+  [/^\/product\/[^/]+/, "the product"],
+  [/^\/vendor\/?$/, "stores"],
+  [/^\/vendor\/[^/]+/, "the store"],
   [/^\/$/, "home"],
 ];
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ROLE } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
@@ -11,6 +12,8 @@ export interface PushNotificationPayload {
   icon?: string;
   badge?: string;
   url?: string;
+  /** Collapses duplicates of the SAME notification on the device. */
+  tag?: string;
   data?: Record<string, unknown>;
 }
 
@@ -77,6 +80,9 @@ export class WebPushService implements OnModuleInit {
       icon: payload.icon || '/favicon.svg',
       badge: payload.badge || '/favicon.svg',
       url: payload.url || '/',
+      // Same notification delivered twice (two endpoints, a retry) shows once; distinct
+      // notifications never replace each other.
+      tag: payload.tag || randomUUID(),
       data: payload.data || {},
     });
 

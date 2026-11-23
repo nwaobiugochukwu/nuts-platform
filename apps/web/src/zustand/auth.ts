@@ -442,19 +442,30 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     if (!broadcastSubscribed) {
       broadcastSubscribed = true;
       authBroadcast.subscribe((event: AuthEvent) => {
+        // Customer, vendor and admin sessions are independent. An event about ANOTHER
+        // role (say the customer tab's session expired) must not sign this tab out or
+        // turn it into that role; it only concerns this tab if the roles match or this
+        // tab has no session yet.
+        const eventRole = event.type !== "VENDOR_FOLLOW_CHANGED" && event.role ? normalizeRole(event.role) : null;
+        const currentRole = get().role;
+        const concernsThisTab = !eventRole || !currentRole || eventRole === currentRole;
+
         if (event.type === "LOGOUT" || event.type === "SESSION_EXPIRED") {
+          if (!concernsThisTab) return;
           clearBrowserQueryClient();
-          clearAuthTokens();
+          clearAuthTokens(currentRole ?? eventRole ?? undefined);
           resetAuthBootstrap();
           get().clearSession();
         } else if (event.type === "LOGIN") {
+          if (!concernsThisTab && get().isAuthenticated) return;
           clearBrowserQueryClient();
           resetAuthBootstrap();
           void get().hydrateFromCookies();
         } else if (
           event.type === "SESSION_REFRESHED" &&
           event.user &&
-          typeof event.user === "object"
+          typeof event.user === "object" &&
+          concernsThisTab
         ) {
           get().setSession(event.user as SessionUserInput, event.role as AuthRole);
         }
@@ -490,20 +501,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
       // 2. Refresh tokens using HttpOnly refresh_token cookie (re-populates in-memory access token)
       try {
-        let refreshResult = await performTokenRefresh(candidateRole);
-
-        // Resilience: If candidate role was vendor/admin and failed (e.g. 401/403 due to role mismatch),
-        // try the universal /auth/refresh endpoint before assuming the entire session is dead
-        if (
-          !refreshResult.success &&
-          candidateRole !== "user" &&
-          refreshResult.reason !== "unavailable"
-        ) {
-          const fallbackResult = await performTokenRefresh("user");
-          if (fallbackResult.success) {
-            refreshResult = fallbackResult;
-          }
-        }
+        // Each role has its own refresh cookie, so only this role's endpoint is asked.
+        const refreshResult = await performTokenRefresh(candidateRole);
 
         if (refreshResult.success && refreshResult.user) {
           const resolvedRole = refreshResult.role || candidateRole;

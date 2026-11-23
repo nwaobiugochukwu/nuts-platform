@@ -11,6 +11,7 @@ Settings,
 Shield,
 ShoppingCart,
 Store,
+Ticket,
 User as UserIcon,
 Wallet,
 } from "lucide-react";
@@ -104,7 +105,9 @@ export function Navbar({
   return (
     <>
     <header className="sticky top-0 z-50 flex w-full flex-col">
-      <div className="w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
+      {/* z-20: the bar's dropdowns (account menu, categories, search) must paint above
+          the promo banner that follows it, not underneath. */}
+      <div className="relative z-20 w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
         {/* Brand Logo and primary navigation */}
         <div className="flex items-center gap-2.5 sm:gap-5 min-w-0">
@@ -401,6 +404,14 @@ export function Navbar({
                         >
                           <Wallet className="h-4 w-4 text-muted-foreground" />
                           My Wallet
+                        </Link>
+                        <Link
+                          href="/vouchers"
+                          onClick={() => setAccountOpen(false)}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+                        >
+                          <Ticket className="h-4 w-4 text-muted-foreground" />
+                          My Vouchers
                         </Link>
                         <Link
                           href="/account/setting"

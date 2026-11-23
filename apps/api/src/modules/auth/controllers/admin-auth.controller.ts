@@ -8,6 +8,7 @@
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -95,7 +96,7 @@ export class AdminAuthController {
       extractUserAgent(req),
     );
 
-    this.authCookies.setAuthCookies(res, session.tokens);
+    this.authCookies.setAuthCookies(res, session.tokens, 'admin');
 
     return {
       admin: session.user,
@@ -145,7 +146,7 @@ export class AdminAuthController {
       extractUserAgent(req),
     );
 
-    this.authCookies.setAuthCookies(res, session.tokens);
+    this.authCookies.setAuthCookies(res, session.tokens, 'admin');
 
     return {
       admin: session.user,
@@ -183,12 +184,18 @@ export class AdminAuthController {
     @GetUser() payload: RefreshJwtPayload,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AdminAuthResponseDto> {
+    if (payload.role !== ROLE.ADMIN) {
+      // A customer/vendor refresh token must never be consumed here.
+      throw new UnauthorizedException('Invalid token role');
+    }
+
     const session = await this.adminAuthService.refresh(
       payload.sub,
       payload.refreshId,
+      payload.sessionId,
     );
 
-    this.authCookies.setAuthCookies(res, session.tokens);
+    this.authCookies.setAuthCookies(res, session.tokens, 'admin');
 
     return {
       admin: session.user,
@@ -277,6 +284,7 @@ export class AdminAuthController {
   })
   async logout(
     @GetUser('id') userId: string,
+    @GetUser('sessionId') sessionId: string | undefined,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<null> {
@@ -284,8 +292,9 @@ export class AdminAuthController {
       userId,
       extractIpAddress(req),
       extractUserAgent(req),
+      sessionId,
     );
-    this.authCookies.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res, 'admin');
     return null;
   }
 }
