@@ -44,7 +44,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: summary, isError, isLoading: isSummaryLoading } = useQuery({
     queryKey: ["admin", "analytics", "summary", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -58,7 +58,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topProducts = [], isLoading: isTopProductsLoading, isError: isTopProductsError } = useQuery({
     queryKey: ["admin", "analytics", "topProducts", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -72,7 +72,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topVendors = [], isLoading: isTopVendorsLoading, isError: isTopVendorsError } = useQuery({
     queryKey: ["admin", "analytics", "topVendors", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -86,7 +86,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topCategories = [], isLoading: isTopCategoriesLoading, isError: isTopCategoriesError } = useQuery({
     queryKey: ["admin", "analytics", "topCategories", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -100,7 +100,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: payments, isLoading: isPaymentsLoading, isError: isPaymentsError } = useQuery({
     queryKey: ["admin", "analytics", "payments", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -128,7 +128,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: marketplace, isLoading: isMarketplaceLoading, isError: isMarketplaceError } = useQuery({
     queryKey: ["admin", "analytics", "marketplace-performance", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,

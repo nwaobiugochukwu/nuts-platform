@@ -30,6 +30,57 @@ export function vendorFollowKeys(userId?: string) {
   };
 }
 
+type FollowKeys = ReturnType<typeof vendorFollowKeys>;
+
+/**
+ * Everything that must refresh after a follow/unfollow. One definition used by
+ * both the local mutation and the cross-tab handler so they cannot drift.
+ *
+ * "active" only: shelves on screen refetch now; ones not on screen are marked
+ * stale and refetch when next shown, instead of all being fetched eagerly.
+ */
+function invalidateFollowCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  keys: FollowKeys,
+  userId: string | undefined,
+  vendorSlug: string,
+): Promise<unknown> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: keys.list }),
+    queryClient.invalidateQueries({ queryKey: keys.manage }),
+    queryClient.invalidateQueries({ queryKey: keys.count }),
+    queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", vendorSlug] }),
+    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "active" }),
+    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "active" }),
+    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "active" }),
+    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "active" }),
+  ]);
+}
+
+/**
+ * useVendorFollowing is mounted by several components at once (cards, store
+ * header, shelves) and each one subscribes to the cross-tab event. Without
+ * coalescing, one remote follow ran the same invalidation once per mounted
+ * instance. Instances call this in the same tick, so only the first schedules.
+ */
+const pendingRemoteRefresh = new Map<string, ReturnType<typeof setTimeout>>();
+function scheduleRemoteFollowRefresh(
+  queryClient: ReturnType<typeof useQueryClient>,
+  keys: FollowKeys,
+  userId: string | undefined,
+  vendorSlug: string,
+) {
+  const id = `${userId ?? ""}:${vendorSlug}`;
+  if (pendingRemoteRefresh.has(id)) return;
+  pendingRemoteRefresh.set(
+    id,
+    setTimeout(() => {
+      pendingRemoteRefresh.delete(id);
+      void invalidateFollowCaches(queryClient, keys, userId, vendorSlug);
+    }, 0),
+  );
+}
+
 export function useVendorFollowing() {
   const queryClient = useQueryClient();
   const userId = useAuthStore((state) => state.user?.id);
@@ -52,17 +103,8 @@ export function useVendorFollowing() {
 
   useEffect(() => authBroadcast.subscribe((event) => {
     if (event.type !== "VENDOR_FOLLOW_CHANGED" || event.userId !== userId) return;
-    void Promise.all([
-      queryClient.invalidateQueries({ queryKey: keys.list }),
-      queryClient.invalidateQueries({ queryKey: keys.manage }),
-      queryClient.invalidateQueries({ queryKey: keys.count }),
-      queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", event.vendorSlug] }),
-      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "all" }),
-    ]);
-  }), [keys.count, keys.list, keys.manage, queryClient, userId]);
+    scheduleRemoteFollowRefresh(queryClient, keys, userId, event.vendorSlug);
+  }), [keys, queryClient, userId]);
 
   const mutation = useMutation({
     mutationFn: async ({ vendor, following }: FollowVariables) => {
@@ -188,7 +230,9 @@ export function useVendorFollowing() {
         count: result.followerCount,
       });
       if (result.changed && userId) {
-        authBroadcast.publish({
+        // Other tabs only: this tab refreshes itself in onSettled. publish()
+        // would also notify local listeners and refresh everything twice.
+        authBroadcast.broadcast({
           type: "VENDOR_FOLLOW_CHANGED",
           userId,
           vendorId: vendor.id,
@@ -203,16 +247,7 @@ export function useVendorFollowing() {
         next.delete(vendor.id);
         return next;
       });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: keys.list }),
-        queryClient.invalidateQueries({ queryKey: keys.manage }),
-        queryClient.invalidateQueries({ queryKey: keys.count }),
-        queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", vendor.storeSlug] }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "all" }),
-      ]);
+      await invalidateFollowCaches(queryClient, keys, userId, vendor.storeSlug);
     },
   });
 

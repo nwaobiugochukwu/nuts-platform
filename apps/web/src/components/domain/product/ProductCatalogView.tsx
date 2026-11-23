@@ -1,7 +1,6 @@
 "use client";
 
 import { productService } from "@/api";
-import { queryKey } from "@/lib/query-key";
 import { categoryService } from "@/api/modules/category";
 import { analyticsEventService } from "@/api/modules/analytics";
 import type { CategoryResponseDto } from "@/api/dto/category";
@@ -15,7 +14,7 @@ import { ProductCard } from "@/components/product/ProductCard";
 import { ProductGridSkeleton } from "@/components/product/ProductGridSkeleton";
 import { RemoteImage } from "@/components/ui/RemoteImage";
 import { Button } from "@/components/ui/button";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import { CategoryFilterDrawer } from "@/components/category/CategoryFilterDrawer";
@@ -85,7 +84,6 @@ export function ProductCatalogView({
   const [vendorId, setVendorId] = useState(initialFilters?.vendorId || "");
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
   const trackedSearchRef = useRef("");
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -263,15 +261,10 @@ export function ProductCatalogView({
     const dedupeKey = `${userId ?? sessionId}:${search}`;
     if (trackedSearchRef.current === dedupeKey) return;
     trackedSearchRef.current = dedupeKey;
-    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer, visitorId).then(() => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKey.recommendations.forYou(userId, sessionId),
-        refetchType: "all",
-      });
-    }).catch(() => {
+    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer, visitorId).catch(() => {
       if (trackedSearchRef.current === dedupeKey) trackedSearchRef.current = "";
     });
-  }, [search, searchResultCount, userId, sessionId, visitorId, isAuthenticated, canPurchase, isLoading, isError, queryClient]);
+  }, [search, searchResultCount, userId, sessionId, visitorId, isAuthenticated, canPurchase, isLoading, isError]);
 
   // Auto-load next page when user scrolls near the bottom of the feed
   useEffect(() => {

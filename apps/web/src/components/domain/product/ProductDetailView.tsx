@@ -27,7 +27,7 @@ import { formatPrice } from "@/lib/util";
 import { usePublicCategories } from "@/hooks/use-public-categories";
 import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
 ChevronDown,
 ChevronRight,
@@ -75,7 +75,6 @@ export function ProductDetailView({
   noLayout = false,
 }: ProductDetailViewProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: cachedCategories } = usePublicCategories(categories);
   const productCategories = cachedCategories ?? categories;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -184,23 +183,8 @@ export function ProductDetailView({
             visitorId,
           );
           trackedView.status = "accepted";
-          // Invalidate recommendation queries with active refetch type so inactive
-          // queries are marked stale without triggering background network requests
-          // while viewing this product page.
-          void Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: queryKey.recommendations.forYou(userId, sessionId),
-              refetchType: "active",
-            }),
-            queryClient.invalidateQueries({
-              queryKey: queryKey.recommendations.recentlyViewed(userId, sessionId),
-              refetchType: "active",
-            }),
-            queryClient.invalidateQueries({
-              queryKey: queryKey.recommendations.stores(userId, sessionId),
-              refetchType: "active",
-            }),
-          ]);
+          // Recommendation shelves are refreshed centrally by
+          // analyticsEventService.trackProductView once the view is accepted.
           return;
         } catch {
           if (attempt === 2) {
@@ -211,7 +195,7 @@ export function ProductDetailView({
         }
       }
     })();
-  }, [product?.id, isAuthInitialized, isAuthenticated, canPurchase, queryClient, userId]);
+  }, [product?.id, isAuthInitialized, isAuthenticated, canPurchase, userId]);
 
   const getVariantLabel = (v?: PublicVariantSummaryDto | null) => {
     if (!v) return "";

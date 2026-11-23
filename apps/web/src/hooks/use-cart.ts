@@ -45,7 +45,7 @@ export function useCart(initialData?: CartResponseDto | null) {
   const invalidateForYou = useCallback(
     () => queryClient.invalidateQueries({
       queryKey: queryKey.recommendations.forYou(userId),
-      refetchType: "all",
+      refetchType: "active",
     }),
     [queryClient, userId],
   );

@@ -51,7 +51,7 @@ export function useWishlist(initialData?: WishlistResponseDto[]) {
   const invalidateForYou = useCallback(
     () => queryClient.invalidateQueries({
       queryKey: queryKey.recommendations.forYou(userId),
-      refetchType: "all",
+      refetchType: "active",
     }),
     [queryClient, userId],
   );

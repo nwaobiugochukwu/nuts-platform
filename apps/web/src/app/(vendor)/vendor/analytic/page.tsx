@@ -26,7 +26,7 @@ export default function VendorAnalyticPage() {
     isLoading,
   } = useQuery({
     queryKey: [...queryKey.vendor.analytic, periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -40,7 +40,7 @@ export default function VendorAnalyticPage() {
 
   const { data: productPerformance, isLoading: isLoadingProducts } = useQuery({
     queryKey: [...queryKey.vendor.analytic, "product-performance", periodKey, productPage],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,

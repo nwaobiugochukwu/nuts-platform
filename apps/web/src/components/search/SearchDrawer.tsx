@@ -87,11 +87,10 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
     enabled: isOpen && isEmptySearch && isAuthInitialized && isShopper && Boolean(sessionId),
     // Refresh when the drawer is reopened so a product visited since the last
     // search session can influence the next set of picks.
-    staleTime: 0,
+    staleTime: 10_000,
     // Never paint a previous open's picks; always show what the latest
     // activity produces.
     gcTime: 0,
-    refetchOnMount: "always",
     refetchOnWindowFocus: true,
   });
 
