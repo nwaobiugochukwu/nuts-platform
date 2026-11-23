@@ -1,11 +1,11 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { WishlistResponseDto } from "@/api/dto/wishlist";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Button } from "@/component/ui/button";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { formatPrice } from "@/lib/util";

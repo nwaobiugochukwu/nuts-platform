@@ -1,16 +1,16 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { publicVendorService } from "@/api";
-import { analyticsEventService } from "@/api/modules/analytics";
+import { analyticsEventService } from "@/api/services/analytics";
 import { isApiClientError } from "@/api/core/error";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PublicProductResponseDto } from "@/api/dto/product";
 import type { VendorStoreDto } from "@/api/dto/vendor";
-import { CategoryFilterDrawer } from "@/component/category/CategoryFilterDrawer";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ProductCard } from "@/component/product/ProductCard";
-import { ProductGridSkeleton } from "@/component/product/ProductGridSkeleton";
+import { CategoryFilterDrawer } from "@/components/domain/category/CategoryFilterDrawer";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ProductCard } from "@/components/domain/product/ProductCard";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import {

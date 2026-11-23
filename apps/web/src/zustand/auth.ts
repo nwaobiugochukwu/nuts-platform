@@ -23,6 +23,7 @@ import type { ShippingInformation, UserResponseDto } from "@/api/dto/user";
 import axios from "axios";
 import { authBroadcast, type AuthEvent } from "@/lib/auth-events";
 import { clearBrowserQueryClient } from "@/lib/query-client";
+import { useDiscountStore } from "@/zustand/discount";
 import {
   rotateRecommendationSessionId,
   rotateRecommendationVisitorId,
@@ -234,6 +235,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isLoading: false,
       isInitialized: true,
     });
+
+    // A guest's claimed voucher is adopted by the account that signs in; a
+    // different account's claim is dropped. (Only customers shop.)
+    useDiscountStore
+      .getState()
+      .syncIdentity(userRole === "user" ? rawUser.id : null);
   },
 
   clearSession: () => {
@@ -248,6 +255,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       isLoading: false,
       isInitialized: true,
     });
+
+    // Logout: a claim that belonged to an account must not outlive it.
+    useDiscountStore.getState().syncIdentity(null);
   },
 
   login: async (payload) => {

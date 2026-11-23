@@ -1,3 +1,4 @@
+import type { DiscountTargetsDto } from "@/api/dto/discount";
 import type {
 VariantOption
 } from "../core/types";
@@ -20,13 +21,37 @@ export interface CartMetadataDto {
   checkedOut: boolean;
 }
 
+export interface AppliedVoucherDto {
+  code: string;
+  /** What THIS voucher takes off. */
+  amount: number;
+  scope: "VENDOR" | "PLATFORM";
+  stackable: boolean;
+  /** Applied automatically (no code). */
+  automatic?: boolean;
+  /** Offer name for automatic discounts. */
+  label?: string;
+}
+
+export interface RejectedVoucherDto {
+  code: string;
+  reason: string;
+  /** true = can never work for this shopper (expired, exhausted...); drop the claim. */
+  permanent: boolean;
+  appliesTo?: DiscountTargetsDto | null;
+}
+
 export interface DiscountPreviewDto {
+  /** First applied code (single-voucher compatibility). */
   code: string;
   subtotal: number;
+  /** Total taken off by every applied voucher. */
   discountAmount: number;
   deliveryCharge: number;
   serviceCharge: number;
   totalAmount: number;
+  discounts: AppliedVoucherDto[];
+  rejected: RejectedVoucherDto[];
 }
 
 export interface ProductAvailabilityDto {

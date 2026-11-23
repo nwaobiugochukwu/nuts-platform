@@ -3,11 +3,11 @@
 import { orderService } from "@/api";
 import type { PaginationMeta } from "@/api/core/types";
 import type { OrderSummaryDto } from "@/api/dto/order";
-import { PageHeader } from "@/component/common/PageHeader";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent } from "@/component/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { OrderStatusBadge } from "@/components/domain/order/OrderItemSnapshot";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";
 import { formatDate,formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";

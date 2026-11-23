@@ -1,12 +1,13 @@
 "use client";
 
-import { SessionHydrator } from "@/component/auth/SessionHydrator";
-import { ThemeProvider } from "@/component/provider/ThemeProvider";
-import { Toaster } from "@/component/ui/sonner";
-import { MaintenanceModeHost } from "@/components/maintenance/MaintenanceModeHost";
+import { SessionHydrator } from "@/components/domain/auth/SessionHydrator";
+import { ThemeProvider } from "@/provider/ThemeProvider";
+import { Toaster } from "@/components/ui/sonner";
+import { MaintenanceModeHost } from "@/components/domain/maintenance/MaintenanceModeHost";
 import { NotificationStreamHost } from "@/hooks/use-notifications";
-import { PushNotificationHost } from "@/hooks/use-push-notifications";
-import { type ReactNode } from "react";
+import { PushNotificationHost } from "@/components/domain/notification/PushNotificationHost";
+import { NavigationHistoryTracker } from "./NavigationHistoryTracker";
+import { type ReactNode, Suspense } from "react";
 import { QueryProvider } from "./QueryProvider";
 
 export function Provider({ children }: { children: ReactNode }) {
@@ -14,6 +15,9 @@ export function Provider({ children }: { children: ReactNode }) {
     <QueryProvider>
       <ThemeProvider>
         <SessionHydrator>
+          <Suspense fallback={null}>
+            <NavigationHistoryTracker />
+          </Suspense>
           <NotificationStreamHost />
           <PushNotificationHost />
           <MaintenanceModeHost />

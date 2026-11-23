@@ -1,10 +1,10 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
-import { adminApi, vendorApi } from "@/api/core/client";
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
-import { Label } from "@/component/ui/label";
+import { RemoteImage } from "@/components/ui/RemoteImage";
+import { adminApi, UPLOAD_REQUEST_TIMEOUT_MS, vendorApi } from "@/api/core/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/util";
 import {
 ImageIcon,
@@ -178,7 +178,9 @@ export function ProductVariantBuilder({
     form.append("files", file);
 
     try {
-      const res = await api.post<unknown>("/images/upload", form);
+      const res = await api.post<unknown>("/images/upload", form, {
+        timeout: UPLOAD_REQUEST_TIMEOUT_MS,
+      });
       const rawData = res.data;
       const payload =
         typeof rawData === "object" && rawData !== null && "data" in rawData
@@ -283,7 +285,7 @@ export function ProductVariantBuilder({
                   <button
                     type="button"
                     onClick={() => handleRemoveVariant(vIdx)}
-                    className="p-1 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors -mr-1.5"
                     title="Remove variant"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -326,7 +328,7 @@ export function ProductVariantBuilder({
                             <button
                               type="button"
                               onClick={() => handleRemoveOption(vIdx, oIdx)}
-                              className="text-muted-foreground hover:text-destructive p-1"
+                              className="flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground hover:text-destructive"
                               title="Remove attribute"
                             >
                               <X className="h-3 w-3" />
@@ -416,7 +418,7 @@ export function ProductVariantBuilder({
                             <button
                               type="button"
                               onClick={() => handleRemoveImage(vIdx, imgIdx)}
-                              className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                              className="absolute right-0.5 top-0.5 flex h-4 w-4 [@media(hover:none)]:h-6 [@media(hover:none)]:w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-destructive"
                             >
                               <X className="h-2.5 w-2.5" />
                             </button>

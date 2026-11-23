@@ -9,6 +9,7 @@
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -26,6 +27,7 @@ import { DiscountCodeService } from '@api/modules/promotions/discount-code.servi
 import {
   CreateAdminDiscountCodeDto,
   DiscountCodeResponseDto,
+  ListDiscountCodesQueryDto,
   UpdateAdminDiscountCodeDto,
 } from '@api/modules/promotions/dto';
 import { Message } from '@api/common/decorators/message.decorator';
@@ -65,8 +67,10 @@ export class AdminDiscountCodesController {
   @ApiUnauthorizedResponse({
     description: 'Unauthorized â€” no valid JWT session.',
   })
-  async findAll(): Promise<DiscountCodeResponseDto[]> {
-    return this.discountCodeService.findAllForAdmin();
+  async findAll(
+    @Query() query: ListDiscountCodesQueryDto,
+  ): Promise<DiscountCodeResponseDto[]> {
+    return this.discountCodeService.findAllForAdmin(query.limit, query.offset);
   }
 
   @Patch(':id')

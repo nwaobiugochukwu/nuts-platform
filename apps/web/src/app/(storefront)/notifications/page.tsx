@@ -1,4 +1,4 @@
-import { NotificationsManager } from "@/component/notification/NotificationsManager";
+import { NotificationsManager } from "@/components/domain/notification/NotificationsManager";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

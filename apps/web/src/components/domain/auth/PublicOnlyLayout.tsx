@@ -1,6 +1,6 @@
 "use client";
 
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
@@ -49,7 +49,7 @@ export function PublicOnlyLayout({
   // If already authenticated with the matching role, display a clean redirecting state
   if (shouldRedirect) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <div className="min-h-dvh flex items-center justify-center bg-background px-4">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <p className="text-xs font-medium">Redirecting to your dashboard...</p>
@@ -82,7 +82,7 @@ export function PublicOnlyLayout({
   // Admin and Vendor auth pages should NOT render CustomerLayout with customer Navbar!
   if (targetPageRole !== "user" || !showNavigation) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-3 py-6 sm:px-6 sm:py-12">
+      <div className="min-h-dvh flex items-center justify-center bg-background px-3 py-6 sm:px-6 sm:py-12">
         <div className="w-full max-w-lg">
           {roleNoticeBanner}
           {children}

@@ -2,11 +2,11 @@
 
 import { orderService } from "@/api";
 import type { OrderResponseDto } from "@/api/dto/order";
-import { PageHeader } from "@/component/common/PageHeader";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { WriteReviewDialog } from "@/component/review/WriteReviewDialog";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/component/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { WriteReviewDialog } from "@/components/domain/review/WriteReviewDialog";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";

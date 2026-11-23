@@ -1,15 +1,15 @@
 "use client";
 
 import { publicApi } from "@/api/core/client";
-import { authService } from "@/api/modules/auth";
+import { authService } from "@/api/services/auth";
 import type { RegisterResponseDto, VerifyOtpResponseDto } from "@/api/dto/auth";
-import { referralService } from "@/api/referral";
-import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
-import { FormInput } from "@/component/form/FormInput";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { Button } from "@/component/ui/button";
-import { SegmentedOtpInput } from "@/component/ui/SegmentedOtpInput";
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { referralService } from "@/api/services/referral";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
+import { FormInput } from "@/components/form/FormInput";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { Button } from "@/components/ui/button";
+import { SegmentedOtpInput } from "@/components/ui/SegmentedOtpInput";
+import { GoogleSignInButton } from "@/components/domain/auth/GoogleSignInButton";
 import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";

@@ -33,7 +33,10 @@ import { WalletService } from '@api/modules/wallet/wallet.service';
 import { AdminOrderResponseDto } from './dto/admin-order-response.dto';
 import { CheckoutResponseDto } from './dto/checkout-response.dto';
 import { CheckoutDto } from './dto/checkout.dto';
-import { OrderResponseDto } from './dto/order-response.dto';
+import {
+  OrderAppliedVoucherDto,
+  OrderResponseDto,
+} from './dto/order-response.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { VendorOrderResponseDto } from './dto/vendor-order-response.dto';
 
@@ -55,6 +58,12 @@ import {
 } from './constants/order-status.constants';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
+import {
+  computeVendorEarnings,
+  loadCreditedVendorEarnings,
+  loadVendorFundedDiscounts,
+  releaseDiscountUsage,
+} from '@api/modules/promotions/discount-funding';
 
 import { DomainEvents } from '@api/common/events/domain-events';
 
@@ -111,6 +120,25 @@ const orderInclude = {
       status: true,
       paymentLink: true,
       transactionReference: true,
+    },
+  },
+
+  // Snapshot of what each voucher took off this order (breakdown on the
+  // order page).
+  discountCodeUsages: {
+    orderBy: { createdAt: 'asc' as const },
+    select: {
+      discountAmount: true,
+      discountCode: {
+        select: {
+          code: true,
+          description: true,
+          scope: true,
+          type: true,
+          value: true,
+          autoApply: true,
+        },
+      },
     },
   },
 } satisfies Prisma.OrderInclude;
@@ -1255,6 +1283,12 @@ export class OrdersService {
             });
           }
 
+          // A cancelled (necessarily unpaid) order will never redeem its
+          // discount: hand the redemption back.
+          if (nextStatus === OrderStatus.CANCELLED) {
+            await releaseDiscountUsage(tx, orderId);
+          }
+
           /**
            * Only transition an unpaid payment to FAILED when the order is
            * cancelled.
@@ -1317,11 +1351,16 @@ export class OrdersService {
            * They are therefore only settled after delivery.
            */
           if (nextStatus === OrderStatus.DELIVERED) {
+            // Settle exactly what was credited at payment time; fall back to
+            // the computed figure only for vendors with no ledger entry.
+            const credited = await loadCreditedVendorEarnings(tx, orderId);
             const vendorEarnings = this.calculateVendorEarnings(
               current.orderItems,
+              await loadVendorFundedDiscounts(tx, orderId),
             );
-
-            for (const [vendorId, amount] of vendorEarnings) {
+            for (const [vendorId, computed] of vendorEarnings) {
+              const amount = credited.get(vendorId) ?? computed;
+              if (amount.lessThanOrEqualTo(0)) continue;
               await this.walletService.settleVendorEarning(
                 vendorId,
                 amount,
@@ -1533,6 +1572,7 @@ export class OrdersService {
                     isDeleted: true,
                     vendorId: true,
                     categoryId: true,
+                    category: { select: { parentId: true } },
                     images: {
                       select: {
                         url: true,
@@ -1678,68 +1718,70 @@ export class OrdersService {
         let discountAmount = new Prisma.Decimal(0);
         let discountCode: string | null = null;
 
-        let discountRecord: Awaited<
-          ReturnType<typeof this.discountCodeService.validate>
-        > | null = null;
+        // Every voucher applied to this order, with the amount IT took off.
+        let appliedVouchers: Array<{
+          id: string;
+          code: string;
+          amount: Prisma.Decimal;
+        }> = [];
 
-        if (dto.discountCode?.trim()) {
-          discountRecord = await this.discountCodeService.validate(
-            dto.discountCode.trim(),
-            userId,
-            totalAmount,
-          );
+        // `discountCodes` (up to two, combinable) and the legacy single
+        // `discountCode` are merged so older clients keep working.
+        const requestedCodes = [
+          ...(dto.discountCodes ?? []),
+          ...(dto.discountCode ? [dto.discountCode] : []),
+        ]
+          .map((code) => code.trim())
+          .filter(Boolean);
 
-          discountCode = discountRecord.code;
+        // One engine for eligibility, minimum spend, stacking and amounts,
+        // shared with the cart preview: each voucher is measured on the lines
+        // it covers (a store voucher only ever covers that store's items),
+        // never on the whole cart. strict: any rejected voucher fails the
+        // checkout rather than silently charging a different price. Automatic
+        // discounts (no code) are resolved here too, by the same engine the cart
+        // previewed with, so the charged price is the price the shopper saw.
+        const resolved = await this.discountCodeService.resolveVoucherStack(
+          requestedCodes,
+          userId,
+          cart.cartItems.map((item) => ({
+            productId: item.productId,
+            vendorId: item.product.vendorId,
+            categoryIds: [
+              item.product.categoryId,
+              ...(item.product.category?.parentId
+                ? [item.product.category.parentId]
+                : []),
+            ],
+            lineTotal: item.unitPrice.mul(item.quantity),
+            quantity: item.quantity,
+          })),
+          { strict: true, includeAutomatic: true },
+        );
 
-          /**
-           * Product-scoped vendor discounts must match at least one
-           * product in this cart.
-           */
-          if (
-            discountRecord.scope === 'VENDOR' &&
-            !discountRecord.platformwide &&
-            discountRecord.applicableProductIds.length > 0
-          ) {
-            const applicable = cart.cartItems.some((item) =>
-              discountRecord!.applicableProductIds.includes(item.productId),
-            );
+        appliedVouchers = resolved.applied.map(
+          ({ discount, discountAmount: amount }) => ({
+            id: discount.id,
+            code: discount.code,
+            amount: amount.toDecimalPlaces(2),
+          }),
+        );
+        discountAmount = resolved.totalDiscount;
+        discountCode =
+          appliedVouchers.length > 0
+            ? appliedVouchers.map((v) => v.code).join(', ')
+            : null;
 
-            if (!applicable) {
-              throw new BadRequestException(
-                'This discount code does not apply to any products in your cart.',
-              );
-            }
-          }
-
-          /**
-           * Category-scoped discounts must match at least one product's category.
-           */
-          if (discountRecord.applicableCategoryIds.length > 0) {
-            const applicable = cart.cartItems.some((item) =>
-              discountRecord!.applicableCategoryIds.includes(
-                item.product.categoryId,
-              ),
-            );
-
-            if (!applicable) {
-              throw new BadRequestException(
-                'This discount code does not apply to any categories in your cart.',
-              );
-            }
-          }
-
-          discountAmount = this.discountCodeService.calculateDiscount(
-            discountRecord,
-            totalAmount,
-          );
-
-          discountAmount = discountAmount.toDecimalPlaces(2);
-        }
-
+        // The cart page shows delivery and service charges in its total, so
+        // the charged amount must include them or the shopper would be shown
+        // one price and billed another. Discounts apply to goods only.
         const finalAmount = Prisma.Decimal.max(
           totalAmount.sub(discountAmount),
           new Prisma.Decimal(0),
-        ).toDecimalPlaces(2);
+        )
+          .add(cart.deliveryCharge ?? 0)
+          .add(cart.serviceCharge ?? 0)
+          .toDecimalPlaces(2);
 
         // ---------------------------------------------------------------
         // INVENTORY
@@ -2010,7 +2052,7 @@ export class OrdersService {
         // DISCOUNT USAGE
         // ---------------------------------------------------------------
 
-        if (discountRecord) {
+        if (appliedVouchers.length > 0) {
           /**
            * Discount usage is recorded inside the same checkout transaction.
            *
@@ -2020,14 +2062,21 @@ export class OrdersService {
            * - usage counters cannot commit without the order
            * - a failed checkout cannot consume the discount
            * - concurrent redemptions are serialized by recordUsage()
+           *
+           * Codes are locked in a fixed (id) order so two checkouts combining
+           * the same pair of vouchers can never deadlock each other.
            */
-          await this.discountCodeService.recordUsage(
-            discountRecord.id,
-            order.id,
-            userId,
-            discountAmount,
-            tx,
-          );
+          for (const voucher of [...appliedVouchers].sort((x, y) =>
+            x.id.localeCompare(y.id),
+          )) {
+            await this.discountCodeService.recordUsage(
+              voucher.id,
+              order.id,
+              userId,
+              voucher.amount,
+              tx,
+            );
+          }
         }
 
         // ---------------------------------------------------------------
@@ -2097,6 +2146,10 @@ export class OrdersService {
     );
 
     await this.invalidateCartCache(userId);
+    // The user now has a prior order: first-order promos must stop showing.
+    await this.discountCodeService
+      .invalidateFirstOrderCache(userId)
+      .catch(() => undefined);
 
     return order;
   }
@@ -2316,29 +2369,15 @@ export class OrdersService {
       quantity: number;
       unitPrice: Prisma.Decimal;
     }>,
+    vendorFundedDiscounts: Map<string, Prisma.Decimal> = new Map(),
   ): Map<string, Prisma.Decimal> {
-    const earnings = new Map<string, Prisma.Decimal>();
-
-    for (const item of items) {
-      /**
-       * Decimal arithmetic avoids floating-point money errors.
-       *
-       * Example:
-       * 10000 * 0.85
-       *
-       * stays as a Decimal rather than becoming a JS floating-point number.
-       */
-      const earning = item.unitPrice
-        .mul(item.quantity)
-        .mul(VENDOR_COMMISSION_RATE)
-        .toDecimalPlaces(2);
-
-      const existing = earnings.get(item.vendorId) ?? new Prisma.Decimal(0);
-
-      earnings.set(item.vendorId, existing.add(earning).toDecimalPlaces(2));
-    }
-
-    return earnings;
+    // Decimal-only arithmetic; vendor-funded discounts reduce the vendor's
+    // gross sales before commission (platform-funded ones do not).
+    return computeVendorEarnings(
+      items,
+      VENDOR_COMMISSION_RATE,
+      vendorFundedDiscounts,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -2450,6 +2489,38 @@ export class OrdersService {
   // RESPONSE MAPPERS
   // ---------------------------------------------------------------------------
 
+  private toAppliedVouchers(
+    order: OrderWithItems | OrderWithItemsList,
+  ): OrderAppliedVoucherDto[] {
+    const usages =
+      'discountCodeUsages' in order ? order.discountCodeUsages : [];
+    if (usages.length > 0) {
+      return usages.map((usage) => ({
+        code: usage.discountCode.code,
+        description: usage.discountCode.description ?? null,
+        scope: usage.discountCode.scope,
+        type: usage.discountCode.type,
+        value: Number(usage.discountCode.value),
+        amount: Number(usage.discountAmount),
+        automatic: usage.discountCode.autoApply,
+      }));
+    }
+    // Legacy orders: only the joined code string was kept ("STORE20, PLAT10").
+    return (order.discountCode ?? '')
+      .split(',')
+      .map((code) => code.trim())
+      .filter(Boolean)
+      .map((code) => ({
+        code,
+        description: null,
+        scope: 'PLATFORM' as const,
+        type: 'FIXED' as const,
+        value: 0,
+        amount: null,
+        automatic: false,
+      }));
+  }
+
   private toResponse(
     order: OrderWithItems | OrderWithItemsList,
   ): OrderResponseDto {
@@ -2464,6 +2535,8 @@ export class OrdersService {
       finalAmount: Number(order.finalAmount),
 
       discountCode: order.discountCode ?? null,
+
+      appliedVouchers: this.toAppliedVouchers(order),
 
       referralCode: order.referralCode ?? null,
 

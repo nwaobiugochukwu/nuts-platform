@@ -1,22 +1,23 @@
 "use client";
 
 import { adminApi } from "@/api/core/client";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { AutomaticDiscountFields } from "@/components/domain/promotions/AutomaticDiscountFields";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
-import { categoryService } from "@/api/modules/category";
+} from "@/components/ui/dialog";
+import { categoryService } from "@/api/services/category";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
@@ -50,6 +51,9 @@ interface AdminDiscount {
   isActive: boolean;
   platformwide?: boolean;
   firstOrderOnly?: boolean;
+  stackable?: boolean;
+  autoApply?: boolean;
+  minQuantity?: number | null;
   applicableCategoryIds?: string[];
   perUserUsageLimit?: number | null;
   minOrderAmount?: number | null;
@@ -115,11 +119,10 @@ const optionalPositiveInt = (label: string) =>
 
 const createDiscountSchema = z
   .object({
-    code: z
-      .string()
-      .min(3, "Code must be at least 3 characters")
-      .max(64)
-      .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
+    // Optional here: an automatic discount has no code (checked in superRefine).
+    code: z.string().max(50).optional().or(z.literal("")),
+    autoApply: z.boolean().default(false),
+    minQuantity: optionalPositiveInt("Minimum items"),
     type: z.enum(["PERCENTAGE", "FIXED"]),
     value: z.coerce.number().positive("Value must be greater than 0"),
     description: z.string().max(256).optional().or(z.literal("")),
@@ -131,9 +134,32 @@ const createDiscountSchema = z
     expiresAt: z.string().optional().or(z.literal("")),
     platformwide: z.boolean().default(true),
     firstOrderOnly: z.boolean().default(false),
+    stackable: z.boolean().default(false),
     applicableCategoryIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
+    const code = (data.code ?? "").trim();
+    if (data.autoApply) {
+      if ((data.description ?? "").trim().length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Name this offer: shoppers see it at checkout",
+          path: ["description"],
+        });
+      }
+    } else if (code.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Code must be at least 3 characters",
+        path: ["code"],
+      });
+    } else if (!/^[A-Za-z0-9_-]+$/.test(code)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Alphanumeric, hyphens and underscores only",
+        path: ["code"],
+      });
+    }
     if (data.type === "PERCENTAGE" && data.value > 100) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -348,6 +374,8 @@ export default function AdminDiscountPage() {
     resolver: zodResolver(createDiscountSchema),
     defaultValues: {
       code: "",
+      autoApply: false,
+      minQuantity: undefined,
       type: "PERCENTAGE",
       value: 10,
       description: "",
@@ -359,18 +387,23 @@ export default function AdminDiscountPage() {
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
+      stackable: false,
       applicableCategoryIds: [],
     },
   });
 
   const selectedType = useWatch({ control: methods.control, name: "type" });
+  const selectedAuto = Boolean(useWatch({ control: methods.control, name: "autoApply" }));
   const selectedCategoryIds = useWatch({
     control: methods.control,
     name: "applicableCategoryIds",
   }) as string[] | undefined;
 
   const discountPayload = (values: CreateDiscountFormData) => ({
-    code: values.code.trim().toUpperCase(),
+    // Automatic discounts have no code; the server generates an internal id.
+    ...(values.autoApply ? {} : { code: (values.code ?? "").trim().toUpperCase() }),
+    autoApply: values.autoApply,
+    minQuantity: values.autoApply ? (values.minQuantity ?? null) : null,
     type: values.type,
     value: values.value,
     description: values.description?.trim() || null,
@@ -393,6 +426,7 @@ export default function AdminDiscountPage() {
     startsAt: values.startsAt ? new Date(values.startsAt).toISOString() : null,
     platformwide: values.platformwide ?? true,
     firstOrderOnly: values.firstOrderOnly ?? false,
+    stackable: values.stackable ?? false,
     applicableCategoryIds: values.applicableCategoryIds ?? [],
   });
 
@@ -476,6 +510,8 @@ export default function AdminDiscountPage() {
     setEditingDiscount(null);
     methods.reset({
       code: "",
+      autoApply: false,
+      minQuantity: undefined,
       type: "PERCENTAGE",
       value: 10,
       description: "",
@@ -487,6 +523,7 @@ export default function AdminDiscountPage() {
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
+      stackable: false,
       applicableCategoryIds: [],
     });
     setOpen(true);
@@ -495,7 +532,9 @@ export default function AdminDiscountPage() {
   const openEdit = (discount: AdminDiscount) => {
     setEditingDiscount(discount);
     methods.reset({
-      code: discount.code,
+      code: discount.autoApply ? "" : discount.code,
+      autoApply: discount.autoApply ?? false,
+      minQuantity: discount.minQuantity ?? undefined,
       type: discount.type,
       value: discount.value,
       description: discount.description ?? "",
@@ -507,6 +546,7 @@ export default function AdminDiscountPage() {
       expiresAt: toInputDateTime(discount.expiresAt),
       platformwide: discount.platformwide ?? true,
       firstOrderOnly: discount.firstOrderOnly ?? false,
+      stackable: discount.stackable ?? false,
       applicableCategoryIds: discount.applicableCategoryIds ?? [],
     });
     setOpen(true);
@@ -523,9 +563,21 @@ export default function AdminDiscountPage() {
             <Tag className="h-4 w-4" />
           </div>
           <div className="flex items-center gap-1.5 min-w-0">
+            {r.autoApply ? (
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-semibold text-neutral-900 dark:text-white">
+                  {r.description || "Automatic offer"}
+                </span>
+                <span className="w-fit rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                  Automatic{r.minQuantity ? ` · ${r.minQuantity}+ items` : ""}
+                </span>
+              </span>
+            ) : (
             <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white truncate">
               {r.code}
             </span>
+            )}
+            {!r.autoApply && (
             <button
               type="button"
               onClick={() => copyToClipboard(r.code)}
@@ -538,6 +590,7 @@ export default function AdminDiscountPage() {
                 <Copy className="h-3 w-3" />
               )}
             </button>
+            )}
           </div>
         </div>
       ),
@@ -772,7 +825,7 @@ export default function AdminDiscountPage() {
 
       {/* CREATE / EDIT DISCOUNT MODAL */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] sm:max-h-[85dvh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
           <DialogHeader className="pb-3 border-b border-border/50 shrink-0">
             <DialogTitle className="text-base sm:text-lg font-bold pr-6">
               {editingDiscount
@@ -805,13 +858,17 @@ export default function AdminDiscountPage() {
               })}
               className="space-y-4 pt-3 overflow-y-auto pr-1 sm:pr-2 flex-1 overscroll-contain"
             >
+              <AutomaticDiscountFields locked={Boolean(editingDiscount)} />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormInput
-                  name="code"
-                  label="Discount Coupon Code"
-                  placeholder="e.g. FLASH25"
-                  required
-                />
+                {!selectedAuto && (
+                  <FormInput
+                    name="code"
+                    label="Discount Coupon Code"
+                    placeholder="e.g. FLASH25"
+                    required
+                  />
+                )}
 
                 <FormSelect
                   name="type"
@@ -911,6 +968,21 @@ export default function AdminDiscountPage() {
                   </label>
                 </div>
 
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="stackable"
+                    {...methods.register("stackable")}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                  />
+                  <label htmlFor="stackable" className="text-xs cursor-pointer select-none">
+                    <span className="font-semibold text-foreground block">Can be combined with another voucher</span>
+                    <span className="text-muted-foreground block text-[11px] mt-0.5">
+                      Shoppers can use this together with ONE other combinable voucher (one store voucher plus one platform voucher). Leave off to make it exclusive.
+                    </span>
+                  </label>
+                </div>
+
                 <div className="flex items-start gap-3 pt-1 border-t border-border/50">
                   <input
                     type="checkbox"
@@ -935,8 +1007,12 @@ export default function AdminDiscountPage() {
 
               <FormTextarea
                 name="description"
-                label="Campaign Description"
-                placeholder="Optional notes for campaign tracking..."
+                label={selectedAuto ? "Offer name (shown to shoppers)" : "Campaign Description"}
+                placeholder={
+                  selectedAuto
+                    ? "e.g. 10% off when you buy 3 or more"
+                    : "Optional notes for campaign tracking..."
+                }
               />
 
               <DialogFooter className="mt-4 pt-3 border-t border-border/50 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">

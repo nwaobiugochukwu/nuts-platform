@@ -1,18 +1,18 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 
-import { Cron, CronExpression } from '@nestjs/schedule';
-
 import { Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
+import type { DiscountLineItem } from '@api/modules/promotions/discount-eligibility';
 import { UsersService } from '@api/modules/users/users.service';
 import { InsufficientStockException } from '@api/common/errors/insufficient-stock.exception';
 import { MarketplaceEventsService } from '@api/modules/analytics/tracking/marketplace-events.service';
@@ -43,6 +43,8 @@ const CART_CACHE_TTL = 60;
  */
 const CART_PRODUCT_SELECT = {
   id: true,
+  vendorId: true,
+  categoryId: true,
   name: true,
   slug: true,
   sku: true,
@@ -153,8 +155,26 @@ export class CartService {
   // DISCOUNT PREVIEW
   // ---------------------------------------------------------------------------
 
-  async previewDiscount(userId: string, code: string) {
+  /**
+   * Previews one or two vouchers against the live cart.
+   *
+   * One code: behaves exactly as before (a rejection is thrown). Several: every
+   * valid, combinable voucher is applied and the rest come back in `rejected`
+   * with the reason and whether it can ever work (`permanent`), so the UI can
+   * tell the shopper which voucher was dropped without losing the others.
+   */
+  async previewDiscount(
+    userId: string,
+    codeOrCodes: string | string[],
+    { automatic = false }: { automatic?: boolean } = {},
+  ) {
     await this.usersService.assertActiveAccount(userId);
+    const codes = (Array.isArray(codeOrCodes) ? codeOrCodes : [codeOrCodes])
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (codes.length === 0 && !automatic) {
+      throw new BadRequestException('A discount code is required');
+    }
 
     /*
      * We intentionally don't call getCart() here because that would introduce
@@ -170,60 +190,74 @@ export class CartService {
       throw new BadRequestException('Your cart is empty');
     }
 
-    const subtotal = new Prisma.Decimal(response.cart.subtotal);
+    // Eligibility, minimum spend, stacking and every amount are computed by the
+    // same engine checkout uses, so the previewed saving is exactly what will
+    // be charged.
+    const lines: DiscountLineItem[] = cart.cartItems.map((item) => ({
+      productId: item.productId,
+      vendorId: item.product.vendorId,
+      categoryIds: [
+        item.product.categoryId,
+        ...(item.product.category?.parentId
+          ? [item.product.category.parentId]
+          : []),
+      ],
+      lineTotal: new Prisma.Decimal(item.unitPrice).mul(item.quantity),
+      quantity: item.quantity,
+    }));
 
-    const discountCode = await this.discountCodeService.validate(
-      code,
+    // `automatic`: the cart's own sync (never throws for a single bad voucher,
+    // and includes no-code offers). Without it: validating one typed code.
+    const resolved = await this.discountCodeService.resolveVoucherStack(
+      codes,
       userId,
-      subtotal,
+      lines,
+      { strict: !automatic && codes.length === 1, includeAutomatic: automatic },
     );
 
-    if (
-      discountCode.scope === 'VENDOR' &&
-      !discountCode.platformwide &&
-      discountCode.applicableProductIds.length > 0 &&
-      !response.cartItems.some((item) =>
-        discountCode.applicableProductIds.includes(item.productId),
-      )
-    ) {
-      throw new BadRequestException(
-        'This discount code does not apply to any products in your cart',
-      );
-    }
-
-    if (
-      discountCode.applicableCategoryIds.length > 0 &&
-      !response.cartItems.some((item) =>
-        discountCode.applicableCategoryIds.includes(
-          item.product.subcategory?.id ?? item.product.category?.id ?? '',
-        ),
-      )
-    ) {
-      throw new BadRequestException(
-        'This discount code does not apply to any categories in your cart',
-      );
-    }
-
-    const discountAmount = Number(
-      this.discountCodeService.calculateDiscount(discountCode, subtotal),
-    );
-
+    const discountAmount = Number(resolved.totalDiscount);
     const deliveryCharge = response.cart.deliveryCharge;
-
     const serviceCharge = response.cart.serviceCharge;
-
     const totalAmount = Math.max(
       0,
       response.cart.subtotal - discountAmount + deliveryCharge + serviceCharge,
     );
 
+    // Say WHAT a rejected voucher covers, so the cart can point the shopper at
+    // the eligible items instead of leaving a claimed code that does nothing.
+    const targets = await this.discountCodeService.describeTargetsByCode(
+      resolved.rejected.map(({ code }) => code),
+    );
+
+    const isPermanent = (error: Error) =>
+      error instanceof NotFoundException ||
+      error instanceof ConflictException ||
+      /expired|no longer active|invalid or inactive/i.test(error.message);
+
     return {
-      code: discountCode.code,
+      // Kept for single-code clients.
+      code: resolved.applied[0]?.discount.code ?? codes[0],
       subtotal: response.cart.subtotal,
       discountAmount,
       deliveryCharge,
       serviceCharge,
       totalAmount,
+      discounts: resolved.applied.map(
+        ({ discount, discountAmount: amount }) => ({
+          code: discount.code,
+          amount: Number(amount),
+          scope: discount.scope,
+          stackable: discount.stackable,
+          automatic: discount.autoApply,
+          label: discount.description?.trim() || discount.code,
+        }),
+      ),
+      rejected: resolved.rejected.map(({ code, error }) => ({
+        code,
+        reason: error.message,
+        permanent: isPermanent(error),
+        appliesTo: targets.get(code.trim().toUpperCase()) ?? null,
+      })),
     };
   }
 
@@ -1159,6 +1193,7 @@ export class CartService {
 
   private async invalidateCartCache(userId: string): Promise<void> {
     await this.cacheService.del(this.getCacheKey(userId));
+    await this.cacheService.invalidateRecommendations(userId);
   }
 
   // ---------------------------------------------------------------------------
@@ -1217,25 +1252,4 @@ export class CartService {
   // ---------------------------------------------------------------------------
   // ABANDONED CART CLEANUP
   // ---------------------------------------------------------------------------
-
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async purgeAbandonedCarts(): Promise<void> {
-    const cutoff = new Date();
-
-    cutoff.setDate(cutoff.getDate() - 30);
-
-    this.logger.log(`Purging carts not updated since ${cutoff.toISOString()}`);
-
-    const result = await this.prisma.cart.deleteMany({
-      where: {
-        checkedOut: false,
-
-        updatedAt: {
-          lte: cutoff,
-        },
-      },
-    });
-
-    this.logger.log(`Purged ${result.count} abandoned carts`);
-  }
 }

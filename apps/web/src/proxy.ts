@@ -39,8 +39,11 @@ export function buildContentSecurityPolicy(nonce: string): string {
     "https://api.paystack.co",
     "https://standard.paystack.co",
     "https://accounts.google.com/gsi/",
+    // Exact API host only. A wildcard (*.onrender.com) would also allow
+    // connections to ANY app hosted on that platform, i.e. an exfiltration
+    // channel for an attacker who finds an injection point. Other deployments
+    // are covered by the NEXT_PUBLIC_* origins added below.
     "https://nutsonline-api.onrender.com",
-    "https://*.onrender.com",
   ]);
 
   for (const rawUrl of [

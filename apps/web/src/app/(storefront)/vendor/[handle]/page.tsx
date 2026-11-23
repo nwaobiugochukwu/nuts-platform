@@ -1,5 +1,5 @@
 import { serverGetCategories,serverGetVendorStore } from "@/api/server";
-import { VendorStoreView } from "@/component/domain/vendor/VendorStoreView";
+import { VendorStoreView } from "@/components/domain/vendor/VendorStoreView";
 import { Metadata } from "next";
 
 interface VendorStorePageProps {

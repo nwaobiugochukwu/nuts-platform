@@ -1,19 +1,21 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { cartService,orderService,paymentService,userService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import type { CheckoutPayload } from "@/api/order";
-import { FormInput } from "@/component/form/FormInput";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
+import type { CheckoutPayload } from "@/api/services/order";
+import { FormInput } from "@/components/form/FormInput";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
 import { clearClientCart } from "@/lib/cart-cleanup";
 import { formatPrice } from "@/lib/util";
 import { useAuthStore } from "@/zustand/auth";
-import { useDiscountStore } from "@/zustand/discount";
+import { MAX_CLAIMED_VOUCHERS, useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -53,8 +55,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
-  const [discountCode, setDiscountCode] = useState(() => searchParams.get("code") ?? appliedDiscount?.code ?? claimedCode ?? "");
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const setAppliedDiscounts = useDiscountStore((state) => state.setAppliedDiscounts);
+  const { claim, release } = useClaimVoucher();
+  const [discountCode, setDiscountCode] = useState("");
+  // Room for one store voucher + one platform voucher.
+  const canAddVoucher = claimedCodes.length < MAX_CLAIMED_VOUCHERS;
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [addressMode, setAddressMode] = useState<"default" | "new">("default");
   const [saveAsDefault, setSaveAsDefault] = useState(false);
@@ -108,26 +115,19 @@ export default function CheckoutPage() {
     }
   }, [defaultAddress, form]);
 
-  // Revalidate an applied discount code against the server before applying it.
-  const appliedDiscountCode = appliedDiscount?.code;
+  // A voucher arriving via ?code=... is treated exactly like a claim, so there
+  // is a single path (useClaimedVoucherSync) that validates and applies it.
+  const codeFromUrl = searchParams.get("code");
   useEffect(() => {
-    const initialCode = searchParams.get("code") ?? appliedDiscountCode ?? "";
-    if (!initialCode) return;
-    void cartService
-      .previewDiscount(initialCode)
-      .then((res) => {
-        setDiscountCode(res.data.code);
-        setAppliedDiscount({
-          code: res.data.code,
-          amount: res.data.discountAmount,
-        });
-        toast.success(`Discount code "${res.data.code}" applied!`);
-      })
-      .catch(() => {
-        clearDiscount();
-      })
-      .finally(() => setIsApplyingDiscount(false));
-  }, [searchParams, appliedDiscountCode, clearDiscount, setAppliedDiscount]);
+    if (codeFromUrl) void claim(codeFromUrl, { silent: true, copy: false });
+  }, [codeFromUrl, claim]);
+
+  // Keeps the applied voucher valid for the live cart (and re-checks it when the
+  // cart changes) instead of trusting an amount captured earlier.
+  const { isSyncing: isSyncingVoucher } = useClaimedVoucherSync({
+    items: cartData?.cartItems ?? [],
+    enabled: !cartLoading && !cartError,
+  });
 
   const checkoutMutation = useMutation({
     mutationFn: (payload: CheckoutPayload) => orderService.checkout(payload),
@@ -204,36 +204,87 @@ export default function CheckoutPage() {
       return;
     }
 
-    checkoutMutation.mutate({
-      shippingAddress: shipping,
-      ...(appliedDiscount ? { discountCode: appliedDiscount.code } : {}),
-    });
+    if (appliedDiscounts.length === 0) {
+      checkoutMutation.mutate({ shippingAddress: shipping });
+      return;
+    }
+
+    // Re-validate the vouchers against the live cart right before ordering so
+    // the shopper is never charged a different discount than the one displayed
+    // (a code may have expired, been exhausted, or the cart may have changed).
+    const appliedCodes = appliedDiscounts.map((d) => d.code);
+    // Automatic offers are never sent as codes: the server applies them itself.
+    const codesToConfirm = appliedDiscounts.filter((d) => !d.automatic).map((d) => d.code);
+    const confirmedTotal = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
+    setIsApplyingDiscount(true);
+    void (async () => {
+      try {
+        const fresh = (await cartService.previewDiscount(codesToConfirm, { automatic: true })).data;
+        const freshCodes = fresh.discounts.map((d) => d.code);
+        const unchanged =
+          freshCodes.length === appliedCodes.length &&
+          freshCodes.every((code) => appliedCodes.includes(code)) &&
+          fresh.discountAmount === confirmedTotal &&
+          (fresh.rejected ?? []).length === 0;
+        if (!unchanged) {
+          setAppliedDiscounts(
+            fresh.discounts.map((d) => ({
+              code: d.code,
+              amount: d.amount,
+              scope: d.scope,
+              automatic: d.automatic,
+              label: d.label,
+            })),
+          );
+          for (const rejected of fresh.rejected ?? []) {
+            if (rejected.permanent) void release(rejected.code);
+          }
+          toast.info(
+            "Your vouchers were updated. Please review your new total, then place your order again.",
+          );
+          return;
+        }
+      } catch (err: unknown) {
+        // Strict single-voucher failure: it no longer applies.
+        setAppliedDiscounts([]);
+        toast.error(
+          getApiErrorMessage(
+            err,
+            "A voucher is no longer valid. Please review your total.",
+          ),
+        );
+        return;
+      } finally {
+        setIsApplyingDiscount(false);
+      }
+      checkoutMutation.mutate({
+        shippingAddress: shipping,
+        discountCodes: codesToConfirm,
+      });
+    })();
   };
 
   const handleApplyDiscount = async () => {
-    if (!discountCode.trim() || checkoutMutation.isPending) return;
+    const code = discountCode.trim().toUpperCase();
+    if (!code || checkoutMutation.isPending) return;
     setIsApplyingDiscount(true);
     try {
-      const res = await cartService.previewDiscount(discountCode.trim());
-      const discountData = {
-        code: res.data.code,
-        amount: res.data.discountAmount,
-      };
-      setAppliedDiscount(discountData);
-      toast.success(`Discount code "${res.data.code}" applied!`);
+      // Validate the typed code on its own first (precise reason, and a bad
+      // code never disturbs a voucher that is already applied)...
+      await cartService.previewDiscount(code);
+      // ...then claim it; the sync hook checks how it combines with the rest.
+      if (await claim(code, { silent: true, copy: false })) setDiscountCode("");
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, "Invalid or expired discount code"));
-      clearDiscount();
     } finally {
       setIsApplyingDiscount(false);
     }
   };
 
-  const handleRemoveDiscount = () => {
+  const handleRemoveDiscount = (code: string) => {
     if (checkoutMutation.isPending) return;
-    clearDiscount();
-    setDiscountCode("");
-    toast.info("Discount code removed");
+    void release(code);
+    toast.info(`Voucher ${code} removed`);
   };
 
   if (cartLoading) {
@@ -274,7 +325,7 @@ export default function CheckoutPage() {
   const subtotal = cartData?.cart.subtotal ?? 0;
   const deliveryCharge = cartData?.cart.deliveryCharge ?? 0;
   const serviceCharge = cartData?.cart.serviceCharge ?? 0;
-  const discountAmount = appliedDiscount?.amount ?? (cartData?.cart.discountAmount ?? 0);
+  const discountAmount = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
   const totalAmount = Math.max(0, subtotal + deliveryCharge + serviceCharge - discountAmount);
 
   if (items.length === 0) {
@@ -395,12 +446,15 @@ export default function CheckoutPage() {
                   <span>Service Fee</span>
                   <span className="font-medium text-foreground">{serviceCharge > 0 ? formatPrice(serviceCharge) : "₦0.00"}</span>
                 </div>
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <span>Discount</span>
-                    <span>-{formatPrice(discountAmount)}</span>
+                {appliedDiscounts.map((d) => (
+                  <div
+                    key={d.code}
+                    className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
+                  >
+                    <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
+                    <span>-{formatPrice(d.amount)}</span>
                   </div>
-                )}
+                ))}
               </div>
 
               {/* Discount Code inside Mobile Summary */}
@@ -411,25 +465,42 @@ export default function CheckoutPage() {
                 >
                   Discount Code
                 </label>
-                {appliedDiscount ? (
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div className="min-w-0 truncate">
-                        <span className="font-semibold text-foreground uppercase">{appliedDiscount.code}</span>
-                        <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(discountAmount)})</span>
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="min-w-0 truncate">
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
+                          </div>
+                        </div>
+                        {!d.automatic && (
+                          <button
+                          type="button"
+                          onClick={() => handleRemoveDiscount(d.code)}
+                          disabled={checkoutMutation.isPending}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                        )}
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveDiscount}
-                      disabled={checkoutMutation.isPending}
-                      className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
+                    ))}
                   </div>
-                ) : (
+                )}
+                {canAddVoucher && (
                   <div className="flex gap-2">
                     <Input
                       id="mobile-checkout-discount-code"
@@ -438,14 +509,14 @@ export default function CheckoutPage() {
                       placeholder="Discount code"
                       value={discountCode}
                       onChange={(e) => setDiscountCode(e.target.value)}
-                      disabled={checkoutMutation.isPending || isApplyingDiscount}
+                      disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
                       className="h-9 rounded-xl bg-background text-xs uppercase min-w-0"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleApplyDiscount}
-                      disabled={checkoutMutation.isPending || isApplyingDiscount || !discountCode.trim()}
+                      disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher || !discountCode.trim()}
                       className="h-9 rounded-xl px-3 text-xs font-semibold shrink-0 cursor-pointer"
                     >
                       {isApplyingDiscount ? (
@@ -765,25 +836,42 @@ export default function CheckoutPage() {
               >
                 Discount Code
               </label>
-              {appliedDiscount ? (
-                <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 sm:p-3 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <div className="min-w-0 truncate">
-                      <span className="font-semibold text-foreground uppercase">{appliedDiscount.code}</span>
-                      <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(discountAmount)})</span>
-                    </div>
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="min-w-0 truncate">
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
+                          </div>
+                        </div>
+                        {!d.automatic && (
+                          <button
+                          type="button"
+                          onClick={() => handleRemoveDiscount(d.code)}
+                          disabled={checkoutMutation.isPending}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveDiscount}
-                    disabled={checkoutMutation.isPending}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
+                )}
+                {canAddVoucher && (
                 <div className="flex gap-2">
                   <Input
                     id="checkout-discount-code"
@@ -792,14 +880,14 @@ export default function CheckoutPage() {
                     placeholder="Discount code"
                     value={discountCode}
                     onChange={(e) => setDiscountCode(e.target.value)}
-                    disabled={checkoutMutation.isPending || isApplyingDiscount}
+                    disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
                     className="h-10 rounded-xl bg-background text-xs sm:text-sm uppercase min-w-0"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleApplyDiscount}
-                    disabled={checkoutMutation.isPending || isApplyingDiscount || !discountCode.trim()}
+                    disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher || !discountCode.trim()}
                     className="h-10 rounded-xl px-4 text-xs sm:text-sm font-semibold shrink-0"
                   >
                     {isApplyingDiscount ? (
@@ -835,12 +923,15 @@ export default function CheckoutPage() {
                 </span>
               </div>
 
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                  <span>Discount</span>
-                  <span>-{formatPrice(discountAmount)}</span>
+              {appliedDiscounts.map((d) => (
+                <div
+                  key={d.code}
+                  className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
+                >
+                  <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
+                  <span>-{formatPrice(d.amount)}</span>
                 </div>
-              )}
+              ))}
 
               <div className="border-t border-border pt-3 flex justify-between text-base sm:text-lg font-bold text-foreground">
                 <span>Total Due</span>
@@ -852,7 +943,7 @@ export default function CheckoutPage() {
             <Button
               type="submit"
               form="checkout-form"
-              disabled={checkoutMutation.isPending || isApplyingDiscount}
+              disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
               className="hidden w-full rounded-full bg-primary py-6 text-sm sm:text-base font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 lg:flex lg:items-center lg:justify-center lg:gap-2 cursor-pointer"
             >
               {checkoutMutation.isPending ? (
@@ -898,7 +989,7 @@ export default function CheckoutPage() {
                 )();
               }
             }}
-            disabled={checkoutMutation.isPending || isApplyingDiscount}
+            disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
             className="h-11 rounded-xl px-5 sm:px-6 text-xs sm:text-sm font-bold shadow-sm cursor-pointer shrink-0"
           >
             {checkoutMutation.isPending ? (

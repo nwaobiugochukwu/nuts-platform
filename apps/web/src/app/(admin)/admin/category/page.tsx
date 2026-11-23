@@ -1,6 +1,6 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import { useCallback,useMemo,useState } from "react";
@@ -8,22 +8,22 @@ import { FormProvider,useForm,useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { adminCategoryService,adminSystemService } from "@/api";
-import type { CreateCategoryPayload, UpdateCategoryPayload } from "@/api/modules/category";
+import type { CreateCategoryPayload, UpdateCategoryPayload } from "@/api/services/category";
 import type { CategoryResponseDto,CategoryStatus } from "@/api/dto/category";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/lib/api-error";
 import {
@@ -44,7 +44,8 @@ RotateCcw,
 Search,
 Table as TableIcon,
 Trash2,
-XCircle
+XCircle,
+MoreHorizontal,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { toast } from "sonner";
@@ -132,6 +133,8 @@ export default function AdminCategoryPage() {
   } | null>(null);
   const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  // Phones: which tree row has its action bar open.
+  const [actionsOpenFor, setActionsOpenFor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const qc = useQueryClient();
@@ -626,16 +629,16 @@ export default function AdminCategoryPage() {
     return (
       <div key={node.id} className="select-none">
         <div
-          className={`group flex items-center justify-between rounded-xl px-3 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors ${
-            depth > 0 ? "ml-6 border-l border-neutral-200 dark:border-neutral-800" : ""
+          className={`group flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-xl px-2 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors sm:px-3 ${
+            depth > 0 ? "ml-3 border-l border-neutral-200 dark:border-neutral-800 sm:ml-6" : ""
           } ${isArchived ? "opacity-60 bg-neutral-50 dark:bg-neutral-900/30" : ""}`}
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
             {hasChildren ? (
               <button
                 type="button"
                 onClick={() => toggleNodeExpanded(node.id)}
-                className="p-1 hover:text-foreground text-neutral-400 transition-transform"
+                className="flex h-9 w-9 items-center justify-center hover:text-foreground text-neutral-400 transition-transform sm:h-auto sm:w-auto sm:p-1"
                 title={isExpanded ? "Collapse" : "Expand"}
               >
                 {isExpanded ? (
@@ -645,7 +648,7 @@ export default function AdminCategoryPage() {
                 )}
               </button>
             ) : (
-              <span className="w-6" />
+              <span className="hidden w-6 sm:block" />
             )}
 
             {depth === 0 && (
@@ -659,12 +662,12 @@ export default function AdminCategoryPage() {
             <button
               type="button"
               onClick={() => setSelectedDetail(node)}
-              className="text-sm font-semibold text-neutral-900 dark:text-white hover:underline truncate text-left"
+              className="min-w-0 max-w-full truncate text-left text-sm font-semibold text-neutral-900 hover:underline dark:text-white"
             >
               {node.name}
             </button>
 
-            <span className="font-mono text-xs text-neutral-400">/{node.slug}</span>
+            <span className="hidden font-mono text-xs text-neutral-400 md:inline">/{node.slug}</span>
 
             {node.status === "ARCHIVED" ? (
               <Badge variant="destructive" className="text-[10px] py-0 px-1.5 font-medium">
@@ -688,7 +691,21 @@ export default function AdminCategoryPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={() => setActionsOpenFor(actionsOpenFor === node.id ? null : node.id)}
+            aria-label={`Actions for ${node.name}`}
+            aria-expanded={actionsOpenFor === node.id}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 md:hidden"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+
+          <div
+            className={`${
+              actionsOpenFor === node.id ? "flex" : "hidden"
+            } w-full flex-wrap items-center gap-1 border-t border-border/50 pt-2 md:flex md:w-auto md:border-0 md:pt-0 md:opacity-80 md:group-hover:opacity-100 transition-opacity [&_button]:max-md:h-10 [&_button]:max-md:w-10 [&_svg]:max-md:h-4 [&_svg]:max-md:w-4`}
+          >
             <Button
               variant="ghost"
               size="sm"
@@ -1080,7 +1097,7 @@ export default function AdminCategoryPage() {
         open={Boolean(moveTarget)}
         onOpenChange={(v) => !v && setMoveTarget(null)}
       >
-        <DialogContent className="max-w-md rounded-3xl p-6">
+        <DialogContent mobile="center" className="max-w-md rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold flex items-center gap-2">
               <ArrowRightLeft className="h-4 w-4 text-sky-500" />

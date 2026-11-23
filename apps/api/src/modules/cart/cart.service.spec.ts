@@ -58,6 +58,7 @@ describe('CartService', () => {
       get: jest.fn().mockResolvedValue(undefined),
       set: jest.fn(),
       del: jest.fn().mockResolvedValue(undefined),
+      invalidateRecommendations: jest.fn().mockResolvedValue(undefined),
       wrap: jest.fn((key: string, ttl: number, fn: () => Promise<unknown>) =>
         fn(),
       ),

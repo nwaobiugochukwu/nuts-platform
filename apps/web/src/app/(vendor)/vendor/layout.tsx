@@ -1,4 +1,4 @@
-import { VendorLayout } from "@/component/layout/VendorLayout";
+import { VendorLayout } from "@/components/layout/VendorLayout";
 import { getServerSession } from "@/lib/server-auth.ts";
 import { ClientAuthBoundary } from "@/components/domain/auth/ClientAuthBoundary";
 

@@ -2,21 +2,22 @@
 
 import { vendorApi } from "@/api/core/client";
 import { getApiErrorMessage } from "@/api/core/error";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { AutomaticDiscountFields } from "@/components/domain/promotions/AutomaticDiscountFields";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { zodResolver } from "@/lib/zod-resolver";
@@ -51,6 +52,9 @@ interface VendorDiscount {
   expiresAt?: string | null;
   description?: string | null;
   applicableProductIds?: string[];
+  stackable?: boolean;
+  autoApply?: boolean;
+  minQuantity?: number | null;
 }
 
 interface VendorProductOption {
@@ -118,13 +122,15 @@ const optionalPositiveInt = (label: string) =>
       ])
     );
 
+/** Mirrors the API limit for vendor-funded discounts. */
+const VENDOR_MAX_DISCOUNT_PERCENT = 50;
+
 const createDiscountSchema = z
   .object({
-    code: z
-      .string()
-      .min(3, "Code must be at least 3 characters")
-      .max(64)
-      .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
+    // Optional here: an automatic discount has no code (checked in superRefine).
+    code: z.string().max(50).optional().or(z.literal("")),
+    autoApply: z.boolean().default(false),
+    minQuantity: optionalPositiveInt("Minimum items"),
     type: z.enum(["PERCENTAGE", "FIXED"]),
     value: z.coerce.number().positive("Value must be greater than 0"),
     description: z.string().max(256).optional().or(z.literal("")),
@@ -133,12 +139,35 @@ const createDiscountSchema = z
     usageLimit: optionalPositiveInt("Global usage limit"),
     expiresAt: z.string().optional().or(z.literal("")),
     applicableProductIds: z.array(z.string()).default([]),
+    stackable: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
-    if (data.type === "PERCENTAGE" && data.value > 100) {
+    const code = (data.code ?? "").trim();
+    if (data.autoApply) {
+      if ((data.description ?? "").trim().length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Name this offer: shoppers see it at checkout",
+          path: ["description"],
+        });
+      }
+    } else if (code.length < 3) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Percentage discount cannot exceed 100%",
+        message: "Code must be at least 3 characters",
+        path: ["code"],
+      });
+    } else if (!/^[A-Za-z0-9_-]+$/.test(code)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Alphanumeric, hyphens and underscores only",
+        path: ["code"],
+      });
+    }
+    if (data.type === "PERCENTAGE" && data.value > VENDOR_MAX_DISCOUNT_PERCENT) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Store discounts cannot exceed ${VENDOR_MAX_DISCOUNT_PERCENT}%`,
         path: ["value"],
       });
     }
@@ -196,6 +225,8 @@ export default function DashboardDiscountPage() {
     resolver: zodResolver(createDiscountSchema),
     defaultValues: {
       code: "",
+      autoApply: false,
+      minQuantity: undefined,
       type: "PERCENTAGE",
       value: 10,
       description: "",
@@ -204,14 +235,19 @@ export default function DashboardDiscountPage() {
       usageLimit: undefined,
       expiresAt: "",
       applicableProductIds: [],
+      stackable: false,
     },
   });
 
   const selectedType = useWatch({ control: methods.control, name: "type" });
+  const selectedAuto = Boolean(useWatch({ control: methods.control, name: "autoApply" }));
   const selectedProductIds = useWatch({ control: methods.control, name: "applicableProductIds" }) ?? [];
 
   const discountPayload = (values: CreateDiscountFormData) => ({
-    code: values.code.trim().toUpperCase(),
+    // Automatic discounts have no code; the server generates an internal id.
+    ...(values.autoApply ? {} : { code: (values.code ?? "").trim().toUpperCase() }),
+    autoApply: values.autoApply,
+    minQuantity: values.autoApply ? (values.minQuantity ?? null) : null,
     type: values.type,
     value: values.value,
     description: values.description?.trim() || null,
@@ -226,6 +262,7 @@ export default function DashboardDiscountPage() {
         : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
     applicableProductIds: values.applicableProductIds?.length ? values.applicableProductIds : [],
+    stackable: values.stackable ?? false,
   });
 
   const refreshDiscounts = () =>
@@ -303,6 +340,8 @@ export default function DashboardDiscountPage() {
     setScopeMode("all");
     methods.reset({
       code: "",
+      autoApply: false,
+      minQuantity: undefined,
       type: "PERCENTAGE",
       value: 10,
       description: "",
@@ -311,6 +350,7 @@ export default function DashboardDiscountPage() {
       usageLimit: undefined,
       expiresAt: "",
       applicableProductIds: [],
+      stackable: false,
     });
     setOpen(true);
   };
@@ -323,7 +363,9 @@ export default function DashboardDiscountPage() {
     );
     setScopeMode(hasSpecific ? "specific" : "all");
     methods.reset({
-      code: discount.code,
+      code: discount.autoApply ? "" : discount.code,
+      autoApply: discount.autoApply ?? false,
+      minQuantity: discount.minQuantity ?? undefined,
       type: discount.type,
       value: discount.value,
       description: discount.description ?? "",
@@ -332,6 +374,7 @@ export default function DashboardDiscountPage() {
       usageLimit: discount.usageLimit ?? undefined,
       expiresAt: toInputDateTime(discount.expiresAt),
       applicableProductIds: discount.applicableProductIds ?? [],
+      stackable: discount.stackable ?? false,
     });
     setOpen(true);
   };
@@ -347,9 +390,21 @@ export default function DashboardDiscountPage() {
             <Tag className="h-4 w-4" />
           </div>
           <div className="flex items-center gap-1.5 min-w-0">
+            {r.autoApply ? (
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-semibold text-neutral-900 dark:text-white">
+                  {r.description || "Automatic offer"}
+                </span>
+                <span className="w-fit rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                  Automatic{r.minQuantity ? ` · ${r.minQuantity}+ items` : ""}
+                </span>
+              </span>
+            ) : (
             <span className="font-mono font-bold text-sm tracking-wider text-neutral-900 dark:text-white truncate">
               {r.code}
             </span>
+            )}
+            {!r.autoApply && (
             <button
               type="button"
               onClick={() => copyToClipboard(r.code)}
@@ -362,6 +417,7 @@ export default function DashboardDiscountPage() {
                 <Copy className="h-3 w-3" />
               )}
             </button>
+            )}
           </div>
         </div>
       ),
@@ -568,7 +624,7 @@ export default function DashboardDiscountPage() {
 
       {/* CREATE / EDIT DISCOUNT MODAL */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-lg max-h-[90dvh] sm:max-h-[85dvh] rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 flex flex-col gap-0 overflow-hidden">
           <DialogHeader className="pb-3 border-b border-border/50 shrink-0">
             <DialogTitle className="text-base sm:text-lg font-bold pr-6">
               {editingDiscount
@@ -601,12 +657,16 @@ export default function DashboardDiscountPage() {
               })}
               className="space-y-4 pt-3 overflow-y-auto pr-1 sm:pr-2 flex-1 overscroll-contain"
             >
-              <FormInput
-                name="code"
-                label="Coupon Code"
-                placeholder="e.g. SUMMER20"
-                required
-              />
+              <AutomaticDiscountFields locked={Boolean(editingDiscount)} />
+
+              {!selectedAuto && (
+                <FormInput
+                  name="code"
+                  label="Coupon Code"
+                  placeholder="e.g. SUMMER20"
+                  required
+                />
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <FormSelect
@@ -664,6 +724,21 @@ export default function DashboardDiscountPage() {
                 label="Expiration Date & Time (Optional)"
                 type="datetime-local"
               />
+
+              <div className="flex items-start gap-3 rounded-2xl border border-border/80 bg-muted/20 p-3 sm:p-4">
+                <input
+                  type="checkbox"
+                  id="stackable"
+                  {...methods.register("stackable")}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                />
+                <label htmlFor="stackable" className="text-xs cursor-pointer select-none">
+                  <span className="font-semibold text-foreground block">Can be combined with a platform voucher</span>
+                  <span className="text-muted-foreground block text-[11px] mt-0.5">
+                    Shoppers can use this store voucher together with one combinable platform voucher. The platform voucher then applies to what is left. Leave off to make it exclusive.
+                  </span>
+                </label>
+              </div>
 
               {/* Product Application Scope */}
               <div className="space-y-2 rounded-2xl border border-border/80 bg-muted/20 p-3 sm:p-4">
@@ -803,8 +878,12 @@ export default function DashboardDiscountPage() {
 
               <FormTextarea
                 name="description"
-                label="Campaign Purpose (Optional)"
-                placeholder="e.g. Weekend special promotional coupon"
+                label={selectedAuto ? "Offer name (shown to shoppers)" : "Campaign Purpose (Optional)"}
+                placeholder={
+                  selectedAuto
+                    ? "e.g. 10% off when you buy 3 or more"
+                    : "e.g. Weekend special promotional coupon"
+                }
               />
 
               <DialogFooter className="mt-4 pt-3 border-t border-border/50 shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">

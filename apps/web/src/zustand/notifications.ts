@@ -1,7 +1,7 @@
-import { notificationsApiForRole } from "@/api/notifications";
+import { notificationsApiForRole } from "@/api/services/notifications";
 import { getAuthToken } from "@/api/core/token-storage";
 import { performTokenRefresh } from "@/api/core/client";
-import type { AppNotification, ListNotificationsParams } from "@/api/notifications";
+import type { AppNotification, ListNotificationsParams } from "@/api/services/notifications";
 import { useAuthStore, type AuthRole, normalizeRole } from "@/zustand/auth";
 import { activateMaintenanceMode, isMaintenanceModeResponse } from "@/zustand/maintenance-mode";
 import { notificationDetailPath } from "@/lib/notification-path";
@@ -13,7 +13,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { getQueryClient } from "@/lib/query-client";
 import { queryKey } from "@/lib/query-key";
-import type { NotificationPreferences } from "@/api/notifications";
+import type { NotificationPreferences } from "@/api/services/notifications";
 
 interface NotificationsState {
   notifications: AppNotification[];

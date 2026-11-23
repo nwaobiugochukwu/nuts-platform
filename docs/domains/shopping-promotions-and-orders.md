@@ -93,6 +93,12 @@ Vendors and admins need scoped promotions while checkout must enforce dates, eli
 
 Admin and vendor controllers manage discount codes; checkout-side services validate and apply them. The API owns the final calculation rather than accepting a client-supplied discount total.
 
+Vouchers are claimed server-side (`/discounts/claims`) into a per-customer wallet shown at `/account/vouchers`; limited-quantity vouchers hold a 24-hour reservation. One store voucher and one platform voucher can be combined when both are marked combinable. Each voucher reports what it covers (marketplace, one store, specific products, or categories) so the cart can explain why a claimed voucher is not applied yet and link to the eligible items. Orders keep a per-voucher amount (`discount_code_usages`), and the order page lists each voucher with what it took off; older orders show only their codes.
+
+**Automatic discounts.** Creators can mark a discount `autoApply` so shoppers need no code and no claim. It still has the same targets as any discount (minimum spend on covered items, minimum quantity of covered items, product/category/store scope, first-order-only, dates and usage limits); a code is generated internally (`AUTO-XXXXXX`) and the offer is shown by its name. For a cart, the engine evaluates three outcomes and applies the best for the shopper: their own vouchers alone, the best automatic offer(s) alone, and both together when every discount is combinable (at most one store plus one platform discount). Ties keep the shopper's own voucher; a voucher beaten by an automatic offer is reported as not used rather than rejected. The cart preview (with `automatic=1`) and checkout call the same engine, and every applied discount, automatic or not, is recorded with its own amount, so the order page and refunds are unchanged. Product pages show automatic offers as "No code needed" and treat "buy N or more" offers as conditional on a single item.
+
+Platform campaigns shown in the banner are viewer-aware: offers marked first-order-only are returned only to guests and customers with no prior non-cancelled order, so the browser fetches campaigns with the customer's session and the server-rendered anonymous list is trusted only for a confirmed guest. First-order-only offers sort after general campaigns.
+
 #### Failure scenarios and trade-offs
 
 Concurrent redemptions can race usage limits, so limit enforcement and usage records need to share a safe transaction boundary. Add load/concurrency coverage before increasing promotion complexity.

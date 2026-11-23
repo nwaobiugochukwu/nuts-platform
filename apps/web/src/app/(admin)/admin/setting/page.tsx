@@ -1,10 +1,10 @@
 "use client";
 
 import { adminSystemService } from "@/api";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { ThemeSelector } from "@/component/theme/ThemeSelector";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CreditCard,

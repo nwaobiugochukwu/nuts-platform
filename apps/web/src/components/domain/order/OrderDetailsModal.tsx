@@ -1,15 +1,15 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
+import { RemoteImage } from "@/components/ui/RemoteImage";
+import { OrderStatusBadge } from "@/components/domain/order/OrderItemSnapshot";
 import type { CheckoutShippingAddressDto } from "@/api/dto/order";
 import type { OrderStatus } from "@/api/core/types";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogHeader
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { formatPrice } from "@/lib/util";
 import {
 Calendar,
@@ -102,7 +102,7 @@ export function OrderDetailsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 [scrollbar-width:thin]">
+      <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl p-6 sm:p-8 [scrollbar-width:thin]">
         <DialogHeader className="border-b border-neutral-100 dark:border-neutral-800 pb-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>

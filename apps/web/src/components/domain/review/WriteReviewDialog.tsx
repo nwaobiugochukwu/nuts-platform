@@ -2,8 +2,8 @@
 
 import { reviewService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import { RatingInput } from "@/component/form/RatingInput";
-import { Button } from "@/component/ui/button";
+import { RatingInput } from "@/components/form/RatingInput";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
@@ -12,9 +12,9 @@ DialogFooter,
 DialogHeader,
 DialogTitle,
 DialogTrigger,
-} from "@/component/ui/dialog";
-import { Label } from "@/component/ui/label";
-import { Textarea } from "@/component/ui/textarea";
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { queryKey } from "@/lib/query-key";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQueryClient } from "@tanstack/react-query";

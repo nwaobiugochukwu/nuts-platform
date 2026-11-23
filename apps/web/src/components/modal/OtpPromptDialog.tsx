@@ -1,14 +1,14 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/component/ui/dialog";
-import { SegmentedOtpInput } from "@/component/ui/SegmentedOtpInput";
+} from "@/components/ui/dialog";
+import { SegmentedOtpInput } from "@/components/ui/SegmentedOtpInput";
 import { Loader2, Send, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -146,7 +146,7 @@ export function OtpPromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md rounded-2xl p-6 sm:p-7">
+      <DialogContent mobile="center" className="max-w-md rounded-2xl p-6 sm:p-7">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">

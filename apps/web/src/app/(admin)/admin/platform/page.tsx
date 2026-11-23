@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { adminGovernanceService, type PlatformConfig } from "@/api";
-import { Button } from "@/component/ui/button";
-import { Card } from "@/component/ui/card";
-import { Badge } from "@/component/ui/badge";
-import { Label } from "@/component/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/api/core/error";
 

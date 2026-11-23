@@ -1,5 +1,5 @@
 import { serverGetCategories } from "@/api/server";
-import { CartPageView } from "@/component/cart/CartPageView";
+import { CartPageView } from "@/components/domain/cart/CartPageView";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

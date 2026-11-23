@@ -1,7 +1,8 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { DiscountCodeType } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -12,26 +13,39 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Matches,
+  ValidateIf,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
+import {
+  DISCOUNT_CODE_PATTERN,
+  DISCOUNT_MAX_LIST_ITEMS,
+} from '@api/common/constants/discount.constants';
 
 /**
  * Base DTO for creating discount codes.
  * Contains all shared fields, normalization transforms, and validation rules.
  */
 export class CreateDiscountCodeDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      'Unique discount code string. Automatically trimmed and converted to uppercase.',
+      'Unique discount code string. Automatically trimmed and converted to uppercase. Required unless `autoApply` is true (an automatic discount needs no code; one is generated internally).',
     example: 'SAVE20',
   })
+  @ValidateIf((dto: CreateDiscountCodeDto) => !dto.autoApply || !!dto.code)
   @IsString()
+  @MinLength(3)
   @MaxLength(50)
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim().toUpperCase() : (value as unknown),
   )
-  code!: string;
+  @Matches(DISCOUNT_CODE_PATTERN, {
+    message:
+      'code may only contain letters, numbers, hyphens and underscores (3-50 characters).',
+  })
+  code?: string;
 
   @ApiPropertyOptional({
     description: 'Human-readable description of the discount code terms.',
@@ -137,6 +151,7 @@ export class CreateDiscountCodeDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(DISCOUNT_MAX_LIST_ITEMS)
   @IsUUID('4', { each: true })
   applicableProductIds?: string[];
 
@@ -148,6 +163,7 @@ export class CreateDiscountCodeDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(DISCOUNT_MAX_LIST_ITEMS)
   @IsUUID('4', { each: true })
   applicableCategoryIds?: string[];
 
@@ -167,9 +183,62 @@ export class CreateDiscountCodeDto {
   @IsOptional()
   @IsBoolean()
   firstOrderOnly?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether this code may be combined with ONE other stackable code on the same order (at most one store voucher plus one platform voucher). Defaults to false.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  stackable?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Apply automatically when the cart qualifies: no code to type and nothing to claim. The offer is named by `description`.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoApply?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Minimum number of eligible items in the cart for the discount to apply (for example "buy 3, save 10%").',
+    example: 3,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minQuantity?: number | null;
 }
 
-export {
-  CreateDiscountCodeDto as CreateAdminDiscountCodeDto,
-  CreateDiscountCodeDto as CreateVendorDiscountCodeDto,
-};
+/** Admin codes may be platform-wide. */
+export class CreateAdminDiscountCodeDto extends CreateDiscountCodeDto {}
+
+/**
+ * Vendor codes can never be platform-wide: the field is not accepted at all
+ * (the global ValidationPipe uses forbidNonWhitelisted), so a vendor cannot
+ * opt into discounting other stores' products.
+ */
+export class CreateVendorDiscountCodeDto extends OmitType(
+  CreateDiscountCodeDto,
+  ['platformwide'] as const,
+) {}
+
+export class ListDiscountCodesQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 200, default: 100 })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}

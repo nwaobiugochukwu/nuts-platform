@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { notificationsApiForRole } from "@/api/notifications";
+import { notificationsApiForRole } from "@/api/services/notifications";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import { create } from "zustand";
 import { toast } from "sonner";
-
-export { PushNotificationHost } from "@/components/notification/PushNotificationHost";
+import {
+  detectPushSupport,
+  explainSubscribeError,
+  type PushSupport,
+} from "@/lib/push-support";
 
 const PUSH_DISABLED_KEY = "nuts_push_disabled";
 
@@ -75,6 +78,36 @@ async function getOrFetchVapidKey(api: ReturnType<typeof notificationsApiForRole
   return vapidFetchPromise;
 }
 
+/** Brave identifies itself only through an async API; cache the answer. */
+let bravePromise: Promise<boolean> | null = null;
+function detectBrave(): Promise<boolean> {
+  if (typeof navigator === "undefined") return Promise.resolve(false);
+  bravePromise ??= (async () => {
+    const brave = (navigator as Navigator & { brave?: { isBrave?: () => Promise<boolean> } }).brave;
+    try {
+      return Boolean(await brave?.isBrave?.());
+    } catch {
+      return false;
+    }
+  })();
+  return bravePromise;
+}
+
+async function readPushSupport(): Promise<PushSupport> {
+  const isBrave = await detectBrave();
+  return detectPushSupport({
+    isSecureContext: window.isSecureContext,
+    hasServiceWorker: "serviceWorker" in navigator,
+    hasPushManager: "PushManager" in window,
+    hasNotification: "Notification" in window,
+    userAgent: navigator.userAgent,
+    isBrave,
+    isStandalone:
+      window.matchMedia?.("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true,
+  });
+}
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const clean = base64String.trim().replace(/^["']|["']$/g, "");
   const padding = "=".repeat((4 - (clean.length % 4)) % 4);
@@ -104,14 +137,18 @@ export function usePushNotifications() {
   const setIsLoading = usePushStore((s) => s.setIsLoading);
   const setPermission = usePushStore((s) => s.setPermission);
 
-  const [isSupported] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return (
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window
-    );
-  });
+  // null until the browser has been inspected (Brave detection is asynchronous).
+  const [support, setSupport] = useState<PushSupport | null>(null);
+  useEffect(() => {
+    let active = true;
+    void readPushSupport().then((result) => {
+      if (active) setSupport(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const isSupported = support?.status === "supported";
 
   const subscribe = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -218,9 +255,9 @@ export function usePushNotifications() {
         console.error("[usePushNotifications] Failed to enable push notifications:", err);
         setIsSubscribed(false);
         if (!silent) {
-          const msg =
-            err instanceof Error ? err.message : "Failed to enable push notifications";
-          toast.error(msg);
+          toast.error(explainSubscribeError(err, { isBrave: await detectBrave() }), {
+            duration: 9000,
+          });
         }
         return false;
       } finally {
@@ -410,6 +447,8 @@ export function usePushNotifications() {
 
   return {
     isSupported,
+    /** Why push is unavailable (and how to fix it); null while still checking. */
+    support,
     isSubscribed,
     permission,
     isLoading,

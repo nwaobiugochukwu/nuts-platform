@@ -60,6 +60,13 @@ services:
       SWAGGER_ENABLED: "true"
       RABBITMQ_ENABLED: "true"
       RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
+      # Postgres/Redis run from docker-compose.db.yml and publish ports on the
+      # host. Inside this container "localhost" is the container itself, so the
+      # values in .env.development (localhost:5433 / :6379) cannot work here.
+      DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
+      REDIS_URL: redis://host.docker.internal:6379
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./apps/api/src:/app/apps/api/src
       - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
@@ -183,6 +190,9 @@ services:
         INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api:3001}
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-https://api.nuts-commerce.com}
         NEXT_PUBLIC_API_URL: /api/v1
+        # NEXT_PUBLIC_* is baked into the bundle at build time; the runtime
+        # env_file cannot supply it. Set it in the root .env or shell.
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     image: nuts-client:latest
     container_name: nuts_client
     restart: unless-stopped

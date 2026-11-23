@@ -1,5 +1,5 @@
 import { serverGetCategories } from "@/api/server";
-import { WishlistPageView } from "@/component/wishlist/WishlistPageView";
+import { WishlistPageView } from "@/components/domain/wishlist/WishlistPageView";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

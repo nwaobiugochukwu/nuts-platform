@@ -1,14 +1,14 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { adminVendorService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AdminVendorResponseDto } from "@/api/dto/vendor";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";

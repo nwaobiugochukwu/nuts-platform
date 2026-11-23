@@ -98,10 +98,10 @@ export class ProductVariantsController {
   /**
    * Create a variant.
    *
-   * Protect this route with your existing vendor/admin guards
-   * exactly as your current controller does.
+   * Admin-only. Vendors must use /vendors/products/variants, which enforces
+   * that the variant belongs to the calling vendor's own products.
    */
-  @Roles(ROLE.ADMIN, ROLE.VENDOR)
+  @Roles(ROLE.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @Post(':productId')
   @ApiOperation({
@@ -128,7 +128,7 @@ export class ProductVariantsController {
   /**
    * Update variant metadata.
    */
-  @Roles(ROLE.ADMIN, ROLE.VENDOR)
+  @Roles(ROLE.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id')
   @ApiOperation({
@@ -154,7 +154,7 @@ export class ProductVariantsController {
   /**
    * Atomic stock adjustment.
    */
-  @Roles(ROLE.ADMIN, ROLE.VENDOR)
+  @Roles(ROLE.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/stock')
   @ApiOperation({
@@ -179,7 +179,7 @@ export class ProductVariantsController {
   /**
    * Soft delete.
    */
-  @Roles(ROLE.ADMIN, ROLE.VENDOR)
+  @Roles(ROLE.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
@@ -199,7 +199,7 @@ export class ProductVariantsController {
   /**
    * Restore a soft-deleted variant.
    */
-  @Roles(ROLE.ADMIN, ROLE.VENDOR)
+  @Roles(ROLE.ADMIN)
   @ApiBearerAuth('JWT-auth')
   @Patch(':id/reactivate')
   @ApiOperation({

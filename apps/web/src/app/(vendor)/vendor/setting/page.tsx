@@ -2,14 +2,14 @@
 
 import { vendorAccountService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import { FormInput } from "@/component/form/FormInput";
-import { ImageUpload } from "@/component/form/ImageUpload";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { ThemeSelector } from "@/component/theme/ThemeSelector";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
+import { FormInput } from "@/components/form/FormInput";
+import { ImageUpload } from "@/components/form/ImageUpload";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
@@ -176,7 +176,7 @@ export default function VendorSettingPage() {
         {activeTab === "store" && (
           <div className="max-w-2xl space-y-6">
             <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800">
-              <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <CardHeader className="flex flex-col items-start gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-bold">Store Brand & Contacts</CardTitle>
                   <CardDescription className="text-sm">

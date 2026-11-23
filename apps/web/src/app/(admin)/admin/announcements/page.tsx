@@ -11,14 +11,14 @@ import {
   type AnnouncementPayload,
   type AnnouncementStatus,
 } from "@/api";
-import { Button } from "@/component/ui/button";
-import { Card } from "@/component/ui/card";
-import { Badge } from "@/component/ui/badge";
-import { Input } from "@/component/ui/input";
-import { Label } from "@/component/ui/label";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/api/core/error";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 
 type AudienceFilter = AnnouncementAudience | "ALL";
 type StatusFilter = AnnouncementStatus | "ALL";
@@ -550,7 +550,7 @@ export default function AdminAnnouncementsPage() {
             </div>
           </div>
 
-          <div className="max-h-[min(75vh,58rem)] space-y-3 overflow-y-auto p-3 sm:p-5">
+          <div className="max-h-[min(75dvh,58rem)] space-y-3 overflow-y-auto p-3 sm:p-5">
             {announcementsQuery.isLoading ? (
               <p className="p-4 text-sm text-muted-foreground">Loading campaigns…</p>
             ) : announcementsQuery.isError ? (

@@ -50,6 +50,12 @@ export class PublicPlatformPromoDto {
     example: true,
   })
   isFirstOrderOnly?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when the offer applies automatically (no code to enter or claim).',
+  })
+  autoApply?: boolean;
 }
 
 export class ProductVoucherSummaryDto {
@@ -111,6 +117,18 @@ export class ProductVoucherSummaryDto {
     example: false,
   })
   isFirstOrderOnly?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when the offer applies automatically at checkout (no code to enter or claim).',
+  })
+  autoApply?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Minimum number of eligible items required ("buy 3+").',
+    nullable: true,
+  })
+  minQuantity?: number | null;
 }
 
 export class PublicProductDealDto {

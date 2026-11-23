@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/util";
 import { ChevronLeft,ChevronRight,Inbox } from "lucide-react";
 import { type ReactNode } from "react";
@@ -101,7 +101,52 @@ export function DataTable<T extends object>({
           <div className="h-full bg-primary w-1/3 animate-[pulse_1s_infinite] transition-all" />
         </div>
       )}
-      <div className="overflow-x-auto">
+      {/* Phones: each row becomes a stacked card (no sideways scrolling). */}
+      <ul className="divide-y divide-border/60 md:hidden" aria-label="Records">
+        {safeData.map((row, i) => {
+          const rowValues = row as Record<string, unknown>;
+          const rowKey = String(rowValues[String(keyField)] ?? i);
+          const cell = (col: Column<T>) =>
+            col.render
+              ? col.render(row, i)
+              : rowValues[col.key] !== undefined && rowValues[col.key] !== null
+                ? String(rowValues[col.key])
+                : "—";
+          const [primary, ...rest] = columns;
+          return (
+            <li
+              key={rowKey}
+              onClick={() => onRowClick?.(row)}
+              className={cn(
+                "space-y-3 p-4 transition-colors",
+                isFetching && "opacity-50 pointer-events-none",
+                onRowClick && "cursor-pointer active:bg-muted/40",
+              )}
+            >
+              {primary && <div className="min-w-0 break-words text-foreground">{cell(primary)}</div>}
+              <dl className="space-y-2">
+                {rest.map((col) => {
+                  const hasLabel = typeof col.header === "string" ? col.header.trim().length > 0 : Boolean(col.header);
+                  return hasLabel ? (
+                    <div key={col.key} className="flex items-start justify-between gap-4 text-sm">
+                      <dt className="shrink-0 pt-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {col.header}
+                      </dt>
+                      <dd className="min-w-0 break-words text-right text-foreground">{cell(col)}</dd>
+                    </div>
+                  ) : (
+                    <div key={col.key} className="flex flex-wrap justify-end gap-2 border-t border-border/50 pt-3 text-foreground [&_button]:min-h-10 [&_button]:min-w-10 [&_a]:min-h-10">
+                      {cell(col)}
+                    </div>
+                  );
+                })}
+              </dl>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm border-collapse">
           <thead>
             <tr className="border-b border-border/70 bg-muted/30 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -155,7 +200,7 @@ export function DataTable<T extends object>({
         const currentPage = pagination.page ?? 1;
 
         return (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/70 px-4 py-3 bg-muted/15 text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-border/70 px-4 py-3 bg-muted/15 text-xs text-muted-foreground">
             <div>
               <span>
                 {pagination.page !== undefined ? (
@@ -174,11 +219,11 @@ export function DataTable<T extends object>({
               </span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-lg px-2.5 text-xs font-semibold gap-1 disabled:opacity-40"
+                className="h-10 rounded-lg px-3 text-xs font-semibold gap-1 disabled:opacity-40 sm:h-8 sm:px-2.5"
                 disabled={
                   pagination.hasPreviousPage !== undefined
                     ? !pagination.hasPreviousPage
@@ -200,7 +245,7 @@ export function DataTable<T extends object>({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-lg px-2.5 text-xs font-semibold gap-1 disabled:opacity-40"
+                className="h-10 rounded-lg px-3 text-xs font-semibold gap-1 disabled:opacity-40 sm:h-8 sm:px-2.5"
                 disabled={
                   pagination.hasNextPage !== undefined
                     ? !pagination.hasNextPage

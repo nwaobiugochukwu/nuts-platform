@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';

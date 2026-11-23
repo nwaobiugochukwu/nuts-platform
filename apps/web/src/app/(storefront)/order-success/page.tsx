@@ -1,10 +1,10 @@
 "use client";
 
 import { orderService } from "@/api";
-import { paymentService } from "@/api/payment";
+import { paymentService } from "@/api/services/payment";
 import type { OrderResponseDto } from "@/api/dto/order";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Button } from "@/component/ui/button";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/util";
 import { CheckCircle2, PackageCheck, ShoppingBag } from "lucide-react";
 import Link from "@/components/navigation/AppLink";

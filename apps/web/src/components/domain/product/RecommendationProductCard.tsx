@@ -2,8 +2,8 @@
 
 import type { ProductCardDto } from "@/api/dto/product";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
-import type { RecommendationAttribution, RecommendationSurface } from "@/api/modules/analytics";
-import { ProductCard } from "@/component/product/ProductCard";
+import type { RecommendationAttribution, RecommendationSurface } from "@/api/services/analytics";
+import { ProductCard } from "@/components/domain/product/ProductCard";
 import { useRecommendationImpression } from "@/hooks/use-recommendation-impression";
 import { useAuthStore } from "@/zustand/auth";
 import { useMemo, useRef } from "react";

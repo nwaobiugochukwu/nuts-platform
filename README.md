@@ -142,9 +142,13 @@ nuts-platform/
 │   ├── database/        # Prisma 7 schema, migrations, and typed Prisma Client
 │   └── types/           # Shared domain DTOs, API envelopes, and user capabilities
 ├── nginx/               # Reverse proxy templates, SSL certificates, rate limits
+├── scripts/             # Repo tooling: doc link check, architecture guardrails
+├── docs/                # Domain guides, architecture, operations, scaling
 ├── docker-compose.yml   # Multi-profile orchestration (dev, staging, prod)
 └── package.json         # Turbopack and npm workspaces orchestration
 ```
+
+The API (`apps/api/src/modules`) and web app (`apps/web/src/components/domain`) are both organised by business domain, with one-way layering enforced in CI by `npm run check:architecture`. See [Code organization and dependency rules](docs/architecture/code-organization.md).
 
 ---
 
@@ -577,13 +581,14 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
   - _How NUTS Solved It:_ Implemented two-tier caching with in-flight request coalescing (`computeOnce`) in `CacheService`, TTL jitter (0–15%) to avoid synchronized expirations, and a unified bulk deal endpoint (`POST /api/v1/public/discounts/batch-deals`). Uncached items are queried in a single merged database lookup and stored with 60s jittered Redis TTLs.
 - **Duplicate Storefront Requests on Session Hydration:**
   - _The Failure Mode:_ Asynchronous cookie/token hydration alters query keys from `guest` to `authenticated` shortly after mount, causing header banners and deal lookups to fire duplicate network requests.
-  - _How NUTS Solved It:_ Decoupled public promotional campaign hooks (`usePlatformPromos`) from dynamic shopper keys, setting `staleTime: Infinity` to ensure campaigns are retrieved exactly once per session. Client deal batching (`queueBatchProductDeals`) uses a 350ms window and in-memory LRU caching, merging requests from multiple homepage shelves into a single consolidated HTTP call.
+  - _How NUTS Solved It:_ Campaign hooks (`usePlatformPromos`) are viewer-aware: the server-rendered list is anonymous and is trusted only for a confirmed guest, while signed-in customers fetch their own list (5-minute `staleTime`, one retry, fallback to the safe public list) so first-order-only offers never reach returning customers. Client deal batching (`queueBatchProductDeals`) coalesces requests from several homepage shelves (400ms debounce, 1.5s maximum wait, 3-minute per-product cache) and the batch query never retries or refetches on mount.
 - **Telemetry Fragmentation, Store Views & Optional Server Authentication:**
   - _The Failure Mode:_ Fragmented endpoints (e.g. `/analytics/events/store-view/authenticated`, `/guest`, `/recommendations/batch`), split client callers based on login state, small impression batch chunks, and broad query invalidations with `refetchType: "all"`.
   - _How NUTS Solved It:_ Consolidated telemetry into a single unified endpoint `POST /api/v1/analytics/events` (handling behavior events `product_view` and `search`, storefront visits `store_view`, recommendation interactions, and batch payloads). Authentication is handled transparently on the server via `@OptionalAuth()`; clients never split endpoints by authentication status. Tuned impression batching to 100 events with a 2,000ms window, and constrained React Query invalidations to `refetchType: "active"`.
 
 #### 3. Backend Mechanism (With Exact Timings & TTLs)
 
+- **Automatic discounts (no code, no claim):** a discount marked `autoApply` is applied by the server whenever the cart qualifies (spend target `minOrderAmount`, quantity target `minQuantity`, product/category/store scope, first-order-only). The engine (`DiscountCodeService.resolveVoucherStack` with `includeAutomatic`) compares the shopper's own vouchers, the best automatic offer, and the combination when every discount is combinable, and applies whichever saves the most; a voucher that loses is reported rather than failing. Cart preview (`GET /cart/discount-preview?automatic=1`) and checkout use the same engine, so the charged price is the previewed price. Automatic offers cannot be typed or claimed; they are named by `description` and keep an internal `AUTO-XXXXXX` id.
 - **Platform Campaigns (`GET /api/v1/public/discounts/campaigns`):**
   - Cached in Redis (`discounts:platform-promos`) with a **120-second TTL** and automatic cache invalidation on admin discount create, update, or status changes. Prefetched on the server during SSR via `serverGetPlatformPromos()` to eliminate banner layout shifts and client-side mount requests.
 - **Product Deal Details (`GET /api/v1/public/discounts/:productId/available-product-deals-and-vouchers`):**
@@ -598,8 +603,9 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
 
 #### 4. Client-Side Architecture & UX Flow
 
-- **Announcement Ticker (`PlatformPromoTicker`):** Smooth horizontal rotating promo bar featuring dynamic countdown timers, one-click code copy, and zero hardcoded fallbacks.
-- **Voucher Dock (`ProductVoucherDock`):** Interactive voucher tray on product pages showing applicable vouchers, minimum spend requirements, and real-time deal pricing.
+- **Announcement Ticker (`PlatformPromoTicker`):** Rotating promo bar pinned under the header, with live countdowns and one-click claim. It is collapsible, not dismissible: collapsing leaves a slim "N offers available" strip that reopens it, the choice is remembered across pages and tabs, and a campaign the shopper has not seen reopens the bar automatically. Automatic offers show "Applied automatically" instead of a code.
+- **Voucher Dock (`ProductVoucherDock`):** Interactive voucher tray on product pages showing applicable vouchers, minimum spend or quantity targets, and real-time deal pricing. Automatic offers show "No code needed".
+- **My vouchers (`/account/vouchers`):** the customer's server-side wallet with what each voucher covers; the cart explains any claimed voucher that is not applied yet and links to the eligible items.
 - **Mobile Responsive Experience:** Refined touch targets, swipeable carousels, responsive image viewports, and a sticky mobile action bar (`sm:hidden`) ensuring effortless add-to-cart across all viewports (320px–1440px+).
 
 #### 5. Acronym & Concept Glossary

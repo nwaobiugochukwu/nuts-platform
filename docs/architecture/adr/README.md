@@ -4,7 +4,9 @@ This directory records consequential architecture choices and their validation h
 
 ## Decisions
 
-No accepted decision records have been added yet. The [template](0000-template.md) is available for new decisions.
+- [ADR 0001: Modular monolith with enforced layering](0001-modular-monolith-and-enforced-layering.md) — accepted.
+
+The [template](0000-template.md) is available for new decisions.
 
 ## Writing and lifecycle
 

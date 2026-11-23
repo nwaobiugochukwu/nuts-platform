@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Post,
@@ -25,6 +26,7 @@ export class RecommendationsController {
   constructor(private readonly recommendations: RecommendationsService) {}
 
   @Get('for-you')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Personalized recommendations retrieved successfully')
@@ -43,6 +45,7 @@ export class RecommendationsController {
   }
 
   @Get('search-discover')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Personalized search discovery retrieved successfully')
@@ -61,6 +64,7 @@ export class RecommendationsController {
   }
 
   @Get('marketplace-mix')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Marketplace mix retrieved successfully')
@@ -84,6 +88,7 @@ export class RecommendationsController {
   }
 
   @Get('recently-viewed')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message('Recently viewed products retrieved successfully')
@@ -112,6 +117,7 @@ export class RecommendationsController {
   }
 
   @Get('following')
+  @Header('Cache-Control', 'private, no-store')
   @ApiBearerAuth('JWT-auth')
   @Roles(ROLE.USER)
   @Message('New products from followed vendors retrieved successfully')
@@ -120,6 +126,7 @@ export class RecommendationsController {
   }
 
   @Get('stores')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @ApiBearerAuth('JWT-auth')
   @Message(

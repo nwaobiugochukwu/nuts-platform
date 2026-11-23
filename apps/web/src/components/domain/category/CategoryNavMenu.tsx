@@ -145,7 +145,7 @@ export function CategoryNavMenu({
           <section
             id="category-navigation-panel"
             aria-label="Browse product categories"
-            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden border-t border-border bg-background text-foreground shadow-xl md:bottom-auto md:max-h-[75vh] md:bg-background/95 md:backdrop-blur-xl"
+            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden border-t border-border bg-background text-foreground shadow-xl md:bottom-auto md:max-h-[75dvh] md:bg-background/95 md:backdrop-blur-xl"
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
             style={{
