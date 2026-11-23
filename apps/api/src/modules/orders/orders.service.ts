@@ -55,6 +55,12 @@ import {
 } from './constants/order-status.constants';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
+import {
+  computeVendorEarnings,
+  loadCreditedVendorEarnings,
+  loadVendorFundedDiscounts,
+  releaseDiscountUsage,
+} from '@api/modules/promotions/discount-funding';
 
 import { DomainEvents } from '@api/common/events/domain-events';
 
@@ -1255,6 +1261,12 @@ export class OrdersService {
             });
           }
 
+          // A cancelled (necessarily unpaid) order will never redeem its
+          // discount: hand the redemption back.
+          if (nextStatus === OrderStatus.CANCELLED) {
+            await releaseDiscountUsage(tx, orderId);
+          }
+
           /**
            * Only transition an unpaid payment to FAILED when the order is
            * cancelled.
@@ -1317,11 +1329,16 @@ export class OrdersService {
            * They are therefore only settled after delivery.
            */
           if (nextStatus === OrderStatus.DELIVERED) {
+            // Settle exactly what was credited at payment time; fall back to
+            // the computed figure only for vendors with no ledger entry.
+            const credited = await loadCreditedVendorEarnings(tx, orderId);
             const vendorEarnings = this.calculateVendorEarnings(
               current.orderItems,
+              await loadVendorFundedDiscounts(tx, orderId),
             );
-
-            for (const [vendorId, amount] of vendorEarnings) {
+            for (const [vendorId, computed] of vendorEarnings) {
+              const amount = credited.get(vendorId) ?? computed;
+              if (amount.lessThanOrEqualTo(0)) continue;
               await this.walletService.settleVendorEarning(
                 vendorId,
                 amount,
@@ -1533,6 +1550,7 @@ export class OrdersService {
                     isDeleted: true,
                     vendorId: true,
                     categoryId: true,
+                    category: { select: { parentId: true } },
                     images: {
                       select: {
                         url: true,
@@ -1683,63 +1701,41 @@ export class OrdersService {
         > | null = null;
 
         if (dto.discountCode?.trim()) {
-          discountRecord = await this.discountCodeService.validate(
+          // One engine for eligibility, minimum spend and the amount, shared
+          // with the cart preview: the discount is measured on the lines the
+          // code covers (a vendor code only ever covers that vendor's items),
+          // never on the whole cart.
+          const evaluated = await this.discountCodeService.validateForCart(
             dto.discountCode.trim(),
             userId,
-            totalAmount,
-          );
-
-          discountCode = discountRecord.code;
-
-          /**
-           * Product-scoped vendor discounts must match at least one
-           * product in this cart.
-           */
-          if (
-            discountRecord.scope === 'VENDOR' &&
-            !discountRecord.platformwide &&
-            discountRecord.applicableProductIds.length > 0
-          ) {
-            const applicable = cart.cartItems.some((item) =>
-              discountRecord!.applicableProductIds.includes(item.productId),
-            );
-
-            if (!applicable) {
-              throw new BadRequestException(
-                'This discount code does not apply to any products in your cart.',
-              );
-            }
-          }
-
-          /**
-           * Category-scoped discounts must match at least one product's category.
-           */
-          if (discountRecord.applicableCategoryIds.length > 0) {
-            const applicable = cart.cartItems.some((item) =>
-              discountRecord!.applicableCategoryIds.includes(
+            cart.cartItems.map((item) => ({
+              productId: item.productId,
+              vendorId: item.product.vendorId,
+              categoryIds: [
                 item.product.categoryId,
-              ),
-            );
-
-            if (!applicable) {
-              throw new BadRequestException(
-                'This discount code does not apply to any categories in your cart.',
-              );
-            }
-          }
-
-          discountAmount = this.discountCodeService.calculateDiscount(
-            discountRecord,
-            totalAmount,
+                ...(item.product.category?.parentId
+                  ? [item.product.category.parentId]
+                  : []),
+              ],
+              lineTotal: item.unitPrice.mul(item.quantity),
+            })),
           );
 
-          discountAmount = discountAmount.toDecimalPlaces(2);
+          discountRecord = evaluated.discount;
+          discountCode = discountRecord.code;
+          discountAmount = evaluated.discountAmount.toDecimalPlaces(2);
         }
 
+        // The cart page shows delivery and service charges in its total, so
+        // the charged amount must include them or the shopper would be shown
+        // one price and billed another. Discounts apply to goods only.
         const finalAmount = Prisma.Decimal.max(
           totalAmount.sub(discountAmount),
           new Prisma.Decimal(0),
-        ).toDecimalPlaces(2);
+        )
+          .add(cart.deliveryCharge ?? 0)
+          .add(cart.serviceCharge ?? 0)
+          .toDecimalPlaces(2);
 
         // ---------------------------------------------------------------
         // INVENTORY
@@ -2097,6 +2093,10 @@ export class OrdersService {
     );
 
     await this.invalidateCartCache(userId);
+    // The user now has a prior order: first-order promos must stop showing.
+    await this.discountCodeService
+      .invalidateFirstOrderCache(userId)
+      .catch(() => undefined);
 
     return order;
   }
@@ -2316,29 +2316,15 @@ export class OrdersService {
       quantity: number;
       unitPrice: Prisma.Decimal;
     }>,
+    vendorFundedDiscounts: Map<string, Prisma.Decimal> = new Map(),
   ): Map<string, Prisma.Decimal> {
-    const earnings = new Map<string, Prisma.Decimal>();
-
-    for (const item of items) {
-      /**
-       * Decimal arithmetic avoids floating-point money errors.
-       *
-       * Example:
-       * 10000 * 0.85
-       *
-       * stays as a Decimal rather than becoming a JS floating-point number.
-       */
-      const earning = item.unitPrice
-        .mul(item.quantity)
-        .mul(VENDOR_COMMISSION_RATE)
-        .toDecimalPlaces(2);
-
-      const existing = earnings.get(item.vendorId) ?? new Prisma.Decimal(0);
-
-      earnings.set(item.vendorId, existing.add(earning).toDecimalPlaces(2));
-    }
-
-    return earnings;
+    // Decimal-only arithmetic; vendor-funded discounts reduce the vendor's
+    // gross sales before commission (platform-funded ones do not).
+    return computeVendorEarnings(
+      items,
+      VENDOR_COMMISSION_RATE,
+      vendorFundedDiscounts,
+    );
   }
 
   // ---------------------------------------------------------------------------

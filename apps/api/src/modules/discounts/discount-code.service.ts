@@ -18,6 +18,17 @@ import {
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
+import {
+  DISCOUNT_CODE_PATTERN,
+  VENDOR_MAX_DISCOUNT_PERCENT,
+} from '@api/common/constants/discount.constants';
+import {
+  type DiscountEvaluation,
+  type DiscountLineItem,
+  evaluateEligibleLines,
+  isProductEligible,
+} from './discount-eligibility';
+import { releaseDiscountUsage } from './discount-funding';
 
 import {
   BatchProductDiscountsDto,
@@ -176,11 +187,89 @@ export class DiscountCodeService {
     }
   }
 
+  /** A code must be a sane, enumerable-safe token. */
+  private assertValidCodeFormat(code: string): void {
+    if (!DISCOUNT_CODE_PATTERN.test(code)) {
+      throw new BadRequestException(
+        'Discount code must be 3-50 characters using only letters, numbers, hyphens and underscores.',
+      );
+    }
+  }
+
+  private assertValidWindow(
+    startsAt: Date | null | undefined,
+    expiresAt: Date | null | undefined,
+    { allowPastExpiry }: { allowPastExpiry: boolean },
+  ): void {
+    if (startsAt && expiresAt && expiresAt.getTime() <= startsAt.getTime()) {
+      throw new BadRequestException(
+        'Discount expiry must be after its start date.',
+      );
+    }
+    if (!allowPastExpiry && expiresAt && expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('Discount expiry must be in the future.');
+    }
+  }
+
+  /**
+   * Vendors may not give away more than VENDOR_MAX_DISCOUNT_PERCENT, and a
+   * vendor code is only ever allowed to target that vendor's own catalogue.
+   */
+  private async assertVendorRules(
+    vendorId: string,
+    next: {
+      type: DiscountCodeType;
+      value: Prisma.Decimal;
+      applicableProductIds: string[];
+      applicableCategoryIds: string[];
+    },
+  ): Promise<void> {
+    if (
+      next.type === DiscountCodeType.PERCENTAGE &&
+      next.value.greaterThan(VENDOR_MAX_DISCOUNT_PERCENT)
+    ) {
+      throw new BadRequestException(
+        `Vendor discounts cannot exceed ${VENDOR_MAX_DISCOUNT_PERCENT}%.`,
+      );
+    }
+
+    if (next.applicableProductIds.length > 0) {
+      const owned = await this.prisma.product.count({
+        where: {
+          id: { in: next.applicableProductIds },
+          vendorId,
+          isDeleted: false,
+        },
+      });
+      if (owned !== new Set(next.applicableProductIds).size) {
+        throw new BadRequestException(
+          'You can only create discounts for your own products.',
+        );
+      }
+    }
+
+    if (next.applicableCategoryIds.length > 0) {
+      const found = await this.prisma.category.count({
+        where: { id: { in: next.applicableCategoryIds } },
+      });
+      if (found !== new Set(next.applicableCategoryIds).size) {
+        throw new BadRequestException('One or more categories do not exist.');
+      }
+    }
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
   private async purgeDiscountCache(): Promise<void> {
     if (!this.cacheService) return;
     try {
       await Promise.all([
-        this.cacheService.del('discounts:platform-promos'),
+        this.cacheService.del('discounts:platform-promos:v2'),
         this.cacheService.delByPattern('discounts:*'),
       ]);
     } catch (err) {
@@ -199,10 +288,16 @@ export class DiscountCodeService {
     vendorId?: string,
   ): Promise<DiscountCode> {
     const code = this.normalizeCode(dto.code);
+    this.assertValidCodeFormat(code);
 
     this.validateUsageLimits(dto.usageLimit, dto.perUserUsageLimit);
 
     this.validateDiscountValue(dto.type, dto.value);
+    this.assertValidWindow(
+      dto.startsAt ? new Date(dto.startsAt) : null,
+      dto.expiresAt ? new Date(dto.expiresAt) : null,
+      { allowPastExpiry: false },
+    );
 
     if (
       dto.minOrderAmount !== undefined &&
@@ -248,61 +343,88 @@ export class DiscountCodeService {
       ? DiscountCodeScope.VENDOR
       : DiscountCodeScope.PLATFORM;
 
-    const applicableProductIds = dto.applicableProductIds ?? [];
-    const applicableCategoryIds = dto.applicableCategoryIds ?? [];
+    const applicableProductIds = [...new Set(dto.applicableProductIds ?? [])];
+    const applicableCategoryIds = [...new Set(dto.applicableCategoryIds ?? [])];
 
-    const created = await this.prisma.discountCode.create({
-      data: {
-        code,
-
-        description: dto.description?.trim() || null,
-
+    if (vendorId !== undefined) {
+      await this.assertVendorRules(vendorId, {
         type: dto.type,
-
         value: new Prisma.Decimal(dto.value),
-
-        maxDiscountAmount:
-          dto.maxDiscountAmount !== undefined && dto.maxDiscountAmount !== null
-            ? new Prisma.Decimal(dto.maxDiscountAmount)
-            : null,
-
-        minOrderAmount:
-          dto.minOrderAmount !== undefined
-            ? new Prisma.Decimal(dto.minOrderAmount)
-            : new Prisma.Decimal(0),
-
-        usageLimit: dto.usageLimit ?? null,
-
-        // New discount codes have not been redeemed yet.
-        usageCount: 0,
-
-        perUserUsageLimit: dto.perUserUsageLimit ?? null,
-
-        isActive: dto.isActive ?? true,
-
-        startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
-
-        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-
-        vendorId: vendorId ?? null,
-
         applicableProductIds,
         applicableCategoryIds,
+      });
+    }
 
-        /**
-         * Empty product & category lists mean the vendor's or platform's discount
-         * applies to all products within its scope.
-         */
-        platformwide:
-          dto.platformwide ??
-          (applicableProductIds.length === 0 &&
-            applicableCategoryIds.length === 0),
+    let created: DiscountCode;
+    try {
+      created = await this.prisma.discountCode.create({
+        data: {
+          code,
 
-        firstOrderOnly: dto.firstOrderOnly ?? false,
+          description: dto.description?.trim() || null,
 
-        scope,
-      },
-    });
+          type: dto.type,
+
+          value: new Prisma.Decimal(dto.value),
+
+          maxDiscountAmount:
+            dto.maxDiscountAmount !== undefined &&
+            dto.maxDiscountAmount !== null
+              ? new Prisma.Decimal(dto.maxDiscountAmount)
+              : null,
+
+          minOrderAmount:
+            dto.minOrderAmount !== undefined
+              ? new Prisma.Decimal(dto.minOrderAmount)
+              : new Prisma.Decimal(0),
+
+          usageLimit: dto.usageLimit ?? null,
+
+          // New discount codes have not been redeemed yet.
+          usageCount: 0,
+
+          perUserUsageLimit: dto.perUserUsageLimit ?? null,
+
+          isActive: dto.isActive ?? true,
+
+          startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
+
+          expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+
+          vendorId: vendorId ?? null,
+
+          applicableProductIds,
+          applicableCategoryIds,
+
+          /**
+           * Empty product & category lists mean the vendor's or platform's discount
+           * applies to all products within its scope.
+           */
+          // Vendors cannot opt into platform-wide behaviour; for them
+          // "platformwide" just means "all of my own products".
+          platformwide:
+            vendorId !== undefined
+              ? applicableProductIds.length === 0 &&
+                applicableCategoryIds.length === 0
+              : (dto.platformwide ??
+                (applicableProductIds.length === 0 &&
+                  applicableCategoryIds.length === 0)),
+
+          firstOrderOnly: dto.firstOrderOnly ?? false,
+
+          scope,
+        },
+      });
+    } catch (error) {
+      // Two concurrent creates can both pass the pre-check above; the unique
+      // index is the real guard, so translate its violation into a clean 409.
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException(
+          'A discount code with this code already exists.',
+        );
+      }
+      throw error;
+    }
 
     await this.purgeDiscountCache();
     return created;
@@ -315,43 +437,80 @@ export class DiscountCodeService {
   async update(
     discountCodeId: string,
     dto: UpdateDiscountCodeDto,
+    vendorId?: string,
   ): Promise<DiscountCode> {
     const existing = await this.prisma.discountCode.findUnique({
       where: { id: discountCodeId },
-      select: {
-        id: true,
-        code: true,
-        usageCount: true,
-        usageLimit: true,
-        perUserUsageLimit: true,
-        deletedAt: true,
-      },
     });
 
     if (!existing || existing.deletedAt) {
       throw new NotFoundException('Discount code not found.');
     }
 
+    // ---- Resolve the FINAL state, then validate that combined state. ----
+    // Validating only the fields present in the request lets a partial update
+    // (e.g. just `value`) slip an invalid combination past the checks.
+    const nextType = dto.type ?? existing.type;
+    const nextValue =
+      dto.value !== undefined ? new Prisma.Decimal(dto.value) : existing.value;
+    const nextMin =
+      dto.minOrderAmount !== undefined
+        ? new Prisma.Decimal(dto.minOrderAmount)
+        : existing.minOrderAmount;
+    const nextMax =
+      dto.maxDiscountAmount !== undefined
+        ? dto.maxDiscountAmount === null
+          ? null
+          : new Prisma.Decimal(dto.maxDiscountAmount)
+        : existing.maxDiscountAmount;
     const nextUsageLimit =
       dto.usageLimit !== undefined ? dto.usageLimit : existing.usageLimit;
-
     const nextPerUserUsageLimit =
       dto.perUserUsageLimit !== undefined
         ? dto.perUserUsageLimit
         : existing.perUserUsageLimit;
+    const nextStartsAt =
+      dto.startsAt !== undefined
+        ? dto.startsAt
+          ? new Date(dto.startsAt)
+          : null
+        : existing.startsAt;
+    const nextExpiresAt =
+      dto.expiresAt !== undefined
+        ? dto.expiresAt
+          ? new Date(dto.expiresAt)
+          : null
+        : existing.expiresAt;
+    const nextProductIds =
+      dto.applicableProductIds !== undefined
+        ? [...new Set(dto.applicableProductIds)]
+        : existing.applicableProductIds;
+    const nextCategoryIds =
+      dto.applicableCategoryIds !== undefined
+        ? [...new Set(dto.applicableCategoryIds)]
+        : existing.applicableCategoryIds;
 
     this.validateUsageLimits(nextUsageLimit, nextPerUserUsageLimit);
+    this.validateDiscountValue(nextType, nextValue);
+
+    if (nextMin.lessThan(0)) {
+      throw new BadRequestException('Minimum order amount cannot be negative.');
+    }
+    if (nextMax !== null && nextMax.lessThanOrEqualTo(0)) {
+      throw new BadRequestException(
+        'Maximum discount amount must be greater than zero.',
+      );
+    }
+
+    // Only reject a past expiry when the caller is changing it; an existing,
+    // already-expired code must remain editable (e.g. to deactivate it).
+    this.assertValidWindow(nextStartsAt, nextExpiresAt, {
+      allowPastExpiry: dto.expiresAt === undefined,
+    });
 
     /**
-     * Never allow an administrator to reduce the global usage
-     * limit below the number of redemptions that already happened.
-     *
-     * Example:
-     *
-     * usageCount = 50
-     * new usageLimit = 20
-     *
-     * That would make the stored state contradictory.
+     * Never allow the global usage limit to drop below redemptions that
+     * already happened.
      */
     if (
       nextUsageLimit !== null &&
@@ -363,14 +522,21 @@ export class DiscountCodeService {
       );
     }
 
-    if (dto.type !== undefined && dto.value !== undefined) {
-      this.validateDiscountValue(dto.type, dto.value);
+    const ownerVendorId = vendorId ?? existing.vendorId ?? undefined;
+    if (ownerVendorId !== undefined && existing.scope === 'VENDOR') {
+      await this.assertVendorRules(ownerVendorId, {
+        type: nextType,
+        value: nextValue,
+        applicableProductIds: nextProductIds,
+        applicableCategoryIds: nextCategoryIds,
+      });
     }
 
     let normalizedCode: string | undefined;
 
     if (dto.code !== undefined) {
       normalizedCode = this.normalizeCode(dto.code);
+      this.assertValidCodeFormat(normalizedCode);
 
       const duplicate = await this.prisma.discountCode.findFirst({
         where: {
@@ -389,76 +555,49 @@ export class DiscountCodeService {
       }
     }
 
-    const updated = await this.prisma.discountCode.update({
-      where: {
-        id: discountCodeId,
-      },
+    // platform-wide semantics: vendors can never set it explicitly.
+    const nextPlatformwide =
+      existing.scope === 'VENDOR'
+        ? nextProductIds.length === 0 && nextCategoryIds.length === 0
+        : (dto.platformwide ?? existing.platformwide);
 
-      data: {
-        ...(normalizedCode !== undefined && {
-          code: normalizedCode,
-        }),
+    let updated: DiscountCode;
+    try {
+      updated = await this.prisma.discountCode.update({
+        where: {
+          id: discountCodeId,
+        },
 
-        ...(dto.description !== undefined && {
-          description: dto.description?.trim() || null,
-        }),
-
-        ...(dto.type !== undefined && {
-          type: dto.type,
-        }),
-
-        ...(dto.value !== undefined && {
-          value: new Prisma.Decimal(dto.value),
-        }),
-
-        ...(dto.maxDiscountAmount !== undefined && {
-          maxDiscountAmount:
-            dto.maxDiscountAmount === null
-              ? null
-              : new Prisma.Decimal(dto.maxDiscountAmount),
-        }),
-
-        ...(dto.minOrderAmount !== undefined && {
-          minOrderAmount: new Prisma.Decimal(dto.minOrderAmount),
-        }),
-
-        ...(dto.usageLimit !== undefined && {
-          usageLimit: dto.usageLimit,
-        }),
-
-        ...(dto.perUserUsageLimit !== undefined && {
-          perUserUsageLimit: dto.perUserUsageLimit,
-        }),
-
-        ...(dto.isActive !== undefined && {
-          isActive: dto.isActive,
-        }),
-
-        ...(dto.startsAt !== undefined && {
-          startsAt: dto.startsAt ? new Date(dto.startsAt) : null,
-        }),
-
-        ...(dto.expiresAt !== undefined && {
-          expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-        }),
-
-        ...(dto.applicableProductIds !== undefined && {
-          applicableProductIds: dto.applicableProductIds,
-        }),
-
-        ...(dto.applicableCategoryIds !== undefined && {
-          applicableCategoryIds: dto.applicableCategoryIds,
-        }),
-
-        ...(dto.platformwide !== undefined && {
-          platformwide: dto.platformwide,
-        }),
-
-        ...(dto.firstOrderOnly !== undefined && {
-          firstOrderOnly: dto.firstOrderOnly,
-        }),
-      },
-    });
+        data: {
+          ...(normalizedCode !== undefined && { code: normalizedCode }),
+          ...(dto.description !== undefined && {
+            description: dto.description?.trim() || null,
+          }),
+          type: nextType,
+          value: nextValue,
+          maxDiscountAmount: nextMax,
+          minOrderAmount: nextMin,
+          usageLimit: nextUsageLimit ?? null,
+          perUserUsageLimit: nextPerUserUsageLimit ?? null,
+          ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+          startsAt: nextStartsAt,
+          expiresAt: nextExpiresAt,
+          applicableProductIds: nextProductIds,
+          applicableCategoryIds: nextCategoryIds,
+          platformwide: nextPlatformwide,
+          ...(dto.firstOrderOnly !== undefined && {
+            firstOrderOnly: dto.firstOrderOnly,
+          }),
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException(
+          'A discount code with this code already exists.',
+        );
+      }
+      throw error;
+    }
 
     await this.purgeDiscountCache();
     return updated;
@@ -468,10 +607,61 @@ export class DiscountCodeService {
   // VALIDATE DISCOUNT CODE
   // ============================================================
 
+  /**
+   * Validates a code against the cart's ELIGIBLE lines (not the whole cart)
+   * and returns the discount the shopper will actually receive.
+   *
+   * Used by the cart preview and by checkout so both always agree.
+   */
+  async validateForCart(
+    rawCode: string,
+    userId: string,
+    lines: DiscountLineItem[],
+  ): Promise<{
+    discount: DiscountCode;
+    evaluation: DiscountEvaluation;
+    discountAmount: Prisma.Decimal;
+  }> {
+    const discount = await this.validate(rawCode, userId);
+    const evaluation = evaluateEligibleLines(discount, lines);
+
+    if (evaluation.eligibleSubtotal.lessThanOrEqualTo(0)) {
+      throw new BadRequestException(
+        discount.scope === DiscountCodeScope.VENDOR
+          ? 'This discount code only applies to products from the store that issued it, and none are in your cart.'
+          : 'This discount code does not apply to any items in your cart.',
+      );
+    }
+
+    if (evaluation.eligibleSubtotal.lessThan(discount.minOrderAmount)) {
+      const shortfall = new Prisma.Decimal(discount.minOrderAmount)
+        .sub(evaluation.eligibleSubtotal)
+        .toFixed(2);
+      throw new BadRequestException(
+        `Add ${shortfall} more of eligible items to use this discount (minimum ${discount.minOrderAmount.toFixed(2)}).`,
+      );
+    }
+
+    return {
+      discount,
+      evaluation,
+      discountAmount: this.calculateDiscount(
+        discount,
+        evaluation.eligibleSubtotal,
+      ),
+    };
+  }
+
+  /**
+   * Checks that a code exists and is usable by this user right now. When
+   * `orderAmount` is given it is also checked against the minimum order
+   * amount; cart-aware callers should use `validateForCart` instead so the
+   * minimum is measured on eligible items only.
+   */
   async validate(
     rawCode: string,
     userId: string,
-    orderAmount: Prisma.Decimal,
+    orderAmount?: Prisma.Decimal,
   ): Promise<DiscountCode> {
     const code = this.normalizeCode(rawCode);
 
@@ -519,7 +709,7 @@ export class DiscountCodeService {
       );
     }
 
-    if (orderAmount.lessThan(discount.minOrderAmount)) {
+    if (orderAmount && orderAmount.lessThan(discount.minOrderAmount)) {
       throw new BadRequestException(
         `Minimum order amount for this discount is ${discount.minOrderAmount.toFixed(2)}.`,
       );
@@ -613,6 +803,7 @@ export class DiscountCodeService {
         deletedAt: Date | null;
         startsAt: Date | null;
         expiresAt: Date | null;
+        firstOrderOnly: boolean | null;
       }>
     >(
       Prisma.sql`
@@ -624,7 +815,8 @@ export class DiscountCodeService {
           "isActive",
           "deletedAt",
           "startsAt",
-          "expiresAt"
+          "expiresAt",
+          "firstOrderOnly"
         FROM "discount_codes"
         WHERE "id" = ${discountCodeId}
         FOR UPDATE
@@ -681,6 +873,24 @@ export class DiscountCodeService {
 
     if (existingUsage) {
       return;
+    }
+
+    // The first-order rule is re-checked inside the locked transaction:
+    // `validate()` ran earlier, so two simultaneous checkouts by a brand-new
+    // shopper could otherwise both pass it. The code row lock serialises them.
+    if (discount.firstOrderOnly) {
+      const priorOrders = await tx.order.count({
+        where: {
+          userId,
+          id: { not: orderId },
+          status: { not: OrderStatus.CANCELLED },
+        },
+      });
+      if (priorOrders > 0) {
+        throw new ConflictException(
+          'This discount is exclusively reserved for first-time shoppers on their first purchase.',
+        );
+      }
     }
 
     // ----------------------------------------------------------
@@ -790,6 +1000,33 @@ export class DiscountCodeService {
   }
 
   // ============================================================
+  // RELEASE USAGE
+  // ============================================================
+
+  /**
+   * Give a redemption back when its order will never be paid: cancelled,
+   * expired unpaid, payment failed, or refunded.
+   *
+   * Without this, abandoned checkouts permanently burn a code's global limit
+   * and the shopper's own per-user allowance.
+   *
+   * Idempotent: the usage row is the idempotency key, so calling it twice for
+   * the same order releases it once. Must run inside the same transaction as
+   * the order status change.
+   */
+  async releaseUsage(
+    orderId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await releaseDiscountUsage(tx, orderId);
+  }
+
+  /** Call after an order is created so first-order promos disappear at once. */
+  async invalidateFirstOrderCache(userId: string): Promise<void> {
+    await this.cacheService?.del(`user:has-prior-orders:${userId}`);
+  }
+
+  // ============================================================
   // SOFT DELETE
   // ============================================================
 
@@ -808,6 +1045,11 @@ export class DiscountCodeService {
     vendorId?: string,
     isAdmin = false,
   ): Promise<null> {
+    // Prisma treats `vendorId: undefined` as "no filter"; never let a
+    // non-admin call without a vendor id fall through to an unscoped query.
+    if (!isAdmin && !vendorId) {
+      throw new NotFoundException('Discount code not found.');
+    }
     const discount = await this.prisma.discountCode.findFirst({
       where: {
         id,
@@ -841,6 +1083,11 @@ export class DiscountCodeService {
     vendorId?: string,
     isAdmin = false,
   ): Promise<null> {
+    // Prisma treats `vendorId: undefined` as "no filter"; never let a
+    // non-admin call without a vendor id fall through to an unscoped query.
+    if (!isAdmin && !vendorId) {
+      throw new NotFoundException('Discount code not found.');
+    }
     const discount = await this.prisma.discountCode.findFirst({
       where: {
         id,
@@ -874,6 +1121,9 @@ export class DiscountCodeService {
     vendorId?: string,
     isAdmin = false,
   ): Promise<null> {
+    if (!isAdmin && !vendorId) {
+      throw new NotFoundException('Discount code not found.');
+    }
     const discount = await this.prisma.discountCode.findFirst({
       where: {
         id: discountCodeId,
@@ -935,15 +1185,14 @@ export class DiscountCodeService {
     return discount;
   }
 
-  async findAll(limit = 100): Promise<DiscountCode[]> {
+  async findAll(limit = 100, offset = 0): Promise<DiscountCode[]> {
     return this.prisma.discountCode.findMany({
       where: {
         deletedAt: null,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 200),
+      skip: Math.max(offset, 0),
     });
   }
 
@@ -964,8 +1213,11 @@ export class DiscountCodeService {
     return this.toResponseDto(created);
   }
 
-  async findAllForAdmin(limit = 100): Promise<DiscountCodeResponseDto[]> {
-    const all = await this.findAll(limit);
+  async findAllForAdmin(
+    limit = 100,
+    offset = 0,
+  ): Promise<DiscountCodeResponseDto[]> {
+    const all = await this.findAll(limit, offset);
     return all.map((code) => this.toResponseDto(code));
   }
 
@@ -1000,16 +1252,16 @@ export class DiscountCodeService {
   async findAllForVendor(
     vendorId: string,
     limit = 100,
+    offset = 0,
   ): Promise<DiscountCodeResponseDto[]> {
     const codes = await this.prisma.discountCode.findMany({
       where: {
         vendorId,
         deletedAt: null,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(limit, 1), 200),
+      skip: Math.max(offset, 0),
     });
     return codes.map((code) => this.toResponseDto(code));
   }
@@ -1034,7 +1286,7 @@ export class DiscountCodeService {
       );
     }
 
-    const updated = await this.update(id, dto);
+    const updated = await this.update(id, dto, vendorId);
     await this.auditLog?.log({
       action: 'DISCOUNT_CODE_UPDATED',
       entity: 'DISCOUNT_CODE',
@@ -1140,12 +1392,28 @@ export class DiscountCodeService {
             { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
           ],
         },
-        orderBy: [{ value: 'desc' }, { createdAt: 'desc' }],
-        take: 10,
+        orderBy: [{ createdAt: 'desc' }],
+        take: 100,
       });
+
+      // Exhausted codes are removed BEFORE the display limit so they can never
+      // crowd valid codes out of the banner. Percent offers rank above fixed
+      // ones (their raw numbers are not comparable), then by size.
+      const rankValue = (c: (typeof codes)[number]) =>
+        (c.type === DiscountCodeType.PERCENTAGE ? 1_000_000 : 0) +
+        Number(c.value);
+      const started = (c: (typeof codes)[number]) =>
+        c.startsAt === null || c.startsAt <= now ? 0 : 1;
 
       return codes
         .filter((c) => c.usageLimit === null || c.usageCount < c.usageLimit)
+        .sort(
+          (a, b) =>
+            started(a) - started(b) ||
+            rankValue(b) - rankValue(a) ||
+            b.createdAt.getTime() - a.createdAt.getTime(),
+        )
+        .slice(0, 10)
         .map((c) => ({
           id: c.id,
           code: c.code,
@@ -1163,7 +1431,11 @@ export class DiscountCodeService {
     };
 
     const promos = this.cacheService
-      ? await this.cacheService.wrap('discounts:platform-promos', 120, fetcher)
+      ? await this.cacheService.wrap(
+          'discounts:platform-promos:v2',
+          120,
+          fetcher,
+        )
       : await fetcher();
     if (await this.hasPriorNonCancelledOrders(userId)) {
       return promos.filter((promo) => !promo.isFirstOrderOnly);
@@ -1185,6 +1457,7 @@ export class DiscountCodeService {
           id: true,
           vendorId: true,
           categoryId: true,
+          category: { select: { parentId: true } },
           price: true,
           isActive: true,
           isDeleted: true,
@@ -1203,6 +1476,10 @@ export class DiscountCodeService {
 
       const now = new Date();
       const productPrice = Number(product.price);
+      const productCategoryIds = [
+        product.categoryId,
+        ...(product.category?.parentId ? [product.category.parentId] : []),
+      ];
 
       const codes = await this.prisma.discountCode.findMany({
         where: {
@@ -1216,14 +1493,22 @@ export class DiscountCodeService {
             { platformwide: true },
             { vendorId: product.vendorId },
             { applicableProductIds: { has: productId } },
-            { applicableCategoryIds: { has: product.categoryId } },
+            { applicableCategoryIds: { hasSome: productCategoryIds } },
           ],
         },
         orderBy: [{ value: 'desc' }],
       });
 
+      // DB filter above is only a coarse pre-filter; the shared eligibility
+      // rules decide what is actually shown, exactly as checkout will.
       const validCodes = codes.filter(
-        (c) => c.usageLimit === null || c.usageCount < c.usageLimit,
+        (c) =>
+          (c.usageLimit === null || c.usageCount < c.usageLimit) &&
+          isProductEligible(c, {
+            id: productId,
+            vendorId: product.vendorId,
+            categoryIds: productCategoryIds,
+          }),
       );
 
       const allVouchers: ProductVoucherSummaryDto[] = validCodes.map((c) => {
@@ -1324,7 +1609,7 @@ export class DiscountCodeService {
 
     const cachedDeal = this.cacheService
       ? await this.cacheService.wrap(
-          `discounts:product:v3:${productId}`,
+          `discounts:product:v4:${productId}`,
           180,
           fetcher,
         )
@@ -1428,7 +1713,7 @@ export class DiscountCodeService {
                   minOrderShortfall: number;
                 })
               | null;
-          }>(`discounts:deal:v3:${id}:${audienceKey}`);
+          }>(`discounts:deal:v4:${id}:${audienceKey}`);
           if (cached !== undefined) {
             result[id] = cached;
           } else {
@@ -1454,10 +1739,15 @@ export class DiscountCodeService {
         id: true,
         vendorId: true,
         categoryId: true,
+        category: { select: { parentId: true } },
         price: true,
       },
     });
 
+    const categoryIdsOf = (p: (typeof products)[number]) => [
+      p.categoryId,
+      ...(p.category?.parentId ? [p.category.parentId] : []),
+    ];
     const vendorIds = [...new Set(products.map((p) => p.vendorId))];
     const now = new Date();
 
@@ -1475,7 +1765,7 @@ export class DiscountCodeService {
           { applicableProductIds: { hasSome: uncachedIds } },
           {
             applicableCategoryIds: {
-              hasSome: [...new Set(products.map((p) => p.categoryId))],
+              hasSome: [...new Set(products.flatMap(categoryIdsOf))],
             },
           },
         ],
@@ -1490,12 +1780,13 @@ export class DiscountCodeService {
 
     for (const prod of products) {
       const prodPrice = Number(prod.price);
-      const matchingCodes = validCodes.filter(
-        (c) =>
-          c.platformwide ||
-          c.vendorId === prod.vendorId ||
-          c.applicableProductIds.includes(prod.id) ||
-          c.applicableCategoryIds.includes(prod.categoryId),
+      const prodCategoryIds = categoryIdsOf(prod);
+      const matchingCodes = validCodes.filter((c) =>
+        isProductEligible(c, {
+          id: prod.id,
+          vendorId: prod.vendorId,
+          categoryIds: prodCategoryIds,
+        }),
       );
 
       let best: (ProductVoucherSummaryDto & { dealPrice: number }) | null =
@@ -1574,7 +1865,7 @@ export class DiscountCodeService {
       result[prod.id] = dealEntry;
       if (this.cacheService) {
         void this.cacheService.set(
-          `discounts:deal:v3:${prod.id}:${audienceKey}`,
+          `discounts:deal:v4:${prod.id}:${audienceKey}`,
           dealEntry,
           180,
         );

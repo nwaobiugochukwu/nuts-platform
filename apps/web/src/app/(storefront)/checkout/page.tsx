@@ -204,10 +204,47 @@ export default function CheckoutPage() {
       return;
     }
 
-    checkoutMutation.mutate({
-      shippingAddress: shipping,
-      ...(appliedDiscount ? { discountCode: appliedDiscount.code } : {}),
-    });
+    if (!appliedDiscount) {
+      checkoutMutation.mutate({ shippingAddress: shipping });
+      return;
+    }
+
+    // Re-validate the code against the live cart right before ordering so the
+    // shopper is never charged a different discount than the one displayed
+    // (the code may have expired, been exhausted, or the cart may have changed).
+    const discountToConfirm = appliedDiscount;
+    setIsApplyingDiscount(true);
+    void (async () => {
+      try {
+        const fresh = await cartService.previewDiscount(discountToConfirm.code);
+        if (fresh.data.discountAmount !== discountToConfirm.amount) {
+          setAppliedDiscount({
+            code: fresh.data.code,
+            amount: fresh.data.discountAmount,
+          });
+          toast.info(
+            "Your discount was updated. Please review your new total, then place your order again.",
+          );
+          return;
+        }
+      } catch (err: unknown) {
+        clearDiscount();
+        setDiscountCode("");
+        toast.error(
+          getApiErrorMessage(
+            err,
+            "This discount code is no longer valid and has been removed. Please review your total.",
+          ),
+        );
+        return;
+      } finally {
+        setIsApplyingDiscount(false);
+      }
+      checkoutMutation.mutate({
+        shippingAddress: shipping,
+        discountCode: discountToConfirm.code,
+      });
+    })();
   };
 
   const handleApplyDiscount = async () => {

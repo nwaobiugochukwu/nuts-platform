@@ -118,12 +118,15 @@ const optionalPositiveInt = (label: string) =>
       ])
     );
 
+/** Mirrors the API limit for vendor-funded discounts. */
+const VENDOR_MAX_DISCOUNT_PERCENT = 50;
+
 const createDiscountSchema = z
   .object({
     code: z
       .string()
       .min(3, "Code must be at least 3 characters")
-      .max(64)
+      .max(50)
       .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
     type: z.enum(["PERCENTAGE", "FIXED"]),
     value: z.coerce.number().positive("Value must be greater than 0"),
@@ -135,10 +138,10 @@ const createDiscountSchema = z
     applicableProductIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
-    if (data.type === "PERCENTAGE" && data.value > 100) {
+    if (data.type === "PERCENTAGE" && data.value > VENDOR_MAX_DISCOUNT_PERCENT) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Percentage discount cannot exceed 100%",
+        message: `Store discounts cannot exceed ${VENDOR_MAX_DISCOUNT_PERCENT}%`,
         path: ["value"],
       });
     }

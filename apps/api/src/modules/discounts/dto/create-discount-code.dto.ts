@@ -1,7 +1,8 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { DiscountCodeType } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -12,9 +13,15 @@ import {
   IsPositive,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
+import {
+  DISCOUNT_CODE_PATTERN,
+  DISCOUNT_MAX_LIST_ITEMS,
+} from '@api/common/constants/discount.constants';
 
 /**
  * Base DTO for creating discount codes.
@@ -27,10 +34,15 @@ export class CreateDiscountCodeDto {
     example: 'SAVE20',
   })
   @IsString()
+  @MinLength(3)
   @MaxLength(50)
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim().toUpperCase() : (value as unknown),
   )
+  @Matches(DISCOUNT_CODE_PATTERN, {
+    message:
+      'code may only contain letters, numbers, hyphens and underscores (3-50 characters).',
+  })
   code!: string;
 
   @ApiPropertyOptional({
@@ -137,6 +149,7 @@ export class CreateDiscountCodeDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(DISCOUNT_MAX_LIST_ITEMS)
   @IsUUID('4', { each: true })
   applicableProductIds?: string[];
 
@@ -148,6 +161,7 @@ export class CreateDiscountCodeDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(DISCOUNT_MAX_LIST_ITEMS)
   @IsUUID('4', { each: true })
   applicableCategoryIds?: string[];
 
@@ -169,7 +183,31 @@ export class CreateDiscountCodeDto {
   firstOrderOnly?: boolean;
 }
 
-export {
-  CreateDiscountCodeDto as CreateAdminDiscountCodeDto,
-  CreateDiscountCodeDto as CreateVendorDiscountCodeDto,
-};
+/** Admin codes may be platform-wide. */
+export class CreateAdminDiscountCodeDto extends CreateDiscountCodeDto {}
+
+/**
+ * Vendor codes can never be platform-wide: the field is not accepted at all
+ * (the global ValidationPipe uses forbidNonWhitelisted), so a vendor cannot
+ * opt into discounting other stores' products.
+ */
+export class CreateVendorDiscountCodeDto extends OmitType(
+  CreateDiscountCodeDto,
+  ['platformwide'] as const,
+) {}
+
+export class ListDiscountCodesQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 200, default: 100 })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @ApiPropertyOptional({ minimum: 0, default: 0 })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}

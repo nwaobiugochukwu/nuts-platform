@@ -40,6 +40,13 @@ describe('OrdersService', () => {
       orderStatusHistory: {
         create: jest.fn(),
       },
+      discountCodeUsage: {
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn(),
+      },
+      discountCode: { updateMany: jest.fn() },
+      discountCodeUserUsage: { updateMany: jest.fn() },
+      walletTransaction: { findMany: jest.fn().mockResolvedValue([]) },
       payment: {
         create: jest.fn(),
         update: jest.fn(),
@@ -86,6 +93,8 @@ describe('OrdersService', () => {
       validate: jest.fn(),
       calculateDiscount: jest.fn(),
       recordUsage: jest.fn(),
+      validateForCart: jest.fn(),
+      invalidateFirstOrderCache: jest.fn().mockResolvedValue(undefined),
     };
 
     mockPaymentsService = {

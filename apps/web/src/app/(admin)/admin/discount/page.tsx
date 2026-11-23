@@ -118,7 +118,7 @@ const createDiscountSchema = z
     code: z
       .string()
       .min(3, "Code must be at least 3 characters")
-      .max(64)
+      .max(50)
       .regex(/^[A-Za-z0-9_-]+$/, "Alphanumeric, hyphens and underscores only"),
     type: z.enum(["PERCENTAGE", "FIXED"]),
     value: z.coerce.number().positive("Value must be greater than 0"),

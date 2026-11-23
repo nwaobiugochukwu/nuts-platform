@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
+import type { DiscountLineItem } from '@api/modules/promotions/discount-eligibility';
 import { UsersService } from '@api/modules/users/users.service';
 import { InsufficientStockException } from '@api/common/errors/insufficient-stock.exception';
 import { MarketplaceEventsService } from '@api/modules/analytics/tracking/marketplace-events.service';
@@ -43,6 +44,8 @@ const CART_CACHE_TTL = 60;
  */
 const CART_PRODUCT_SELECT = {
   id: true,
+  vendorId: true,
+  categoryId: true,
   name: true,
   slug: true,
   sku: true,
@@ -170,43 +173,25 @@ export class CartService {
       throw new BadRequestException('Your cart is empty');
     }
 
-    const subtotal = new Prisma.Decimal(response.cart.subtotal);
+    // Eligibility, minimum spend and the discount itself are all measured on
+    // the lines the code actually covers - the same engine checkout uses, so
+    // the previewed saving is exactly what will be charged.
+    const lines: DiscountLineItem[] = cart.cartItems.map((item) => ({
+      productId: item.productId,
+      vendorId: item.product.vendorId,
+      categoryIds: [
+        item.product.categoryId,
+        ...(item.product.category?.parentId
+          ? [item.product.category.parentId]
+          : []),
+      ],
+      lineTotal: new Prisma.Decimal(item.unitPrice).mul(item.quantity),
+    }));
 
-    const discountCode = await this.discountCodeService.validate(
-      code,
-      userId,
-      subtotal,
-    );
+    const { discount: discountCode, discountAmount: discountDecimal } =
+      await this.discountCodeService.validateForCart(code, userId, lines);
 
-    if (
-      discountCode.scope === 'VENDOR' &&
-      !discountCode.platformwide &&
-      discountCode.applicableProductIds.length > 0 &&
-      !response.cartItems.some((item) =>
-        discountCode.applicableProductIds.includes(item.productId),
-      )
-    ) {
-      throw new BadRequestException(
-        'This discount code does not apply to any products in your cart',
-      );
-    }
-
-    if (
-      discountCode.applicableCategoryIds.length > 0 &&
-      !response.cartItems.some((item) =>
-        discountCode.applicableCategoryIds.includes(
-          item.product.subcategory?.id ?? item.product.category?.id ?? '',
-        ),
-      )
-    ) {
-      throw new BadRequestException(
-        'This discount code does not apply to any categories in your cart',
-      );
-    }
-
-    const discountAmount = Number(
-      this.discountCodeService.calculateDiscount(discountCode, subtotal),
-    );
+    const discountAmount = Number(discountDecimal);
 
     const deliveryCharge = response.cart.deliveryCharge;
 

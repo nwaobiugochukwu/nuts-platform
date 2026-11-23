@@ -11,6 +11,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -31,6 +32,7 @@ import { DiscountCodeService } from '@api/modules/promotions/discount-code.servi
 import {
   CreateVendorDiscountCodeDto,
   DiscountCodeResponseDto,
+  ListDiscountCodesQueryDto,
   UpdateVendorDiscountCodeDto,
 } from '@api/modules/promotions/dto';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
@@ -86,8 +88,13 @@ export class VendorDiscountCodesController {
   })
   async findAll(
     @GetVendor('id') vendorId: string,
+    @Query() query: ListDiscountCodesQueryDto,
   ): Promise<DiscountCodeResponseDto[]> {
-    return this.discountCodeService.findAllForVendor(vendorId);
+    return this.discountCodeService.findAllForVendor(
+      vendorId,
+      query.limit,
+      query.offset,
+    );
   }
 
   @Patch(':id')
