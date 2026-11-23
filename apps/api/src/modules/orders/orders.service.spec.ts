@@ -46,6 +46,7 @@ describe('OrdersService', () => {
       },
       discountCode: { updateMany: jest.fn() },
       discountCodeUserUsage: { updateMany: jest.fn() },
+      discountCodeClaim: { updateMany: jest.fn() },
       walletTransaction: { findMany: jest.fn().mockResolvedValue([]) },
       payment: {
         create: jest.fn(),

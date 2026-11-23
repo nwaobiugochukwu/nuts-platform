@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 
 import {
+  DiscountClaimStatus,
   DiscountCode,
   DiscountCodeScope,
   DiscountCodeType,
@@ -29,6 +30,7 @@ import {
   isProductEligible,
 } from './discount-eligibility';
 import { releaseDiscountUsage } from './discount-funding';
+import { VoucherClaimsService } from './voucher-claims.service';
 
 import {
   BatchProductDiscountsDto,
@@ -700,13 +702,20 @@ export class DiscountCodeService {
      * This is important because another checkout could redeem
      * the final available slot after this validation succeeds.
      */
-    if (
-      discount.usageLimit !== null &&
-      discount.usageCount >= discount.usageLimit
-    ) {
-      throw new ConflictException(
-        'This discount code has reached its usage limit.',
+    // Live reservations held by OTHER customers count against the limit, so
+    // two shoppers can't both be promised the last use. The caller's own claim
+    // holds a slot for them and is therefore not counted against them.
+    if (discount.usageLimit !== null) {
+      const reservedByOthers = await VoucherClaimsService.reservedByOthers(
+        this.prisma,
+        discount.id,
+        userId,
       );
+      if (discount.usageCount + reservedByOthers >= discount.usageLimit) {
+        throw new ConflictException(
+          'This discount code has reached its usage limit.',
+        );
+      }
     }
 
     if (orderAmount && orderAmount.lessThan(discount.minOrderAmount)) {
@@ -897,13 +906,17 @@ export class DiscountCodeService {
     // 4. Check global usage limit.
     // ----------------------------------------------------------
 
-    if (
-      discount.usageLimit !== null &&
-      discount.usageCount >= discount.usageLimit
-    ) {
-      throw new ConflictException(
-        'This discount code has reached its usage limit.',
+    if (discount.usageLimit !== null) {
+      const reservedByOthers = await VoucherClaimsService.reservedByOthers(
+        tx,
+        discountCodeId,
+        userId,
       );
+      if (discount.usageCount + reservedByOthers >= discount.usageLimit) {
+        throw new ConflictException(
+          'This discount code has reached its usage limit.',
+        );
+      }
     }
 
     // ----------------------------------------------------------
@@ -954,6 +967,16 @@ export class DiscountCodeService {
 
         discountAmount: discountAmount.toDecimalPlaces(2),
       },
+    });
+
+    // The customer's reservation (if any) is now consumed by this order.
+    await tx.discountCodeClaim.updateMany({
+      where: {
+        discountCodeId,
+        userId,
+        status: DiscountClaimStatus.ACTIVE,
+      },
+      data: { status: DiscountClaimStatus.REDEEMED, orderId },
     });
 
     // ----------------------------------------------------------

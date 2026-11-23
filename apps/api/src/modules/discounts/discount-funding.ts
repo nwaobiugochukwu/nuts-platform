@@ -3,7 +3,10 @@ import { DiscountCodeScope, Prisma } from '@prisma/client';
 type Reader = Pick<Prisma.TransactionClient, 'discountCodeUsage'>;
 type Writer = Pick<
   Prisma.TransactionClient,
-  'discountCodeUsage' | 'discountCode' | 'discountCodeUserUsage'
+  | 'discountCodeUsage'
+  | 'discountCode'
+  | 'discountCodeUserUsage'
+  | 'discountCodeClaim'
 >;
 
 /**
@@ -104,6 +107,17 @@ export async function releaseDiscountUsage(
     await tx.discountCode.updateMany({
       where: { id: usage.discountCodeId, usageCount: { gt: 0 } },
       data: { usageCount: { decrement: 1 } },
+    });
+    // The voucher that order consumed goes back to the customer's wallet
+    // history as released (they may claim it again if it is still valid).
+    await tx.discountCodeClaim.updateMany({
+      where: {
+        discountCodeId: usage.discountCodeId,
+        userId: usage.userId,
+        orderId,
+        status: 'REDEEMED',
+      },
+      data: { status: 'RELEASED' },
     });
     await tx.discountCodeUserUsage.updateMany({
       where: {

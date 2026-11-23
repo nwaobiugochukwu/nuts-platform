@@ -172,6 +172,7 @@ describe('releaseDiscountUsage', () => {
     },
     discountCode: { updateMany: jest.fn() },
     discountCodeUserUsage: { updateMany: jest.fn() },
+    discountCodeClaim: { updateMany: jest.fn() },
   });
 
   it('decrements global and per-user counters once', async () => {

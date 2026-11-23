@@ -76,6 +76,16 @@ enum DiscountCodeScope {
   PLATFORM
 }
 
+/// Lifecycle of a voucher a customer has saved ("claimed") to their account.
+enum DiscountClaimStatus {
+  /// Held for the customer (reserves one use of a limited code) until expiresAt.
+  ACTIVE
+  /// Used on an order.
+  REDEEMED
+  /// Given up, or the order that used it was cancelled/refunded.
+  RELEASED
+}
+
 enum WalletTransactionType {
   CREDIT
   DEBIT
@@ -141,6 +151,7 @@ model User {
   checkoutIdempotencies  CheckoutIdempotency[]
   discountCodeUsages     DiscountCodeUsage[]
   discountCodeUserUsages DiscountCodeUserUsage[]
+  discountCodeClaims     DiscountCodeClaim[]
   orderStatusChanges     OrderStatusHistory[]    @relation("OrderStatusChangedByUser")
   orders                 Order[]
   payments               Payment[]
@@ -621,6 +632,13 @@ model DiscountCode {
    */
   firstOrderOnly Boolean @default(false)
 
+  /**
+   * true = may be combined with ONE other stackable code on the same order
+   * (at most one vendor code + one platform code). Default false keeps every
+   * existing code exclusive.
+   */
+  stackable Boolean @default(false)
+
   scope DiscountCodeScope
 
   createdAt DateTime @default(now())
@@ -630,6 +648,7 @@ model DiscountCode {
 
   usages            DiscountCodeUsage[]
   userUsageCounters DiscountCodeUserUsage[]
+  claims            DiscountCodeClaim[]
 
   /**
    * Active-code lookup.
@@ -712,6 +731,42 @@ model DiscountCodeUserUsage {
   @@unique([discountCodeId, userId])
   @@index([userId, discountCodeId])
   @@map("discount_code_user_usage")
+}
+
+/**
+ * A voucher saved to a customer's account.
+ *
+ * For codes with a global usageLimit an ACTIVE, unexpired claim RESERVES one use
+ * for that customer, so two shoppers cannot both be promised the last one.
+ * Reservations are time-boxed (expiresAt) and released when the order that used
+ * the voucher is cancelled or refunded.
+ */
+model DiscountCodeClaim {
+  id String @id @default(uuid())
+
+  discountCodeId String
+  userId         String
+
+  status DiscountClaimStatus @default(ACTIVE)
+
+  claimedAt DateTime @default(now())
+  /// When an ACTIVE claim stops holding its reservation.
+  expiresAt DateTime
+  /// Set once REDEEMED, so a later cancel can release exactly this claim.
+  orderId   String?
+
+  updatedAt DateTime @updatedAt
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One claim row per customer per code; re-claiming revives it.
+  @@unique([discountCodeId, userId])
+  /// "My vouchers"
+  @@index([userId, status, expiresAt])
+  /// Counting live reservations for a limited code.
+  @@index([discountCodeId, status, expiresAt])
+  @@map("discount_code_claims")
 }
 
 model ReferralCode {

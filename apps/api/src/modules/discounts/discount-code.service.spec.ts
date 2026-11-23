@@ -29,6 +29,10 @@ describe('DiscountCodeService', () => {
         update: jest.fn(),
         upsert: jest.fn(),
       },
+      discountCodeClaim: {
+        count: jest.fn().mockResolvedValue(0),
+        updateMany: jest.fn(),
+      },
       $queryRaw: jest.fn(),
     };
 
@@ -227,6 +231,10 @@ describe('DiscountCodeService', () => {
         },
         discountCode: {
           update: jest.fn(),
+        },
+        discountCodeClaim: {
+          count: jest.fn().mockResolvedValue(0),
+          updateMany: jest.fn(),
         },
       };
 
