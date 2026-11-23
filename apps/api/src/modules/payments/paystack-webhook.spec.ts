@@ -32,6 +32,12 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       orderStatusHistory: {
         create: jest.fn(),
       },
+      discountCodeUsage: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      walletTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       admin: {
         findMany: jest.fn().mockResolvedValue([]),
       },

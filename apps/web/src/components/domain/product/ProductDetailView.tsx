@@ -1,8 +1,8 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { analyticsEventService, productService, recommendationService } from "@/api";
-import type { RecommendationAttribution } from "@/api/modules/analytics";
+import type { RecommendationAttribution } from "@/api/services/analytics";
 import type { AddedFromType } from "@/api/dto/cart";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type {
@@ -10,11 +10,11 @@ import type {
   PublicVariantSummaryDto,
 } from "@/api/dto/product";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
-import { ProductReviews } from "@/component/review/ProductReviews";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { RecommendationProductCard } from "@/components/domain/product/RecommendationProductCard";
+import { ProductReviews } from "@/components/domain/review/ProductReviews";
 import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDock";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
@@ -27,7 +27,7 @@ import { formatPrice } from "@/lib/util";
 import { usePublicCategories } from "@/hooks/use-public-categories";
 import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
 ChevronDown,
 ChevronRight,
@@ -75,7 +75,6 @@ export function ProductDetailView({
   noLayout = false,
 }: ProductDetailViewProps) {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: cachedCategories } = usePublicCategories(categories);
   const productCategories = cachedCategories ?? categories;
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -184,23 +183,8 @@ export function ProductDetailView({
             visitorId,
           );
           trackedView.status = "accepted";
-          // Invalidate recommendation queries with active refetch type so inactive
-          // queries are marked stale without triggering background network requests
-          // while viewing this product page.
-          void Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
-              refetchType: "active",
-            }),
-            queryClient.invalidateQueries({
-              queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId],
-              refetchType: "active",
-            }),
-            queryClient.invalidateQueries({
-              queryKey: ["recommendations", "stores", userId ?? null, sessionId],
-              refetchType: "active",
-            }),
-          ]);
+          // Recommendation shelves are refreshed centrally by
+          // analyticsEventService.trackProductView once the view is accepted.
           return;
         } catch {
           if (attempt === 2) {
@@ -211,7 +195,7 @@ export function ProductDetailView({
         }
       }
     })();
-  }, [product?.id, isAuthInitialized, isAuthenticated, canPurchase, queryClient, userId]);
+  }, [product?.id, isAuthInitialized, isAuthenticated, canPurchase, userId]);
 
   const getVariantLabel = (v?: PublicVariantSummaryDto | null) => {
     if (!v) return "";

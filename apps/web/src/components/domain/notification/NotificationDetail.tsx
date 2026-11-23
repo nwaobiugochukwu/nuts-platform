@@ -1,9 +1,9 @@
 "use client";
 
-import type { AppNotification, NotificationType } from "@/api/notifications";
-import { notificationsApiForRole } from "@/api/notifications";
-import { Button } from "@/component/ui/button";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
+import type { AppNotification, NotificationType } from "@/api/services/notifications";
+import { notificationsApiForRole } from "@/api/services/notifications";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { queryKey } from "@/lib/query-key";
 import {
   notificationListPath,
@@ -26,7 +26,9 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useRouter } from "next/navigation";
+import { BackLink } from "@/components/navigation/BackLink";
+import { usePathname, useRouter } from "next/navigation";
+import { canGoBackInApp } from "@/lib/navigation-history";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -121,6 +123,7 @@ function NotificationDetailSkeleton() {
 
 export function NotificationDetail({ id }: { id: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
   const rawRole = useAuthStore((state) => state.role ?? state.user?.role);
   const role = normalizeRole(rawRole) ?? "user";
@@ -167,7 +170,8 @@ export function NotificationDetail({ id }: { id: string }) {
     onSuccess: () => {
       deleteNotification(id);
       toast.success("Notification deleted");
-      router.push(backHref);
+      if (canGoBackInApp(pathname)) router.back();
+      else router.push(backHref);
     },
     onError: () => toast.error("Could not delete this notification. Please try again."),
   });
@@ -225,7 +229,12 @@ export function NotificationDetail({ id }: { id: string }) {
   const paymentId = getMetadataString(item.metadata, "paymentId", "payment_id");
   const referenceId = orderId ?? paymentId;
   const referenceLabel = orderId ? "Order reference" : paymentId ? "Payment reference" : "Related item";
-  const actionLabel = orderId
+  const isAnnouncement = item.type === "SYSTEM_ANNOUNCEMENT";
+  const actionLabel = isAnnouncement
+    ? "Open"
+    : item.type === "VENDOR_FOLLOWED"
+      ? "View followers"
+      : orderId
     ? "View order"
     : paymentId
       ? "View payment"
@@ -235,17 +244,7 @@ export function NotificationDetail({ id }: { id: string }) {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-4 py-3 sm:space-y-5 sm:py-8">
       <div className="flex min-h-10 items-center justify-between gap-3">
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="-ml-2 gap-2 px-2 text-muted-foreground hover:text-foreground"
-        >
-          <Link href={backHref}>
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span>All notifications</span>
-          </Link>
-        </Button>
+        <BackLink fallbackHref={backHref} fallbackLabel="All notifications" className="-ml-2 px-2" />
         <Button
           type="button"
           variant="ghost"
@@ -302,7 +301,13 @@ export function NotificationDetail({ id }: { id: string }) {
           >
             <div className="min-w-0 space-y-1">
               <p className="text-xs font-medium text-muted-foreground">
-                {orderId ? "Related order" : paymentId ? "Related payment" : "Related item"}
+                {isAnnouncement
+                  ? "Linked from this announcement"
+                  : orderId
+                    ? "Related order"
+                    : paymentId
+                      ? "Related payment"
+                      : "Related item"}
               </p>
               {orderNumber && (
                 <p className="break-all text-sm font-semibold text-foreground">

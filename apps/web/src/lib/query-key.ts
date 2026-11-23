@@ -1,4 +1,34 @@
+/**
+ * Recommendation shelves are keyed [ "recommendations", <shelf>, userId, sessionId?, visitorId? ].
+ * Every read AND every invalidation must go through these builders: cache
+ * clearing only works when the key shapes match exactly, and hand-typed
+ * arrays drift. Omitted trailing arguments produce a shorter key, which acts
+ * as a prefix when passed to invalidateQueries.
+ */
+const recommendationKey =
+  (shelf: string) =>
+  (userId?: string | null, sessionId?: string, visitorId?: string) =>
+    [
+      "recommendations",
+      shelf,
+      userId ?? null,
+      ...(sessionId !== undefined ? [sessionId] : []),
+      ...(visitorId !== undefined ? [visitorId] : []),
+    ] as const;
+
 export const queryKey = {
+  recommendations: {
+    all: ["recommendations"] as const,
+    forYou: recommendationKey("for-you"),
+    recentlyViewed: recommendationKey("recently-viewed"),
+    following: recommendationKey("following"),
+    stores: recommendationKey("stores"),
+    marketplaceMix: recommendationKey("marketplace-mix"),
+    searchDiscover: recommendationKey("search-discover"),
+    /** Shelf-level prefixes (match every user/session). */
+    marketplaceMixAll: ["recommendations", "marketplace-mix"] as const,
+    storesAll: ["recommendations", "stores"] as const,
+  },
   session: ["session"] as const,
   product: {
     all: ["product"] as const,
@@ -73,5 +103,8 @@ export const queryKey = {
       ["discounts", "product", productId] as const,
     batch: (idsKey: string) =>
       ["discounts", "batch", idsKey] as const,
+  },
+  vouchers: {
+    mine: ["vouchers", "mine"] as const,
   },
 };

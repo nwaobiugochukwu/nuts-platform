@@ -1,20 +1,22 @@
 "use client";
 // @refresh reset
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { cartService,orderService,paymentService,userService } from "@/api";
 import type {
 CartItemResponseDto,
-DiscountPreviewDto,
 } from "@/api/dto/cart";
 import type { CheckoutResponseDto } from "@/api/dto/order";
 import type { PaymentResponseDto } from "@/api/dto/payment";
-import type { CheckoutPayload } from "@/api/order";
-import { Button } from "@/component/ui/button";
-import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/component/ui/dialog";
-import { Input } from "@/component/ui/input";
+import type { CheckoutPayload } from "@/api/services/order";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
-import { useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { MAX_CLAIMED_VOUCHERS, useDiscountStore } from "@/zustand/discount";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
@@ -27,7 +29,7 @@ import { Heart,Minus,Plus,ShoppingBag,Trash2,X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { extractStockConflict } from "@/lib/stock-conflict";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 type Address = { fullName: string; phone: string; street: string; city: string; state: string; country: string };
@@ -187,7 +189,15 @@ async function resolvePaymentInitialization(order: CheckoutResponseDto): Promise
   throw new Error("Payment could not be initialized for this order");
 }
 
-function CheckoutPanel({ total, discountCode, discountPreview }: { total: number; discountCode: string; discountPreview: DiscountPreviewDto | null }) {
+interface DrawerTotals {
+  subtotal: number;
+  discountAmount: number;
+  deliveryCharge: number;
+  serviceCharge: number;
+  totalAmount: number;
+}
+
+function CheckoutPanel({ total, discountCodes, discountPreview }: { total: number; discountCodes: string[]; discountPreview: DrawerTotals | null }) {
   const queryClient = useQueryClient(); const [useAlternative, setUseAlternative] = useState(false); const [alternative, setAlternative] = useState<Address>(blankAddress);
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -204,7 +214,7 @@ function CheckoutPanel({ total, discountCode, discountPreview }: { total: number
       if (!/^\+[1-9]\d{6,14}$/.test(phone.trim())) {
         throw new Error("Phone number must include international country code (e.g. +2349064786655)");
       }
-      return orderService.checkout({ shippingAddress: { fullName, phone: phone.trim(), street, city, state, country }, ...(discountCode.trim() ? { discountCode: discountCode.trim() } : {}) } as CheckoutPayload);
+      return orderService.checkout({ shippingAddress: { fullName, phone: phone.trim(), street, city, state, country }, ...(discountCodes.length > 0 ? { discountCodes } : {}) } as CheckoutPayload);
     },
     onSuccess: async ({ data: order }) => {
       try {
@@ -381,9 +391,10 @@ export function ShoppingDrawer() {
   const panel = useShoppingDrawerStore((state) => state.panel);
   const close = useShoppingDrawerStore((state) => state.close);
   const [discountCode, setDiscountCode] = useState("");
-  const [discountPreview, setDiscountPreview] = useState<DiscountPreviewDto | null>(null);
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
-  const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
+  const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const { claim, release } = useClaimVoucher();
   const { items: wishlist, removeItem } = useWishlist();
   const {
     items: cartItems,
@@ -393,40 +404,48 @@ export function ShoppingDrawer() {
     addItem: addToCart,
   } = useCart();
 
-  const previewDiscount = useMutation({
-    mutationFn: (code: string) => cartService.previewDiscount(code).then((res) => res.data),
-    onSuccess: (data) => {
-      setDiscountPreview(data);
-      setAppliedDiscount({ code: data.code, amount: data.discountAmount });
-    },
-    onError: () => {
-      setDiscountPreview(null);
-      clearDiscount();
-      toast.error("Discount code could not be applied");
-    },
+  // Applies the claimed vouchers and keeps every applied amount in step with
+  // the cart (shared with the cart page and checkout; cannot loop on failure).
+  useClaimedVoucherSync({
+    items: cartItems,
+    enabled: panel === "cart" || panel === "checkout",
   });
 
-  // Auto-apply claimed discount code when drawer opens with items in cart
-  useEffect(() => {
-    if (
-      (panel === "cart" || panel === "checkout") &&
-      claimedCode &&
-      !appliedDiscount &&
-      !previewDiscount.isPending &&
-      (cartItems.length > 0 || (cart?.totalItemCount ?? 0) > 0)
-    ) {
-      previewDiscount.mutate(claimedCode);
-    }
-  }, [panel, claimedCode, appliedDiscount, cartItems.length, cart?.totalItemCount, previewDiscount]);
+  // Room for one store voucher + one platform voucher.
+  const canAddVoucher = claimedCodes.length < MAX_CLAIMED_VOUCHERS;
+  const discountAmount = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
+  const cartSubtotal = cart?.subtotal ?? 0;
+  const cartDelivery = cart?.deliveryCharge ?? 0;
+  const cartServiceFee = cart?.serviceCharge ?? 0;
+  const discountPreview: DrawerTotals | null =
+    appliedDiscounts.length > 0
+      ? {
+          subtotal: cartSubtotal,
+          discountAmount,
+          deliveryCharge: cartDelivery,
+          serviceCharge: cartServiceFee,
+          totalAmount: Math.max(
+            0,
+            cartSubtotal - discountAmount + cartDelivery + cartServiceFee,
+          ),
+        }
+      : null;
 
-  const handleApplyDiscount = () => {
-    const code = effectiveDiscountCode.trim();
-    if (!code) {
-      setDiscountPreview(null);
-      clearDiscount();
-      return;
+  const handleApplyDiscount = async () => {
+    const code = discountCode.trim().toUpperCase();
+    if (!code) return;
+    setIsApplyingDiscount(true);
+    try {
+      // Validate the typed code on its own first (precise reason, and a bad
+      // code never disturbs a voucher that is already applied)...
+      await cartService.previewDiscount(code);
+      // ...then claim it; the sync hook checks how it combines with the rest.
+      if (await claim(code, { silent: true, copy: false })) setDiscountCode("");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "Discount code could not be applied"));
+    } finally {
+      setIsApplyingDiscount(false);
     }
-    previewDiscount.mutate(code);
   };
 
   const isCart = panel === "cart";
@@ -457,7 +476,7 @@ export function ShoppingDrawer() {
           </button>
         </div>
         {isCheckout ? (
-          <CheckoutPanel total={cart?.totalAmount ?? 0} discountCode={discountPreview ? effectiveDiscountCode : ""} discountPreview={discountPreview} />
+          <CheckoutPanel total={cart?.totalAmount ?? 0} discountCodes={appliedDiscounts.filter((d) => !d.automatic).map((d) => d.code)} discountPreview={discountPreview} />
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto px-5">
@@ -532,43 +551,77 @@ export function ShoppingDrawer() {
             </div>
             {isCart && (
               <div className="border-t bg-card p-5">
-                <div className="mb-2 flex items-center gap-2">
-                  <Input
-                    id="drawer-discount-code"
-                    name="discountCode"
-                    aria-label="Discount code"
-                    value={effectiveDiscountCode}
-                    onChange={(e) => setDiscountCode(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleApplyDiscount();
-                      }
-                    }}
-                    placeholder="Discount code"
-                    className="h-9 text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9"
-                    disabled={!effectiveDiscountCode.trim() || previewDiscount.isPending}
-                    onClick={handleApplyDiscount}
-                  >
-                    {previewDiscount.isPending ? "Applying..." : "Apply"}
-                  </Button>
-                </div>
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-1.5">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs"
+                      >
+                        <span className={`font-semibold ${d.automatic ? "" : "uppercase"}`}>
+                          {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                          {d.automatic && (
+                            <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                              Auto
+                            </span>
+                          )}
+                          <span className="ml-1.5 text-emerald-600">(-{formatPrice(d.amount)})</span>
+                        </span>
+                        {!d.automatic && (
+                          <button
+                            type="button"
+                            className="font-semibold text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              void release(d.code);
+                              toast.info(`Voucher ${d.code} removed`);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {canAddVoucher && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      id="drawer-discount-code"
+                      name="discountCode"
+                      aria-label="Discount code"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void handleApplyDiscount();
+                        }
+                      }}
+                      placeholder={appliedDiscounts.length > 0 ? "Add another voucher" : "Discount code"}
+                      className="h-9 text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9"
+                      disabled={!discountCode.trim() || isApplyingDiscount}
+                      onClick={() => void handleApplyDiscount()}
+                    >
+                      {isApplyingDiscount ? "Applying..." : "Apply"}
+                    </Button>
+                  </div>
+                )}
                 <div className="space-y-1.5 border-t pt-3 text-sm">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
                     <span>{formatPrice(displayedSubtotal)}</span>
                   </div>
-                  {discountPreview && discountPreview.discountAmount > 0 && (
-                    <div className="flex justify-between text-emerald-600">
-                      <span>Discount</span>
-                      <span>-{formatPrice(discountPreview.discountAmount)}</span>
+                  {appliedDiscounts.map((d) => (
+                    <div key={d.code} className="flex justify-between text-emerald-600">
+                      <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
+                      <span>-{formatPrice(d.amount)}</span>
                     </div>
-                  )}
+                  ))}
                   <div className="flex justify-between text-muted-foreground">
                     <span>Delivery</span>
                     <span>{formatPrice(discountPreview?.deliveryCharge ?? cart?.deliveryCharge ?? 0)}</span>

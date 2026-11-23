@@ -8,11 +8,14 @@ The web application uses Next.js App Router for the customer storefront, vendor 
 - src/app/(vendor) — authenticated merchant catalog, inventory, order, analytics, and settings routes.
 - src/app/(admin) — platform governance and operations routes.
 - src/app/(auth) — customer, vendor, and admin authentication flows.
-- src/components/domain — product, cart, category, vendor, notification, and identity surfaces.
-- src/components/home — homepage shelves for a featured store, personalized product activity, the cross-store feed, followed vendors, and vendor discovery.
-- src/api/modules — typed browser API modules.
+- src/components/domain/<feature> — feature components: auth, cart, category, home (homepage shelves), maintenance, notification, order, payments, product, promotions (campaign banner), review, search, vendor, voucher, wishlist, analytics.
+- src/components/ui, form, data, feedback, modal, navigation, theme — shared building blocks that never import feature code.
+- src/components/layout — app shells: storefront navbar, footer, bottom nav, and the vendor/admin panel shell and headers.
+- src/api/services — one typed browser client per backend domain; src/api/core holds the HTTP clients; src/api/dto mirrors API contracts.
 - src/api/server — server-side API adapters with Next.js cache and revalidation options.
-- src/hooks and src/zustand — shared query hooks and client session/UI state.
+- src/hooks and src/zustand — shared query hooks and client session/UI state; src/lib holds pure helpers; src/provider holds root providers.
+
+There is a single import alias, `@/`, mapped to `src/`. Layering and naming rules are in [Code organization and dependency rules](../../docs/architecture/code-organization.md) and are checked by `npm run check:architecture`.
 
 ## Route map by portal
 
@@ -61,14 +64,18 @@ Admin and vendor analytics default to a day view using Africa/Lagos calendar bou
 **Unified Telemetry, Store Views & Impression Batching:**
 - **Consolidated Event Ingestion:** All behavioral analytics (`product_view`, `search`), storefront visits (`store_view`), and recommendation interactions (`CLICK`, `IMPRESSION`, etc.) route cleanly to a single endpoint: `POST /api/v1/analytics/events`.
 - **Server-Side Optional Authentication:** Authentication is resolved on the server using `@OptionalAuth()`. Clients do not branch into `/authenticated` or `/guest` endpoints, eliminating artificial route splits like `/store-view/authenticated`.
-- **SSR Prefetched Campaigns & High-Contrast Progress Bar:** Top banners prefetch platform discount campaigns on the server (`serverGetPlatformPromos`) for instantaneous hydration, and the route progress bar uses high-contrast emerald glow gradients visible across both light and dark modes.
-- **Batch Impression Queue:** Product impression events in `src/api/modules/analytics.ts` are buffered with a 2,000ms window (`IMPRESSION_BATCH_WINDOW_MS = 2000`) and a maximum threshold of 100 events (`IMPRESSION_BATCH_THRESHOLD = 100`, matching backend DTO batch limits). This ensures all cards across multiple homepage shelves settle into a single network call on initial page load.
+- **SSR Prefetched Campaigns & High-Contrast Progress Bar:** Top banners prefetch platform discount campaigns on the server (`serverGetPlatformPromos`) for instantaneous hydration. That list is anonymous, so it is trusted only for a confirmed guest; signed-in customers fetch their own list so first-order-only offers never reach returning customers, and the route progress bar uses high-contrast emerald glow gradients visible across both light and dark modes.
+- **Batch Impression Queue:** Product impression events in `src/api/services/analytics.ts` are buffered with a 2,000ms window (`IMPRESSION_BATCH_WINDOW_MS = 2000`) and a maximum threshold of 100 events (`IMPRESSION_BATCH_THRESHOLD = 100`, matching backend DTO batch limits). This ensures all cards across multiple homepage shelves settle into a single network call on initial page load.
 - **Deduplication & Pagehide Flush:** Impressions are deduplicated using composite `${sessionId}:${surface}:${entityId}` keys to avoid duplicate telemetry for already-viewed items. An active `pagehide` listener guarantees all pending telemetry flushes before navigating away or closing tabs.
 - **Inactive Query Preservation:** Product view tracking invalidates recommendation queries using `refetchType: "active"`, marking inactive homepage queries as stale without triggering background network requests while viewing product detail pages.
 
 ## Push notifications
 
-The web client uses the [Web Push API](https://www.w3.org/TR/push-api/) with VAPID keys to deliver push notifications. Push notification state is managed in `src/hooks/use-push-notifications.ts` and exposed to the UI through `src/components/domain/notification/NotificationPreferencesView.tsx`.
+The web client uses the [Web Push API](https://www.w3.org/TR/push-api/) with VAPID keys to deliver push notifications. Push notification state is managed in `src/hooks/use-push-notifications.ts` and exposed to the UI through `src/components/domain/notification/NotificationPreferencesView.tsx`; the root provider mounts `PushNotificationHost` from `src/components/domain/notification`.
+
+**Support detection and guidance (`src/lib/push-support.ts`):** "unsupported" is split into its real causes, each with its own message and steps: insecure (non-HTTPS) page, Brave (the Push API is hidden until *Use Google services for push messaging* is enabled in `brave://settings/privacy`, so the screen shows the steps and a copy button), iPhone/iPad Safari outside the Home Screen (add the site to the Home Screen), and browsers with no Push API. A failed `pushManager.subscribe()` is translated to a specific explanation (blocked, push service unreachable, stale registration). Email and in-app notifications keep working whatever push does.
+
+**Permission prompt (`PushNotificationHost`):** signed-in users see an in-app prompt first, about 6 seconds after load and only while the browser permission is undecided; the browser's one-shot dialog opens only when they tap *Turn on*. *Not now* snoozes the prompt with backoff (3 days, 2 weeks, then 2 months). The prompt is never shown where push cannot work.
 
 **Architecture decisions:**
 
@@ -120,7 +127,24 @@ For Google sign-in origin errors, check the OAuth **Web application** credential
 
 After customer sign-in, the client can claim anonymous recent product history for recommendation continuity. This does not merge anonymous analytics identities. `/account/following` manages followed stores; followed-store news and follower counts come from separate relationship and analytics endpoints.
 
-Use public, vendor, or admin API clients from src/api/modules based on the operation's authority. Server components should use src/api/server adapters and the configured INTERNAL_API_URL. Do not place private provider secrets in `NEXT_PUBLIC_` variables. Admin announcements are audience-specific in-app campaigns for customers or approved vendors. The admin UI supports drafts, scheduling, publishing, and archiving, with campaign status and recipient progress returned by the API. Platform settings and staff lifecycle changes are available in the admin portal and require admin authorization.
+Use public, vendor, or admin API clients from src/api/services based on the operation's authority. Server components should use src/api/server adapters and the configured INTERNAL_API_URL. Do not place private provider secrets in `NEXT_PUBLIC_` variables. Admin announcements are audience-specific in-app campaigns for customers or approved vendors. The admin UI supports drafts, scheduling, publishing, and archiving, with campaign status and recipient progress returned by the API. Platform settings and staff lifecycle changes are available in the admin portal and require admin authorization.
+
+## Responsive and touch rules
+
+These rules keep every screen from phones to large desktops usable; follow them when adding UI.
+
+- **Breakpoints:** phones are below `sm` (640px), tablets `sm`-`lg`, laptops `lg`-`xl`, desktops `xl` and up. The storefront shows the bottom navigation below `xl`; vendor and admin panels show the sidebar from `lg` and a hamburger below it. Tables (`DataTable`) switch to stacked cards below `md`.
+- **Dialogs:** Tailwind v4 centres dialogs with the individual `translate` property, and the CSS minifier rewrites a `translate: none` override into a `transform` shorthand that does not cancel it. So never undo centring in CSS: `components/ui/dialog.tsx` builds the phone sheet without any translate (`inset-0`, centring only from `sm:`). On phones a form dialog is a full-screen sheet with a pinned action bar (the `DialogFooter` sticks to the bottom); small confirmations use `<DialogContent mobile="center">` so they stay a centred card. The sheet fixes its single grid column to the screen width so one wide child cannot stretch it.
+- **Inputs:** text fields are at least 16px on touch screens (stops iOS zooming on focus) and at least 44px tall in panels and dialogs; date and time inputs are forced to the container width.
+- **Heights:** use `dvh`/`svh` units (`min-h-dvh`, `max-h-[90dvh]`), never `vh`, so the mobile address bar does not cut content off.
+- **Hover-only controls** (image remove/reorder, row actions) must also be reachable on touch: show them by default under `@media (hover: none)`.
+- **Popups that use `position: fixed`** must not live inside an element with `backdrop-filter` (the bottom nav, sticky headers): that element becomes their containing block. Render them in a portal (the notification bell does).
+- **Fonts:** the Next font variable is `--font-inter`, declared on `<html>` so `:root` can resolve it; Tailwind owns `--font-sans`. Never define one from the other (a cycle makes the whole stack invalid and the browser falls back to a serif default).
+- **Back links:** use `BackLink` so Back returns to where the user came from.
+
+## Automatic discounts in the UI
+
+The vendor and admin discount forms share `AutomaticDiscountFields` (an "Apply automatically" switch and an optional minimum item count). Automatic discounts hide the code field, are named by the description, and appear in lists with an "Automatic" badge. In the cart, drawer and checkout, `useClaimedVoucherSync` asks the API for a preview with `automatic=1` even when the shopper holds no codes; automatic discounts are shown with an "Auto" tag and no Remove button, and are never sent as typed codes at checkout.
 
 ## Local development and builds
 

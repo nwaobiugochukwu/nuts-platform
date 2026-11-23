@@ -10,16 +10,7 @@
     "incremental": true,
     "plugins": [{"name": "next"}],
     "paths": {
-      "@/*": ["./src/*"],
-      "@/components/domain/*": ["./src/components/domain/*"],
-      "@/components/feedback/*": ["./src/components/feedback/*"],
-      "@/components/layout/*": ["./src/components/layout/*"],
-      "@/components/ui/*": ["./src/components/ui/*"],
-      "@/components/*": ["./src/components/*", "./src/components/domain/*"],
-      "@/component/*": ["./src/components/domain/*", "./src/components/*"],
-      "@/hooks/*": ["./src/hooks/*"],
-      "@/api/modules/*": ["./src/api/modules/*"],
-      "@/api/*": ["./src/api/*", "./src/api/modules/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [

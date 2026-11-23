@@ -309,6 +309,49 @@ export class CacheService {
   }
 
   /**
+   * Drops every cached recommendation payload for the given shopper identities
+   * (user, visitor and/or session id). Called whenever a behavioural signal is
+   * written (view, search, cart, wishlist, follow, click) so the next read
+   * reflects what the shopper just did instead of waiting for a TTL.
+   */
+  async invalidateRecommendations(
+    ...identities: Array<string | null | undefined>
+  ): Promise<void> {
+    const ids = [...new Set(identities.filter((id): id is string => !!id))];
+    if (ids.length === 0) return;
+    // The daily marketplace mix is deterministic per shopper+day (it does not
+    // depend on behavioural signals), so it is intentionally NOT cleared here.
+    await this.delMany(
+      ids.flatMap((id) => [
+        `recommendations:for-you:${id}`,
+        `recommendations:search-discover:${id}`,
+        `recommendations:stores:${id}`,
+      ]),
+    );
+  }
+
+  /**
+   * Deletes several keys with ONE Redis round trip (vs one per key), while
+   * still dropping local copies and in-flight computations for each key.
+   */
+  async delMany(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    for (const key of keys) {
+      this.invalidateInFlight(key);
+      this.forgetLocally(key);
+    }
+    try {
+      await this.redis.del(...keys);
+    } catch (error) {
+      this.logger.warn(
+        `Redis DEL failed for ${keys.length} keys: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  /**
    * Deletes keys matching a glob pattern.
    *
    * SCAN is used instead of KEYS so we do not block Redis

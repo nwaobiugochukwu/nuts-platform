@@ -1,5 +1,5 @@
 import type { WishlistResponseDto } from "@/api/dto/wishlist";
-import { wishlistService } from "@/api/wishlist";
+import { wishlistService } from "@/api/services/wishlist";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
 import { useWishlistStore } from "@/zustand/wishlist";
@@ -50,8 +50,8 @@ export function useWishlist(initialData?: WishlistResponseDto[]) {
   const guestItems = useWishlistStore((state) => state.items);
   const invalidateForYou = useCallback(
     () => queryClient.invalidateQueries({
-      queryKey: ["recommendations", "for-you", userId ?? null],
-      refetchType: "all",
+      queryKey: queryKey.recommendations.forYou(userId),
+      refetchType: "active",
     }),
     [queryClient, userId],
   );

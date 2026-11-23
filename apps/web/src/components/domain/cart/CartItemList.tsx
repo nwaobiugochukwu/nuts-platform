@@ -1,9 +1,9 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import type { CartItemResponseDto } from "@/api/dto/cart";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent } from "@/component/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent } from "@/components/ui/card";
 import { useCart } from "@/hooks/use-cart";
 import { formatPrice } from "@/lib/util";
 import { Minus,Plus,ShoppingBag,Trash2 } from "lucide-react";

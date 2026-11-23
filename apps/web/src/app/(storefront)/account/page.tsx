@@ -1,8 +1,8 @@
 "use client";
 
 import { orderService,referralService,userService,walletService,vendorFollowingService } from "@/api";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { queryKey } from "@/lib/query-key";
 import { formatDate,formatPrice } from "@/lib/util";
@@ -22,6 +22,7 @@ Share2,
 User,
 Wallet,
 Store,
+Ticket,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useState } from "react";
@@ -137,7 +138,7 @@ export default function AccountPage() {
       </div>
 
       {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {/* Wallet Stat */}
         <Link href="/wallet" className="group block">
           <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
@@ -202,6 +203,26 @@ export default function AccountPage() {
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-foreground">
                 <Heart className="h-6 w-6 stroke-[1.5]" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/account/vouchers" className="group block">
+          <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+            <CardContent className="p-6 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">My Vouchers</p>
+                <p className="mt-2 text-2xl font-bold text-foreground group-hover:text-primary transition-colors">
+                  Wallet
+                </p>
+                <p className="mt-1 text-xs text-neutral-500 flex items-center gap-1">
+                  <span>See the vouchers you have claimed</span>
+                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+                </p>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 text-foreground">
+                <Ticket className="h-6 w-6 stroke-[1.5]" />
               </div>
             </CardContent>
           </Card>

@@ -56,6 +56,18 @@ export interface OrderItemResponseDto {
   variantSnapshot?: OrderVariantSnapshotDto | null;
 }
 
+export interface OrderAppliedVoucherDto {
+  code: string;
+  description?: string | null;
+  scope: "PLATFORM" | "VENDOR";
+  type: "PERCENTAGE" | "FIXED";
+  value: number;
+  /** What this voucher took off. Null on legacy orders that kept only the code text. */
+  amount: number | null;
+  /** Applied automatically (no code was entered). */
+  automatic?: boolean;
+}
+
 export interface OrderResponseDto {
   id: string;
   orderNumber: string;
@@ -65,6 +77,7 @@ export interface OrderResponseDto {
   referralDiscountAmount: number;
   finalAmount: number;
   discountCode?: string | null;
+  appliedVouchers?: OrderAppliedVoucherDto[];
   referralCode?: string | null;
   items: OrderItemResponseDto[];
   shippingAddress?: CheckoutShippingAddressDto | null;

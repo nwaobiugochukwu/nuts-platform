@@ -1,31 +1,31 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { adminCategoryService } from "@/api";
 import { adminApi } from "@/api/core/client";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { AdminVariantResponseDto } from "@/api/dto/variant";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { CategoryPicker } from "@/component/form/CategoryPicker";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ImageUpload } from "@/component/form/ImageUpload";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { CategoryPicker } from "@/components/form/CategoryPicker";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ImageUpload } from "@/components/form/ImageUpload";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import {
 ProductVariantBuilder,
 type ProductVariantItem,
-} from "@/component/product/ProductVariantBuilder";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+} from "@/components/domain/product/ProductVariantBuilder";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
@@ -590,7 +590,7 @@ export default function AdminProductPage() {
             setSelectedCategory(e.target.value);
             setPage(1);
           }}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer min-w-[200px]"
+          className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer w-full min-w-0 sm:w-auto sm:min-w-[200px]"
         >
           <option value="ALL">All Categories</option>
           {categoryFilterList.map((cat) => (
@@ -649,7 +649,7 @@ export default function AdminProductPage() {
           if (!next) setEditingProduct(null);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">
               {isEditing ? `Edit: ${editingProduct?.name}` : "Create New Product"}
@@ -794,7 +794,7 @@ export default function AdminProductPage() {
 
       {/* ADJUST STOCK MODAL */}
       <Dialog open={stockOpen} onOpenChange={setStockOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6">
+        <DialogContent mobile="center" className="max-w-md rounded-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-indigo-500" />

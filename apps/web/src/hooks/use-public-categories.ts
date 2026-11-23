@@ -1,7 +1,7 @@
 "use client";
 
 import type { CategoryResponseDto } from "@/api/dto/category";
-import { categoryService } from "@/api/modules/category";
+import { categoryService } from "@/api/services/category";
 import { queryKey } from "@/lib/query-key";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";

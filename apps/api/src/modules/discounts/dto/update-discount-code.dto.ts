@@ -1,5 +1,9 @@
 import { PartialType } from '@nestjs/swagger';
-import { CreateDiscountCodeDto } from './create-discount-code.dto';
+import {
+  CreateAdminDiscountCodeDto,
+  CreateDiscountCodeDto,
+  CreateVendorDiscountCodeDto,
+} from './create-discount-code.dto';
 
 /**
  * Base DTO for updating existing discount codes.
@@ -7,7 +11,11 @@ import { CreateDiscountCodeDto } from './create-discount-code.dto';
  */
 export class UpdateDiscountCodeDto extends PartialType(CreateDiscountCodeDto) {}
 
-export {
-  UpdateDiscountCodeDto as UpdateAdminDiscountCodeDto,
-  UpdateDiscountCodeDto as UpdateVendorDiscountCodeDto,
-};
+export class UpdateAdminDiscountCodeDto extends PartialType(
+  CreateAdminDiscountCodeDto,
+) {}
+
+/** Vendors cannot update `platformwide` either. */
+export class UpdateVendorDiscountCodeDto extends PartialType(
+  CreateVendorDiscountCodeDto,
+) {}

@@ -132,7 +132,7 @@ export function PanelShell({
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[18rem]">
         {header(() => setMobileOpen(true), mobileOpen)}
-        <main className="mx-auto min-w-0 w-full max-w-7xl flex-1 p-3 sm:p-6 lg:p-8">{children}</main>
+        <main className="panel-main mx-auto min-w-0 w-full max-w-7xl flex-1 overflow-x-clip p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

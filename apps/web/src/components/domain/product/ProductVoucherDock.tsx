@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Copy, Sparkles, Tag, Ticket } from "lucide-react";
 import { useProductDeal } from "@/hooks/use-product-deals";
 import { useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { formatPrice } from "@/lib/util";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 
@@ -26,7 +27,11 @@ function calculateSavings(voucher: ProductVoucherSummaryDto, price: number): num
 
 export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDockProps) {
   const { data: dealData, isLoading } = useProductDeal(productId);
-  const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
+  const { claim } = useClaimVoucher();
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const isVoucherClaimed = (code: string) =>
+    claimedCodes.includes(code) || appliedDiscounts.some((d) => d.code === code);
   const [justClaimedCode, setJustClaimedCode] = useState<string | null>(null);
 
   const rawVouchers = dealData?.allVouchers;
@@ -42,11 +47,13 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
 
   const handleClaim = (voucher: ProductVoucherSummaryDto, e: React.MouseEvent) => {
     e.stopPropagation();
-    claimCode(voucher.code);
-    setJustClaimedCode(voucher.code);
-    setTimeout(() => {
-      setJustClaimedCode(null);
-    }, 3000);
+    void claim(voucher.code).then((claimed) => {
+      if (!claimed) return;
+      setJustClaimedCode(voucher.code);
+      setTimeout(() => {
+        setJustClaimedCode(null);
+      }, 3000);
+    });
   };
 
   return (
@@ -75,15 +82,14 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
       <div className="mt-3 space-y-2.5">
         {vouchers.map((voucher) => {
           const isClaimed =
-            claimedCode === voucher.code ||
-            appliedDiscount?.code === voucher.code ||
-            justClaimedCode === voucher.code;
+            isVoucherClaimed(voucher.code) || justClaimedCode === voucher.code;
 
           const isBest = voucher.code === bestVoucherCode;
           const liveSavings = calculateSavings(voucher, currentPrice);
           const effectivePrice = Math.max(0, currentPrice - liveSavings);
-          const meetsMinSpend = currentPrice >= voucher.minOrderAmount;
-          const spendDeficit = voucher.minOrderAmount - currentPrice;
+          const needsQuantity = (voucher.minQuantity ?? 1) > 1;
+          const meetsMinSpend = currentPrice >= voucher.minOrderAmount && !needsQuantity;
+          const spendDeficit = Math.max(0, voucher.minOrderAmount - currentPrice);
 
           return (
             <div
@@ -114,9 +120,18 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                     )}
 
                     {/* Applicability status badge */}
-                    {meetsMinSpend ? (
+                    {voucher.autoApply && (
+                      <span className="inline-flex items-center gap-1 rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+                        Automatic
+                      </span>
+                    )}
+                    {needsQuantity ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                        Buy {voucher.minQuantity}+ to unlock
+                      </span>
+                    ) : meetsMinSpend ? (
                       <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                        ✓ Applies Instantly
+                        {voucher.autoApply ? "✓ Applied at checkout" : "✓ Applies Instantly"}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
@@ -124,11 +139,13 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                       </span>
                     )}
 
-                    {/* Code pill */}
-                    <span className="inline-flex items-center gap-1 font-mono text-xs font-bold text-foreground bg-secondary/80 px-2 py-0.5 rounded border border-border/60">
-                      <Tag className="h-3 w-3 text-muted-foreground" />
-                      {voucher.code}
-                    </span>
+                    {/* Code pill: automatic offers have no code to show */}
+                    {!voucher.autoApply && (
+                      <span className="inline-flex items-center gap-1 font-mono text-xs font-bold text-foreground bg-secondary/80 px-2 py-0.5 rounded border border-border/60">
+                        <Tag className="h-3 w-3 text-muted-foreground" />
+                        {voucher.code}
+                      </span>
+                    )}
                   </div>
 
                   {/* Description & Savings */}
@@ -138,6 +155,9 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                         ? `${voucher.value}% OFF`
                         : `Save ${formatPrice(voucher.value)}`}
                     </span>
+                    {voucher.autoApply && voucher.description && (
+                      <span className="text-xs font-medium text-foreground">{voucher.description}</span>
+                    )}
                     {liveSavings > 0 && meetsMinSpend && (
                       <span className="text-xs text-muted-foreground">
                         (Pay {formatPrice(effectivePrice)} on this item)
@@ -172,6 +192,12 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
 
                 {/* Right: Claim Action Button */}
                 <div className="shrink-0 flex items-center sm:self-center">
+                  {voucher.autoApply ? (
+                    <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-500/10 px-3.5 py-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300 sm:w-auto">
+                      <Check className="h-3.5 w-3.5" />
+                      No code needed
+                    </span>
+                  ) : (
                   <button
                     type="button"
                     onClick={(e) => handleClaim(voucher, e)}
@@ -193,6 +219,7 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                       </>
                     )}
                   </button>
+                  )}
                 </div>
               </div>
             </div>

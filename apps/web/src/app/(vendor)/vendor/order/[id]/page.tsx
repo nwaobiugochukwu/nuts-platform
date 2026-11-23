@@ -3,16 +3,15 @@
 import { dashboardOrderService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { OrderStatus } from "@/api/core/types";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
-import { Button } from "@/component/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/component/ui/card";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { OrderStatusBadge } from "@/components/domain/order/OrderItemSnapshot";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { queryKey } from "@/lib/query-key";
 import { formatDate, formatPrice } from "@/lib/util";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   Calendar,
   Check,
   Copy,
@@ -23,7 +22,7 @@ import {
   Truck,
   User,
 } from "lucide-react";
-import Link from "@/components/navigation/AppLink";
+import { BackLink } from "@/components/navigation/BackLink";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -98,11 +97,7 @@ export default function VendorOrderDetailPage() {
         <p className="mt-2 text-sm text-muted-foreground">
           The requested vendor order could not be loaded. It may not belong to your store or may have been archived.
         </p>
-        <Button asChild className="mt-6">
-          <Link href="/vendor/order">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
-          </Link>
-        </Button>
+        <BackLink fallbackHref="/vendor/order" fallbackLabel="Back to Orders" className="mt-6 rounded-lg border border-border px-4" />
       </div>
     );
   }
@@ -140,16 +135,7 @@ export default function VendorOrderDetailPage() {
     <div className="mx-auto max-w-5xl px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
       {/* Back button */}
       <div>
-        <Button
-          asChild
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <Link href="/vendor/order">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
-          </Link>
-        </Button>
+        <BackLink fallbackHref="/vendor/order" fallbackLabel="Back to Orders" className="-ml-2 px-2" />
       </div>
 
       {/* Header Banner */}

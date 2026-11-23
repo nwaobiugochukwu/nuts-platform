@@ -1,0 +1,55 @@
+import { userApi } from "@/api/core/client";
+import type {
+AddToCartResponseDto,
+AddedFromType,
+CartResponseDto,
+DiscountPreviewDto,
+RemoveCartItemResponseDto,
+} from "@/api/dto/cart";
+import type { RecommendationAttribution } from "@/api/services/analytics";
+
+export interface AddToCartPayload {
+  quantity?: number;
+  variantId?: string;
+  addedFrom?: AddedFromType;
+  recommendationContext?: RecommendationAttribution;
+}
+
+export interface UpdateCartItemPayload {
+  quantity: number;
+  variantId?: string;
+}
+
+export const cartService = {
+  get() {
+    return userApi.get<CartResponseDto>("/cart");
+  },
+  addItem(productId: string, payload: AddToCartPayload = {}) {
+    return userApi.post<AddToCartResponseDto>(
+      `/cart/items/${productId}`,
+      payload
+    );
+  },
+  updateItem(productId: string, payload: UpdateCartItemPayload) {
+    return userApi.patch<CartResponseDto>(`/cart/items/${productId}`, payload);
+  },
+  removeItem(productId: string, variantId?: string) {
+    return userApi.delete<RemoveCartItemResponseDto>(`/cart/items/${productId}`, {
+      params: variantId ? { variantId } : {},
+    });
+  },
+  clear() {
+    return userApi.delete<CartResponseDto>("/cart");
+  },
+  /** One code (throws if it cannot apply) or up to two combinable codes (per-code results). */
+  previewDiscount(codeOrCodes: string | string[], options?: { automatic?: boolean }) {
+    const codes = Array.isArray(codeOrCodes) ? codeOrCodes : [codeOrCodes];
+    return userApi.get<DiscountPreviewDto>("/cart/discount-preview", {
+      params: {
+        codes: codes.join(","),
+        // The cart's own sync: also applies no-code offers and reports per-voucher problems.
+        ...(options?.automatic ? { automatic: "1" } : {}),
+      },
+    });
+  },
+};

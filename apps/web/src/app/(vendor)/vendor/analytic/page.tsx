@@ -1,7 +1,7 @@
 "use client";
 
 import { vendorAnalyticsService } from "@/api";
-import { StatCard } from "@/component/common/PageHeader";
+import { StatCard } from "@/components/layout/PageHeader";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import {
@@ -26,7 +26,7 @@ export default function VendorAnalyticPage() {
     isLoading,
   } = useQuery({
     queryKey: [...queryKey.vendor.analytic, periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -40,7 +40,7 @@ export default function VendorAnalyticPage() {
 
   const { data: productPerformance, isLoading: isLoadingProducts } = useQuery({
     queryKey: [...queryKey.vendor.analytic, "product-performance", periodKey, productPage],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -138,7 +138,7 @@ export default function VendorAnalyticPage() {
         </div>
       </section>
 
-      <section aria-label="Store followers" className="space-y-3">
+      <section id="followers" aria-label="Store followers" className="scroll-mt-24 space-y-3">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Store followers</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -335,13 +335,13 @@ export default function VendorAnalyticPage() {
               </p>
             ) : (
               s.topProducts.map((p, idx) => (
-                <div key={p.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                <div key={p.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                       {idx + 1}
                     </span>
-                    <div>
-                      <p className="text-sm font-medium text-neutral-900 dark:text-white truncate max-w-[200px] sm:max-w-xs">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 dark:text-white truncate sm:max-w-xs">
                         {p.name}
                       </p>
                       <span className="text-xs font-mono text-neutral-400">

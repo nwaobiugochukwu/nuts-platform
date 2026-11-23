@@ -6,7 +6,7 @@ import { useWishlist } from "@/hooks/use-wishlist";
 import { Compass, Heart, Home, LayoutDashboard, Shield, ShoppingBag, Store } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { usePathname } from "next/navigation";
-import { NotificationBell } from "@/component/notification/NotificationBell";
+import { NotificationBell } from "@/components/domain/notification/NotificationBell";
 import { useAuthStore } from "@/zustand/auth";
 
 export function BottomNav() {

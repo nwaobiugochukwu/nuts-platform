@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
+import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import type { RecommendationEventDto } from './recommendation-events.dto';
 
@@ -14,7 +15,20 @@ const CLIENT_TRACKABLE_EVENTS = new Set([
 export class RecommendationEventsService {
   private readonly logger = new Logger(RecommendationEventsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly cache?: CacheService,
+  ) {}
+
+  /** Clicks, dismissals and category views change what we should recommend. */
+  private async refreshRecommendations(
+    userId: string | null | undefined,
+    sessionIds: Array<string | null | undefined>,
+    events: Array<{ eventType: string }>,
+  ) {
+    if (!events.some((e) => e.eventType !== 'IMPRESSION')) return;
+    await this.cache?.invalidateRecommendations(userId, ...sessionIds);
+  }
 
   async record(
     userId: string | undefined,
@@ -53,6 +67,7 @@ export class RecommendationEventsService {
           sessionId: event.sessionId,
         },
       });
+      await this.refreshRecommendations(userId, [event.sessionId], [event]);
       return { accepted: true };
     } catch (error) {
       if (
@@ -108,6 +123,11 @@ export class RecommendationEventsService {
         })),
         skipDuplicates: true,
       });
+      await this.refreshRecommendations(
+        userId,
+        acceptedEvents.map((e) => e.sessionId),
+        acceptedEvents,
+      );
       return { accepted: true, stored: result.count };
     } catch (error) {
       if (

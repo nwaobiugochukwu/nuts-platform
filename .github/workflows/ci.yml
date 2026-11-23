@@ -61,6 +61,9 @@ jobs:
       - name: Lint Backend & Frontend
         run: npm run lint
 
+      - name: Architecture guardrails (layering & module boundaries)
+        run: npm run check:architecture
+
   # ── 2. Static Analysis & Type Checking ─────────────────────────
   typecheck:
     name: Typecheck & Static Analysis

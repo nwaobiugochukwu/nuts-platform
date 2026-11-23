@@ -1,4 +1,4 @@
-import { safeInternalPath } from "./safe-internal-path";
+import { safeInternalPath } from "./safe-internal-path.ts";
 
 export function notificationListPath(role?: string | null): string {
   const normalized = (role ?? "").toLowerCase();
@@ -34,6 +34,13 @@ export function resolveNotificationTargetUrl(
   role?: string | null,
 ): string | null {
   const normRole = (role ?? "").toLowerCase();
+
+  // "New follower" belongs on the followers section of store analytics, however
+  // the stored link was written (older rows point at the page top).
+  if (notification.type === "VENDOR_FOLLOWED" && normRole === "vendor") {
+    return "/vendor/analytic#followers";
+  }
+
   const rawUrl = notification.actionUrl || notification.link;
 
   // 1. Process explicit link if provided

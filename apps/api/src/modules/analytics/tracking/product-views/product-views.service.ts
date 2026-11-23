@@ -6,6 +6,7 @@ import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.con
 import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { TRACKING } from '@api/common/constants';
+import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
 
 interface BufferedView {
@@ -30,6 +31,7 @@ export class ProductViewsService {
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
     private readonly rabbitmq: RabbitMQService,
     private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
   ) {
     this.startFlushTimer();
   }
@@ -79,6 +81,18 @@ export class ProductViewsService {
       effectiveVisitorId,
       timestamp,
     );
+    // The recent-view row is written synchronously, so recommendations can
+    // reflect this view immediately.
+    await this.cache
+      .invalidateRecommendations(
+        // Vendors browse under their visitor id, but their recommendation
+        // cache is keyed by the signed-in user id, so clear both.
+        userId,
+        effectiveUserId,
+        effectiveVisitorId,
+        resolvedSessionId,
+      )
+      .catch(() => undefined);
     if (!this.redis || this.redis.status !== 'ready') {
       // Keep recommendation signals usable during a Redis outage instead of
       // acknowledging a view that was never stored.

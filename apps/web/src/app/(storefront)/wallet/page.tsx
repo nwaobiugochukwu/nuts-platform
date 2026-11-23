@@ -1,10 +1,10 @@
 "use client";
 
 import { walletService } from "@/api";
-import { PageHeader } from "@/component/common/PageHeader";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { formatDate,formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";
 import {

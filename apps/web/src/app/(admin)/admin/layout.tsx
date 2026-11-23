@@ -1,4 +1,4 @@
-import { AdminLayout } from "@/component/layout/AdminLayout";
+import { AdminLayout } from "@/components/layout/AdminLayout";
 import { getServerSession } from "@/lib/server-auth.ts";
 import { ClientAuthBoundary } from "@/components/domain/auth/ClientAuthBoundary";
 

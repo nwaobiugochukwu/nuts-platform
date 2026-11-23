@@ -1,28 +1,31 @@
 "use client";
 
 import { productService } from "@/api";
-import { categoryService } from "@/api/modules/category";
-import { analyticsEventService } from "@/api/modules/analytics";
+import { categoryService } from "@/api/services/category";
+import { analyticsEventService } from "@/api/services/analytics";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PaginationMeta, CursorPaginationMeta } from "@/api/core/types";
 import type { ApiResult } from "@/api/core/client";
 import type { ProductCardDto } from "@/api/dto/product";
 import type { VendorResponseDto } from "@/api/dto/vendor";
 import { DiscoverPersonalizedShelf } from "@/components/domain/product/DiscoverPersonalizedShelf";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ProductCard } from "@/component/product/ProductCard";
-import { ProductGridSkeleton } from "@/component/product/ProductGridSkeleton";
-import { RemoteImage } from "@/component/ui/RemoteImage";
-import { Button } from "@/component/ui/button";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ProductCard } from "@/components/domain/product/ProductCard";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
+import { RemoteImage } from "@/components/ui/RemoteImage";
+import { Button } from "@/components/ui/button";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
-import { CategoryFilterDrawer } from "@/component/category/CategoryFilterDrawer";
+import { CategoryFilterDrawer } from "@/components/domain/category/CategoryFilterDrawer";
 import { Loader2, Search, SlidersHorizontal, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/zustand/auth";
-import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
+import {
+  useRecommendationSessionId,
+  useRecommendationVisitorId,
+} from "@/hooks/use-recommendation-session";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
 
 const EMPTY_CATEGORIES: CategoryResponseDto[] = [];
@@ -81,12 +84,12 @@ export function ProductCatalogView({
   const [vendorId, setVendorId] = useState(initialFilters?.vendorId || "");
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
   const trackedSearchRef = useRef("");
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const sessionId = useRecommendationSessionId();
+  const visitorId = useRecommendationVisitorId();
   const { addSearch } = useRecentSearches();
 
   useEffect(() => {
@@ -258,15 +261,10 @@ export function ProductCatalogView({
     const dedupeKey = `${userId ?? sessionId}:${search}`;
     if (trackedSearchRef.current === dedupeKey) return;
     trackedSearchRef.current = dedupeKey;
-    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer).then(() => {
-      void queryClient.invalidateQueries({
-        queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
-        refetchType: "all",
-      });
-    }).catch(() => {
+    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer, visitorId).catch(() => {
       if (trackedSearchRef.current === dedupeKey) trackedSearchRef.current = "";
     });
-  }, [search, searchResultCount, userId, sessionId, isAuthenticated, canPurchase, isLoading, isError, queryClient]);
+  }, [search, searchResultCount, userId, sessionId, visitorId, isAuthenticated, canPurchase, isLoading, isError]);
 
   // Auto-load next page when user scrolls near the bottom of the feed
   useEffect(() => {

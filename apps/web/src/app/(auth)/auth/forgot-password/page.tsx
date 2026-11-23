@@ -1,10 +1,10 @@
 "use client";
 
-import { authService } from "@/api/auth";
+import { authService } from "@/api/services/auth";
 import { getApiErrorMessage } from "@/api/core/error";
-import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
-import { FormInput } from "@/component/form/FormInput";
-import { Button } from "@/component/ui/button";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
+import { FormInput } from "@/components/form/FormInput";
+import { Button } from "@/components/ui/button";
 import { zodResolver } from "@/lib/zod-resolver";
 import { AxiosError } from "axios";
 import { ArrowLeft,KeyRound,Mail,RefreshCw } from "lucide-react";

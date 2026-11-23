@@ -2,6 +2,8 @@
 
 import { useAuthStore } from "@/zustand/auth";
 import { RecentHistoryClaim } from "@/components/domain/auth/RecentHistoryClaim";
+import { VoucherWalletSync } from "@/components/domain/auth/VoucherWalletSync";
+import { useDiscountStore } from "@/zustand/discount";
 import { useEffect } from "react";
 
 /**
@@ -12,6 +14,8 @@ export function SessionHydrator({ children }: { children: React.ReactNode }) {
   const hydrateFromCookies = useAuthStore((state) => state.hydrateFromCookies);
 
   useEffect(() => {
+    // Restore a claimed voucher after hydration (no SSR/client mismatch).
+    useDiscountStore.getState().hydrate();
     void hydrateFromCookies();
 
     const handleOnline = () => {
@@ -27,6 +31,7 @@ export function SessionHydrator({ children }: { children: React.ReactNode }) {
   return (
     <>
       <RecentHistoryClaim />
+      <VoucherWalletSync />
       {children}
     </>
   );

@@ -4,8 +4,8 @@ import {
   serverGetFeaturedVendors,
   serverGetProductDiscovery,
 } from "@/api/server";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { HomeProductShelves } from "@/components/home/HomeProductShelves";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { HomeProductShelves } from "@/components/domain/home/HomeProductShelves";
 
 export default async function HomePage() {
   const [categories, promos, vendors, discovery] = await Promise.all([

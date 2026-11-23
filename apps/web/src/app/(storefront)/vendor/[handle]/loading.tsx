@@ -1,5 +1,5 @@
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ProductGridSkeleton } from "@/component/product/ProductGridSkeleton";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function VendorStoreLoading() {

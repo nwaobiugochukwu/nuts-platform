@@ -1,7 +1,7 @@
 "use client";
 
-import { adminAnalyticsService } from "@/api/analytics";
-import { StatCard } from "@/component/common/PageHeader";
+import { adminAnalyticsService } from "@/api/services/analytics";
+import { StatCard } from "@/components/layout/PageHeader";
 import { formatPrice } from "@/lib/util";
 import {
   CalendarPeriodFilter,
@@ -44,7 +44,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: summary, isError, isLoading: isSummaryLoading } = useQuery({
     queryKey: ["admin", "analytics", "summary", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -58,7 +58,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topProducts = [], isLoading: isTopProductsLoading, isError: isTopProductsError } = useQuery({
     queryKey: ["admin", "analytics", "topProducts", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -72,7 +72,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topVendors = [], isLoading: isTopVendorsLoading, isError: isTopVendorsError } = useQuery({
     queryKey: ["admin", "analytics", "topVendors", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -86,7 +86,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: topCategories = [], isLoading: isTopCategoriesLoading, isError: isTopCategoriesError } = useQuery({
     queryKey: ["admin", "analytics", "topCategories", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -100,7 +100,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: payments, isLoading: isPaymentsLoading, isError: isPaymentsError } = useQuery({
     queryKey: ["admin", "analytics", "payments", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -128,7 +128,7 @@ export default function AdminAnalyticsPage() {
 
   const { data: marketplace, isLoading: isMarketplaceLoading, isError: isMarketplaceError } = useQuery({
     queryKey: ["admin", "analytics", "marketplace-performance", periodKey],
-    staleTime: 10_000,
+    staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
@@ -368,13 +368,13 @@ export default function AdminAnalyticsPage() {
               />
             ) : (
               topProducts.slice(0, 5).map((p, idx) => (
-                <div key={p.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                <div key={p.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                       {idx + 1}
                     </span>
-                    <div>
-                      <p className="text-sm font-medium text-neutral-900 dark:text-white truncate max-w-[200px] sm:max-w-xs">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 dark:text-white truncate sm:max-w-xs">
                         {p.name}
                       </p>
                       <span className="text-xs font-mono text-neutral-400">
@@ -418,9 +418,9 @@ export default function AdminAnalyticsPage() {
               />
             ) : (
               topVendors.slice(0, 5).map((c, idx) => (
-                <div key={c.id} className="flex items-center justify-between py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                <div key={c.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800 text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                       {idx + 1}
                     </span>
                     <div>
@@ -471,7 +471,7 @@ export default function AdminAnalyticsPage() {
               />
             ) : (
               topCategories.slice(0, 5).map((cat) => (
-                <div key={cat.id} className="flex items-center justify-between py-3">
+                <div key={cat.id} className="flex items-center justify-between gap-3 py-3">
                   <div>
                     <p className="text-sm font-medium text-neutral-900 dark:text-white">
                       {cat.name}

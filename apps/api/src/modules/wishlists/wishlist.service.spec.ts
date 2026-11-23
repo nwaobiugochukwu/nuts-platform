@@ -47,6 +47,7 @@ describe('WishlistService', () => {
         fn(),
       ),
       del: jest.fn().mockResolvedValue(undefined),
+      invalidateRecommendations: jest.fn().mockResolvedValue(undefined),
     };
 
     service = new WishlistService(mockPrisma, mockCacheService);

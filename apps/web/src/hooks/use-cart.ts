@@ -1,5 +1,5 @@
-import { cartService } from "@/api/cart";
-import type { RecommendationAttribution } from "@/api/modules/analytics";
+import { cartService } from "@/api/services/cart";
+import type { RecommendationAttribution } from "@/api/services/analytics";
 import type {
 CartItemResponseDto,
 CartResponseDto,
@@ -44,8 +44,8 @@ export function useCart(initialData?: CartResponseDto | null) {
 
   const invalidateForYou = useCallback(
     () => queryClient.invalidateQueries({
-      queryKey: ["recommendations", "for-you", userId ?? null],
-      refetchType: "all",
+      queryKey: queryKey.recommendations.forYou(userId),
+      refetchType: "active",
     }),
     [queryClient, userId],
   );

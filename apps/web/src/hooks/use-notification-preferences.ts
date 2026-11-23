@@ -5,7 +5,7 @@ import {
   notificationsApiForRole,
   type NotificationPreferences,
   type UpdateNotificationPreferencesDto,
-} from "@/api/notifications";
+} from "@/api/services/notifications";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import { queryKey } from "@/lib/query-key";
 import { toast } from "sonner";

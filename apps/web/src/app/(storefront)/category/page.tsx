@@ -1,7 +1,7 @@
 import { serverGetCategories } from "@/api/server";
 import type { CategoryResponseDto } from "@/api/dto/category";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import Link from "@/components/navigation/AppLink";
 import { getNodeChildren } from "@/lib/category-tree";
 import { ArrowUpRight, Shapes } from "lucide-react";

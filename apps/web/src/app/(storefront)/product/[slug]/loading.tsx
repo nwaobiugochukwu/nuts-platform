@@ -1,4 +1,4 @@
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProductDetailLoading() {

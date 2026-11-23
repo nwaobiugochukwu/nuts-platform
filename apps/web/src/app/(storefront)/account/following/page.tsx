@@ -1,7 +1,7 @@
 "use client";
 
-import { vendorFollowingService } from "@/api/modules/vendor";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { vendorFollowingService } from "@/api/services/vendor";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { Input } from "@/components/ui/input";
 import Link from "@/components/navigation/AppLink";
 import { useVendorFollowing, vendorFollowKeys } from "@/hooks/use-vendor-following";

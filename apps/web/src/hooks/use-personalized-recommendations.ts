@@ -1,6 +1,7 @@
 "use client";
 
-import { recommendationService } from "@/api/modules/recommendations";
+import { recommendationService } from "@/api/services/recommendations";
+import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -63,14 +64,21 @@ export function useForYouRecommendations(enabled = true) {
 
   const requestEnabled = enabled && isAuthInitialized && isShopper && Boolean(sessionId);
   const query = useQuery({
-    queryKey: ["recommendations", "for-you", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.forYou(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.forYou(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: requestEnabled,
-    // 90s before data is considered stale — fresh enough so navigating around
-    // the app reuses the response, but short enough to pick up new signals when
-    // the user returns to the page after some browsing.
-    staleTime: 90_000,
+    // Freshness after the shopper DOES something comes from explicit
+    // invalidation (see refreshPersonalizedRecommendations), not from this
+    // timer. The timer only covers "came back to the tab a while later", so it
+    // must be long enough that merely focusing the window never re-sends
+    // requests that are still current.
+    staleTime: 60_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -103,8 +111,13 @@ export function usePersonalizedRecommendations(enabled = true) {
   const publicDiscoveryEnabled =
     enabled && isAuthInitialized && Boolean(sessionId);
   const recentQuery = useQuery({
-    queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.recentlyViewed(userId, sessionId, visitorId),
     queryFn: async ({ signal }) => (await recommendationService.recentlyViewed(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
     // any new views from product pages visited in the same session.
@@ -115,32 +128,46 @@ export function usePersonalizedRecommendations(enabled = true) {
   });
 
   const followingQuery = useQuery({
-    queryKey: ["recommendations", "following", userId],
+    queryKey: queryKey.recommendations.following(userId),
     queryFn: async ({ signal }) => (await recommendationService.following(signal)).data,
     enabled: enabled && isCustomer,
+    // Never blank the shelf while a refetch (or auth refresh) is in flight.
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     staleTime: 120_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 
   const storesQuery = useQuery({
-    queryKey: ["recommendations", "stores", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.stores(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.stores(sessionId, isCustomer, visitorId, signal)).data,
     // Store discovery is a separate shelf and must not wait for For You or the
     // cold-start store mix to finish.
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 
   const marketplaceMixQuery = useQuery({
-    queryKey: ["recommendations", "marketplace-mix", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.marketplaceMix(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
     refetchOnMount: true,

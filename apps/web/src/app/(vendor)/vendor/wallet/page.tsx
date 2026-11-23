@@ -1,9 +1,9 @@
 "use client";
 
-import { vendorWalletService } from "@/api/modules/vendor";
+import { vendorWalletService } from "@/api/services/vendor";
 import type { PaginationMeta } from "@/api/core/types";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";
 import {

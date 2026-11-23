@@ -1,6 +1,6 @@
 "use client";
 
-import { NotificationsManager } from "@/component/notification/NotificationsManager";
+import { NotificationsManager } from "@/components/domain/notification/NotificationsManager";
 
 export default function AdminNotificationsPage() {
   return (

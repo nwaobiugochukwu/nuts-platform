@@ -21,8 +21,6 @@ import {
   PaymentStatus,
   Prisma,
   ROLE,
-  WalletTransactionReason,
-  WalletTransactionType,
 } from '@prisma/client';
 
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
@@ -48,6 +46,12 @@ import type {
 } from '@api/common/events/event-payloads';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
+import {
+  computeVendorEarnings,
+  loadCreditedVendorEarnings,
+  loadVendorFundedDiscounts,
+  releaseDiscountUsage,
+} from '@api/modules/promotions/discount-funding';
 
 import {
   PAYSTACK_SUCCESS_STATUS,
@@ -197,6 +201,14 @@ export class PaymentsService {
       throw new BadRequestException('This payment has already been refunded.');
     }
 
+    if (new Prisma.Decimal(payment.amount).isZero()) {
+      return this.settleZeroTotalOrder({
+        id: payment.id,
+        orderId: payment.order.id,
+        transactionReference: payment.transactionReference,
+      });
+    }
+
     /**
      * If Paystack initialization already succeeded, simply return the stored
      * authorization URL.
@@ -297,18 +309,7 @@ export class PaymentsService {
       },
     };
 
-    const configuredCallback = this.config
-      .get<string>('PAYSTACK_CALLBACK_URL')
-      ?.trim();
-    const storefrontOrigin = this.config
-      .get<string>('ALLOWED_ORIGINS')
-      ?.split(',')[0]
-      ?.trim();
-    const fallbackCallback = storefrontOrigin
-      ? `${storefrontOrigin.replace(/\/+$/, '')}/order-success`
-      : undefined;
-
-    const callbackUrl = configuredCallback || fallbackCallback;
+    const callbackUrl = this.resolveCallbackUrl();
 
     if (callbackUrl) {
       payload.callback_url = callbackUrl;
@@ -352,6 +353,65 @@ export class PaymentsService {
 
       reference: result.data.reference,
 
+      paymentId: payment.id,
+    };
+  }
+
+  private resolveCallbackUrl(): string | undefined {
+    const configuredCallback = this.config
+      .get<string>('PAYSTACK_CALLBACK_URL')
+      ?.trim();
+    const storefrontOrigin = this.config
+      .get<string>('ALLOWED_ORIGINS')
+      ?.split(',')[0]
+      ?.trim();
+    const fallbackCallback = storefrontOrigin
+      ? `${storefrontOrigin.replace(/\/+$/, '')}/order-success`
+      : undefined;
+    return configuredCallback || fallbackCallback;
+  }
+
+  /**
+   * An order whose total is exactly zero (a 100% discount) has nothing to
+   * charge, and Paystack rejects zero-amount transactions. Settle it through
+   * the same confirmation path as a paid order so stock, vendor earnings,
+   * notifications and cart handling all behave identically.
+   *
+   * Only reachable when the SERVER-SIDE payment amount is zero.
+   */
+  private async settleZeroTotalOrder(payment: {
+    id: string;
+    orderId: string;
+    transactionReference: string | null;
+  }): Promise<InitializePaymentResponseDto> {
+    const reference = payment.transactionReference ?? `FREE-${randomUUID()}`;
+
+    if (!payment.transactionReference) {
+      await this.prisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: PaymentStatus.PENDING,
+          transactionReference: null,
+        },
+        data: { transactionReference: reference, paymentMethod: 'discount' },
+      });
+    }
+
+    const stored = await this.prisma.payment.findUnique({
+      where: { id: payment.id },
+      select: { transactionReference: true },
+    });
+    const finalReference = stored?.transactionReference ?? reference;
+
+    await this.confirmPayment(finalReference, undefined, payment.orderId, true);
+
+    const callback = this.resolveCallbackUrl();
+    const separator = callback?.includes('?') ? '&' : '?';
+    return {
+      authorizationUrl: callback
+        ? `${callback}${separator}reference=${encodeURIComponent(finalReference)}`
+        : `/order/${payment.orderId}`,
+      reference: finalReference,
       paymentId: payment.id,
     };
   }
@@ -1055,28 +1115,24 @@ export class PaymentsService {
             });
           }
 
-          const vendorEarnings = this.calculateVendorEarnings(
-            currentOrder.orderItems,
+          // Reverse exactly what was credited (ledger amounts), not a
+          // recomputation, so the vendor wallet nets to zero on refund.
+          const creditedEarnings = await loadCreditedVendorEarnings(
+            tx,
+            currentOrder.id,
           );
-          for (const [vendorId, earning] of vendorEarnings) {
-            const credited = await tx.walletTransaction.findFirst({
-              where: {
-                referenceId: currentOrder.id,
-                type: WalletTransactionType.CREDIT,
-                reason: WalletTransactionReason.COMMISSION,
-                vendorWallet: { vendorId },
-              },
-              select: { id: true },
-            });
-            if (credited) {
-              await this.walletService.debitVendorPending(
-                vendorId,
-                earning,
-                currentOrder.id,
-                tx,
-              );
-            }
+          for (const [vendorId, earning] of creditedEarnings) {
+            if (earning.lessThanOrEqualTo(0)) continue;
+            await this.walletService.debitVendorPending(
+              vendorId,
+              earning,
+              currentOrder.id,
+              tx,
+            );
           }
+
+          // The refunded order will not redeem its discount.
+          await releaseDiscountUsage(tx, currentOrder.id);
 
           await tx.orderStatusHistory.create({
             data: {
@@ -1217,6 +1273,7 @@ export class PaymentsService {
     reference: string,
     webhookData?: PaystackWebhookEvent['data'],
     orderIdFallback?: string,
+    zeroTotal = false,
   ): Promise<PaymentResponseDto | null> {
     /**
      * transactionReference is @unique in Prisma.
@@ -1258,7 +1315,22 @@ export class PaymentsService {
      * If the verification API times out or is unreachable, but we have a cryptographically
      * verified webhook payload proving charge.success, use that authoritative webhook proof.
      */
-    let verified = await this.paystackVerify(reference);
+    // A zero-total order has no provider transaction to verify. This branch
+    // is gated on the stored amount being zero, never on caller input alone.
+    let verified =
+      zeroTotal && new Prisma.Decimal(payment.amount).isZero()
+        ? ({
+            status: true,
+            message: 'No charge required (zero-total order)',
+            data: {
+              status: PAYSTACK_SUCCESS_STATUS,
+              reference,
+              amount: 0,
+              currency: payment.currency,
+              paid_at: new Date().toISOString(),
+            },
+          } as Awaited<ReturnType<typeof this.paystackVerify>>)
+        : await this.paystackVerify(reference);
 
     if (
       (!verified?.status ||
@@ -1504,9 +1576,14 @@ export class PaymentsService {
             });
           }
 
-          const earnings = this.calculateVendorEarnings(order.orderItems);
+          const earnings = this.calculateVendorEarnings(
+            order.orderItems,
+            await loadVendorFundedDiscounts(tx, payment.orderId),
+          );
 
           for (const [vendorId, earning] of earnings) {
+            // A vendor-funded discount can reduce earnings to zero.
+            if (earning.lessThanOrEqualTo(0)) continue;
             await this.walletService.creditVendorPending(
               vendorId,
               earning,
@@ -2014,21 +2091,13 @@ export class PaymentsService {
       quantity: number;
       unitPrice: Prisma.Decimal;
     }>,
+    vendorFundedDiscounts: Map<string, Prisma.Decimal> = new Map(),
   ): Map<string, Prisma.Decimal> {
-    const result = new Map<string, Prisma.Decimal>();
-
-    for (const item of items) {
-      const earning = item.unitPrice
-        .mul(item.quantity)
-        .mul(VENDOR_COMMISSION_RATE)
-        .toDecimalPlaces(2);
-
-      const current = result.get(item.vendorId) ?? new Prisma.Decimal(0);
-
-      result.set(item.vendorId, current.add(earning).toDecimalPlaces(2));
-    }
-
-    return result;
+    return computeVendorEarnings(
+      items,
+      VENDOR_COMMISSION_RATE,
+      vendorFundedDiscounts,
+    );
   }
 
   // ---------------------------------------------------------------------------

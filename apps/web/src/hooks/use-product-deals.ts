@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import {
   publicDiscountService,
   type BatchProductDealsResult,
-} from "@/api/modules/public-discounts";
+} from "@/api/services/public-discounts";
 import type {
   PublicPlatformPromoDto,
   PublicProductDealDto,
@@ -17,30 +17,56 @@ import { queryKey } from "@/lib/query-key";
  * Hook to retrieve site-wide promotional campaigns for the header ticker.
  */
 export function usePlatformPromos(initialPromos?: PublicPlatformPromoDto[]) {
+  const isInitialized = useAuthStore((state) => state.isInitialized);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const userId = useAuthStore((state) => state.user?.id);
+
+  // Who is looking decides which campaigns are shown: "first order only" offers
+  // must never reach a returning customer. The server-rendered list is fetched
+  // anonymously, so it is only trusted for a confirmed guest; for a signed-in
+  // customer the server filters by their order history.
+  const viewer = !isInitialized ? "pending" : isAuthenticated ? (userId ?? "user") : "guest";
+  const isGuest = viewer === "guest";
+  const safeInitial = initialPromos?.filter((promo) => !promo.isFirstOrderOnly);
+
   return useQuery({
-    queryKey: queryKey.discounts.platformPromos,
+    queryKey: [...queryKey.discounts.platformPromos, viewer] as const,
+    enabled: isInitialized,
     queryFn: async () => {
-      const res = await publicDiscountService.getPlatformPromos(false);
-      const raw = res.data;
-      if (Array.isArray(raw)) return raw;
-      if (
-        raw &&
-        typeof raw === "object" &&
-        "data" in raw &&
-        Array.isArray((raw as { data: unknown }).data)
-      ) {
-        return (raw as { data: PublicPlatformPromoDto[] }).data;
+      const parse = (raw: unknown): PublicPlatformPromoDto[] => {
+        if (Array.isArray(raw)) return raw as PublicPlatformPromoDto[];
+        if (
+          raw &&
+          typeof raw === "object" &&
+          "data" in raw &&
+          Array.isArray((raw as { data: unknown }).data)
+        ) {
+          return (raw as { data: PublicPlatformPromoDto[] }).data;
+        }
+        // An unrecognised body is an error, not "no campaigns": returning [] here
+        // would wipe a good banner after a hiccup.
+        throw new Error("Unexpected campaigns response");
+      };
+
+      if (isAuthenticated) {
+        try {
+          return parse((await publicDiscountService.getPlatformPromos(true)).data);
+        } catch {
+          // Session refresh or transient failure: fall back to the public list, minus
+          // offers reserved for first-time shoppers (we cannot verify this viewer).
+          const list = parse((await publicDiscountService.getPlatformPromos(false)).data);
+          return list.filter((promo) => !promo.isFirstOrderOnly);
+        }
       }
-      return [];
+      return parse((await publicDiscountService.getPlatformPromos(false)).data);
     },
-    // Only use SSR data as placeholder when it's non-empty.
-    // An empty SSR result should NOT freeze the client — it must re-fetch
-    // so staging/production with real DB data shows the banner correctly.
-    initialData: initialPromos && initialPromos.length > 0 ? initialPromos : undefined,
-    // 5 minutes fresh in client cache, preventing random or redundant refetches
-    // when navigating across product pages or opening drawers.
+    // Guests can use the SSR list as-is. Everyone else sees only the offers that
+    // are safe for any viewer until their own list arrives.
+    initialData: isGuest && initialPromos && initialPromos.length > 0 ? initialPromos : undefined,
+    placeholderData: isGuest ? undefined : safeInitial,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
+    retry: 1,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
@@ -98,6 +124,11 @@ export function useBatchProductDeals(productIds: string[]) {
     enabled: normalizedIds.length > 0,
     staleTime: 180_000,
     gcTime: 300_000,
+    // The service already coalesces + caches per product; never re-POST on
+    // mount/reconnect/failure (react-query's default 3 retries multiplied calls).
+    retry: false,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }

@@ -1,16 +1,19 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
-import { cartService } from "@/api/cart";
+import { RemoteImage } from "@/components/ui/RemoteImage";
+import { cartService } from "@/api/services/cart";
 import type { CartResponseDto } from "@/api/dto/cart";
 import type { CategoryResponseDto } from "@/api/dto/category";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
+import { PendingVouchers } from "@/components/domain/cart/PendingVouchers";
 import { formatPrice } from "@/lib/util";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { useDiscountStore } from "@/zustand/discount";
+import { MAX_CLAIMED_VOUCHERS, useDiscountStore } from "@/zustand/discount";
 import {
 ArrowRight,
 Loader2,
@@ -21,7 +24,7 @@ Tag,
 Trash2,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export interface CartPageViewProps {
@@ -32,66 +35,45 @@ export interface CartPageViewProps {
 export function CartPageView({ initialCart, categories }: CartPageViewProps) {
   const { items, cart, isLoading, updateItem, removeItem, clearCart } = useCart(initialCart);
   const [discountCode, setDiscountCode] = useState("");
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const { claim, release } = useClaimVoucher();
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
-  const effectiveDiscount = appliedDiscount;
-  const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
+  // Room for one store voucher + one platform voucher.
+  const canAddVoucher = claimedCodes.length < MAX_CLAIMED_VOUCHERS;
 
-  // Auto-apply claimed discount code when arriving on cart page with items
-  useEffect(() => {
-    if (
-      claimedCode &&
-      !appliedDiscount &&
-      !isApplyingDiscount &&
-      (items.length > 0 || (cart?.totalItemCount ?? 0) > 0)
-    ) {
-      void (async () => {
-        setIsApplyingDiscount(true);
-        try {
-          const res = await cartService.previewDiscount(claimedCode);
-          setAppliedDiscount({
-            code: res.data.code,
-            amount: res.data.discountAmount,
-          });
-          toast.success(`Claimed code "${res.data.code}" auto-applied!`);
-        } catch {
-          // If code doesn't meet minimum spend yet, leave in input without disruptive error
-        } finally {
-          setIsApplyingDiscount(false);
-        }
-      })();
-    }
-  }, [claimedCode, appliedDiscount, isApplyingDiscount, items.length, cart?.totalItemCount, setAppliedDiscount]);
+  // Applies the claimed vouchers and keeps every applied amount in step with
+  // the cart (shared with the drawer and checkout; cannot loop on failure).
+  const { pending: pendingVouchers } = useClaimedVoucherSync({ items });
 
   const handleApplyDiscount = async () => {
-    if (!effectiveDiscountCode.trim()) return;
+    const code = discountCode.trim().toUpperCase();
+    if (!code) return;
     setIsApplyingDiscount(true);
     try {
-      const res = await cartService.previewDiscount(effectiveDiscountCode.trim());
-      const discountData = {
-        code: res.data.code,
-        amount: res.data.discountAmount,
-      };
-      setAppliedDiscount(discountData);
-      toast.success(`Discount code "${res.data.code}" applied!`);
+      // Validate the typed code ON ITS OWN first, so a bad code gets a precise
+      // reason and never disturbs a voucher that is already applied.
+      await cartService.previewDiscount(code);
+      // Claiming (server-side for customers) makes it part of the cart's
+      // vouchers; the sync hook then checks how it combines with the others.
+      const claimed = await claim(code, { silent: true, copy: false });
+      if (claimed) setDiscountCode("");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Invalid or expired discount code"));
-      clearDiscount();
     } finally {
       setIsApplyingDiscount(false);
     }
   };
 
-  const handleRemoveDiscount = () => {
-    clearDiscount();
-    setDiscountCode("");
-    toast.info("Discount code removed");
+  const handleRemoveDiscount = (code: string) => {
+    void release(code);
+    toast.info(`Voucher ${code} removed`);
   };
 
   const subtotal = cart?.subtotal ?? 0;
   const deliveryCharge = cart?.deliveryCharge ?? 0;
   const serviceCharge = cart?.serviceCharge ?? 0;
-  const discountAmount = effectiveDiscount?.amount ?? (cart?.discountAmount ?? 0);
+  const discountAmount = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
   const totalAmount = Math.max(0, subtotal - discountAmount + deliveryCharge + serviceCharge);
 
   return (
@@ -313,12 +295,15 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                   <span className="font-semibold text-foreground">{formatPrice(subtotal)}</span>
                 </div>
 
-                {effectiveDiscount && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span>Discount ({effectiveDiscount.code})</span>
-                    <span>-{formatPrice(discountAmount)}</span>
+                {appliedDiscounts.map((d) => (
+                  <div
+                    key={d.code}
+                    className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium"
+                  >
+                    <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
+                    <span>-{formatPrice(d.amount)}</span>
                   </div>
-                )}
+                ))}
 
                 <div className="flex justify-between text-muted-foreground">
                   <span>Estimated Delivery</span>
@@ -348,31 +333,49 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                 >
                   Discount Code
                 </label>
-                {effectiveDiscount ? (
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div>
-                        <span className="font-semibold text-foreground uppercase">{effectiveDiscount.code}</span>
-                        <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(discountAmount)})</span>
+                <PendingVouchers pending={pendingVouchers} />
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div>
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
+                            <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
+                          </div>
+                        </div>
+                        {!d.automatic && (
+                          <button
+                          type="button"
+                          onClick={() => handleRemoveDiscount(d.code)}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold"
+                        >
+                          Remove
+                        </button>
+                        )}
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveDiscount}
-                      className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold"
-                    >
-                      Remove
-                    </button>
+                    ))}
                   </div>
-                ) : (
+                )}
+                {canAddVoucher && (
                   <div className="flex gap-2">
                     <Input
                       id="cart-discount-code"
                       name="discountCode"
                       aria-label="Discount code"
-                      placeholder="Enter discount code"
-                      value={effectiveDiscountCode}
+                      placeholder={appliedDiscounts.length > 0 ? "Add another voucher" : "Enter discount code"}
+                      value={discountCode}
                       onChange={(e) => setDiscountCode(e.target.value)}
                       className="h-10 rounded-xl uppercase text-sm"
                     />
@@ -380,7 +383,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                       type="button"
                       variant="outline"
                       onClick={handleApplyDiscount}
-                      disabled={isApplyingDiscount || !effectiveDiscountCode.trim()}
+                      disabled={isApplyingDiscount || !discountCode.trim()}
                       className="h-10 rounded-xl px-4 text-sm font-medium"
                     >
                       {isApplyingDiscount ? (
@@ -421,7 +424,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                     className="mt-6 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90 py-6 text-base font-semibold transition-all shadow-sm"
                   >
                     <Link
-                      href={effectiveDiscount ? `/checkout?code=${encodeURIComponent(effectiveDiscount.code)}` : "/checkout"}
+                      href="/checkout"
                       className="flex items-center justify-center gap-2"
                     >
                       <span>Proceed to Checkout</span>

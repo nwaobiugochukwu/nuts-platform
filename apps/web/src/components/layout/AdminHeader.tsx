@@ -1,7 +1,7 @@
 "use client";
 
-import { NotificationBell } from "@/component/notification/NotificationBell";
-import { Button } from "@/component/ui/button";
+import { NotificationBell } from "@/components/domain/notification/NotificationBell";
+import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/zustand/auth";
 import { logoutWithFeedback } from "@/lib/logout";
 import {

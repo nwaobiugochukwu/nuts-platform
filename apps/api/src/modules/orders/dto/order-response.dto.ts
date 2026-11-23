@@ -51,6 +51,39 @@ export class OrderItemResponseDto {
   variantSnapshot?: OrderVariantSnapshotDto | null;
 }
 
+export class OrderAppliedVoucherDto {
+  @ApiProperty({ description: 'Voucher code' })
+  code!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  description?: string | null;
+
+  @ApiProperty({
+    description: 'Who funded the voucher',
+    enum: ['PLATFORM', 'VENDOR'],
+  })
+  scope!: 'PLATFORM' | 'VENDOR';
+
+  @ApiProperty({ enum: ['PERCENTAGE', 'FIXED'] })
+  type!: 'PERCENTAGE' | 'FIXED';
+
+  @ApiProperty({ description: 'Voucher face value (percent or amount)' })
+  value!: number;
+
+  @ApiProperty({
+    description:
+      'True when the discount was applied automatically (no code was entered).',
+  })
+  automatic!: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Amount this voucher took off the order. Null only for legacy orders that did not record a per-voucher amount.',
+    nullable: true,
+  })
+  amount!: number | null;
+}
+
 export class OrderResponseDto {
   @ApiProperty({ description: 'Unique identifier of the order' })
   id!: string;
@@ -75,6 +108,14 @@ export class OrderResponseDto {
 
   @ApiPropertyOptional({ description: 'Discount code used', nullable: true })
   discountCode?: string | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Per-voucher breakdown of the discount (one entry per voucher used)',
+    type: () => OrderAppliedVoucherDto,
+    isArray: true,
+  })
+  appliedVouchers?: OrderAppliedVoucherDto[];
 
   @ApiPropertyOptional({ description: 'Referral code used', nullable: true })
   referralCode?: string | null;
