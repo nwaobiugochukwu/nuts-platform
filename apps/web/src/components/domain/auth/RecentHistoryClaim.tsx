@@ -1,6 +1,7 @@
 "use client";
 
 import { recommendationService } from "@/api/modules/recommendations";
+import { queryKey } from "@/lib/query-key";
 import { useRecommendationVisitorId } from "@/hooks/use-recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +16,7 @@ export function RecentHistoryClaim() {
   const visitorId = useRecommendationVisitorId();
 
   const claimQuery = useQuery({
-    queryKey: ["recommendations", "recent-history-claim", userId ?? null, visitorId],
+    queryKey: queryKey.recommendations.recentHistoryClaim(userId, undefined, visitorId),
     queryFn: async () => (await recommendationService.claimRecentlyViewed(visitorId)).data,
     enabled: isCustomer && Boolean(userId && visitorId),
     staleTime: Number.POSITIVE_INFINITY,
@@ -25,9 +26,9 @@ export function RecentHistoryClaim() {
   useEffect(() => {
     if (claimQuery.isSuccess && userId) {
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "for-you", userId], refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "recently-viewed", userId], refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "stores", userId], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.recentlyViewed(userId), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.stores(userId), refetchType: "all" }),
       ]);
     }
   }, [claimQuery.isSuccess, queryClient, userId]);

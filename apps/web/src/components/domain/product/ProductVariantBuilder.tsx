@@ -1,7 +1,7 @@
 "use client";
 
 import { RemoteImage } from "@/component/ui/RemoteImage";
-import { adminApi, vendorApi } from "@/api/core/client";
+import { adminApi, UPLOAD_REQUEST_TIMEOUT_MS, vendorApi } from "@/api/core/client";
 import { Button } from "@/component/ui/button";
 import { Input } from "@/component/ui/input";
 import { Label } from "@/component/ui/label";
@@ -178,7 +178,9 @@ export function ProductVariantBuilder({
     form.append("files", file);
 
     try {
-      const res = await api.post<unknown>("/images/upload", form);
+      const res = await api.post<unknown>("/images/upload", form, {
+        timeout: UPLOAD_REQUEST_TIMEOUT_MS,
+      });
       const rawData = res.data;
       const payload =
         typeof rawData === "object" && rawData !== null && "data" in rawData

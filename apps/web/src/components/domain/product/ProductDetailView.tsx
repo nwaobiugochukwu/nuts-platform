@@ -189,15 +189,15 @@ export function ProductDetailView({
           // while viewing this product page.
           void Promise.all([
             queryClient.invalidateQueries({
-              queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
+              queryKey: queryKey.recommendations.forYou(userId, sessionId),
               refetchType: "active",
             }),
             queryClient.invalidateQueries({
-              queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId],
+              queryKey: queryKey.recommendations.recentlyViewed(userId, sessionId),
               refetchType: "active",
             }),
             queryClient.invalidateQueries({
-              queryKey: ["recommendations", "stores", userId ?? null, sessionId],
+              queryKey: queryKey.recommendations.stores(userId, sessionId),
               refetchType: "active",
             }),
           ]);

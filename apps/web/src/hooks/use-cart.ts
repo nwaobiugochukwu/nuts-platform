@@ -44,7 +44,7 @@ export function useCart(initialData?: CartResponseDto | null) {
 
   const invalidateForYou = useCallback(
     () => queryClient.invalidateQueries({
-      queryKey: ["recommendations", "for-you", userId ?? null],
+      queryKey: queryKey.recommendations.forYou(userId),
       refetchType: "all",
     }),
     [queryClient, userId],

@@ -1,6 +1,7 @@
 "use client";
 
 import { recommendationService } from "@/api/modules/recommendations";
+import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
@@ -63,7 +64,7 @@ export function useForYouRecommendations(enabled = true) {
 
   const requestEnabled = enabled && isAuthInitialized && isShopper && Boolean(sessionId);
   const query = useQuery({
-    queryKey: ["recommendations", "for-you", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.forYou(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.forYou(sessionId, isCustomer, visitorId, signal)).data,
     enabled: requestEnabled,
@@ -103,7 +104,7 @@ export function usePersonalizedRecommendations(enabled = true) {
   const publicDiscoveryEnabled =
     enabled && isAuthInitialized && Boolean(sessionId);
   const recentQuery = useQuery({
-    queryKey: ["recommendations", "recently-viewed", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.recentlyViewed(userId, sessionId, visitorId),
     queryFn: async ({ signal }) => (await recommendationService.recentlyViewed(sessionId, isCustomer, visitorId, signal)).data,
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
@@ -115,7 +116,7 @@ export function usePersonalizedRecommendations(enabled = true) {
   });
 
   const followingQuery = useQuery({
-    queryKey: ["recommendations", "following", userId],
+    queryKey: queryKey.recommendations.following(userId),
     queryFn: async ({ signal }) => (await recommendationService.following(signal)).data,
     enabled: enabled && isCustomer,
     // Never blank the shelf while a refetch (or auth refresh) is in flight.
@@ -127,7 +128,7 @@ export function usePersonalizedRecommendations(enabled = true) {
   });
 
   const storesQuery = useQuery({
-    queryKey: ["recommendations", "stores", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.stores(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.stores(sessionId, isCustomer, visitorId, signal)).data,
     // Store discovery is a separate shelf and must not wait for For You or the
@@ -140,7 +141,7 @@ export function usePersonalizedRecommendations(enabled = true) {
   });
 
   const marketplaceMixQuery = useQuery({
-    queryKey: ["recommendations", "marketplace-mix", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.marketplaceMix(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId, signal)).data,
     enabled: publicDiscoveryEnabled,

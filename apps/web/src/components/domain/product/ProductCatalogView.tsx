@@ -1,6 +1,7 @@
 "use client";
 
 import { productService } from "@/api";
+import { queryKey } from "@/lib/query-key";
 import { categoryService } from "@/api/modules/category";
 import { analyticsEventService } from "@/api/modules/analytics";
 import type { CategoryResponseDto } from "@/api/dto/category";
@@ -264,7 +265,7 @@ export function ProductCatalogView({
     trackedSearchRef.current = dedupeKey;
     void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer, visitorId).then(() => {
       void queryClient.invalidateQueries({
-        queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
+        queryKey: queryKey.recommendations.forYou(userId, sessionId),
         refetchType: "all",
       });
     }).catch(() => {

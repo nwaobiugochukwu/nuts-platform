@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { queryKey } from "@/lib/query-key";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -80,7 +81,7 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
   }, [isOpen, onClose]);
 
   const searchDiscoveryQuery = useQuery({
-    queryKey: ["recommendations", "search-discover", userId ?? null, sessionId, visitorId],
+    queryKey: queryKey.recommendations.searchDiscover(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.searchDiscover(sessionId, isCustomer, visitorId, signal)).data,
     enabled: isOpen && isEmptySearch && isAuthInitialized && isShopper && Boolean(sessionId),

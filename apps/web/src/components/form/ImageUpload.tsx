@@ -1,7 +1,7 @@
 "use client";
 
 import { RemoteImage } from "@/component/ui/RemoteImage";
-import { adminApi, vendorApi } from "@/api/core/client";
+import { adminApi, UPLOAD_REQUEST_TIMEOUT_MS, vendorApi } from "@/api/core/client";
 import { Label } from "@/component/ui/label";
 import { cn } from "@/lib/util";
 import {
@@ -174,7 +174,8 @@ export function ImageUpload({
 
       const { data } = await api.post<UploadedImage[]>(
         "/images/upload",
-        form
+        form,
+        { timeout: UPLOAD_REQUEST_TIMEOUT_MS },
       );
 
       const rawResults = Array.isArray(data) ? data : [];

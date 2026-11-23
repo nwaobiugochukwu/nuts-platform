@@ -1,6 +1,7 @@
 "use client";
 
 import { vendorFollowingService } from "@/api/modules/vendor";
+import { queryKey } from "@/lib/query-key";
 import type { FeaturedVendorDto, FollowedVendorDto, FollowedVendorsPageDto } from "@/api/dto/vendor";
 import { useAuthStore } from "@/zustand/auth";
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
@@ -56,10 +57,10 @@ export function useVendorFollowing() {
       queryClient.invalidateQueries({ queryKey: keys.manage }),
       queryClient.invalidateQueries({ queryKey: keys.count }),
       queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", event.vendorSlug] }),
-      queryClient.invalidateQueries({ queryKey: ["recommendations", "for-you", userId], refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: ["recommendations", "following", userId], refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: ["recommendations", "marketplace-mix"], refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: ["recommendations", "stores"], refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "all" }),
     ]);
   }), [keys.count, keys.list, keys.manage, queryClient, userId]);
 
@@ -207,10 +208,10 @@ export function useVendorFollowing() {
         queryClient.invalidateQueries({ queryKey: keys.manage }),
         queryClient.invalidateQueries({ queryKey: keys.count }),
         queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", vendor.storeSlug] }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "for-you", userId], refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "following", userId], refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "marketplace-mix"], refetchType: "all" }),
-        queryClient.invalidateQueries({ queryKey: ["recommendations", "stores"], refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "all" }),
       ]);
     },
   });

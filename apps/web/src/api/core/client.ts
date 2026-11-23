@@ -76,9 +76,18 @@ export const getApiBaseUrl = (): string => {
   return prefix || "/api/v1";
 };
 
+/**
+ * Without a timeout a stalled connection never settles, so React Query shows a
+ * spinner forever and mutation buttons stay disabled. Fail fast instead, and
+ * let the retry/error UI take over. Large uploads override this per request.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+export const UPLOAD_REQUEST_TIMEOUT_MS = 120_000;
+
 const axiosConfig = {
   baseURL: getApiBaseUrl(),
   withCredentials: true,
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS,
   // Note: x-csrf-token header is managed deterministically in our request interceptor
   // to avoid Axios adding duplicate/comma-joined headers on mutating requests.
 } as const;
@@ -141,7 +150,7 @@ async function executeTokenRefresh(
     const res = await axios.post(
       refreshEndpoint,
       {},
-      { withCredentials: true, headers },
+      { withCredentials: true, headers, timeout: DEFAULT_REQUEST_TIMEOUT_MS },
     );
 
     const freshCsrf =
