@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { useDiscountStore } from "@/zustand/discount";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { queryKey } from "@/lib/query-key";
@@ -27,7 +29,7 @@ import { Heart,Minus,Plus,ShoppingBag,Trash2,X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { extractStockConflict } from "@/lib/stock-conflict";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 type Address = { fullName: string; phone: string; street: string; city: string; state: string; country: string };
@@ -382,7 +384,7 @@ export function ShoppingDrawer() {
   const close = useShoppingDrawerStore((state) => state.close);
   const [discountCode, setDiscountCode] = useState("");
   const [discountPreview, setDiscountPreview] = useState<DiscountPreviewDto | null>(null);
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const { appliedDiscount, claimedCode, setAppliedDiscount, clearApplied, clearDiscount } = useDiscountStore();
   const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
   const { items: wishlist, removeItem } = useWishlist();
   const {
@@ -399,25 +401,24 @@ export function ShoppingDrawer() {
       setDiscountPreview(data);
       setAppliedDiscount({ code: data.code, amount: data.discountAmount });
     },
-    onError: () => {
-      setDiscountPreview(null);
-      clearDiscount();
-      toast.error("Discount code could not be applied");
+    onError: (error, code) => {
+      // A rejected NEW code must not wipe a voucher that is already applied.
+      // Surface the server's reason ("add X more", "expired"...) instead of a
+      // generic message, and withdraw the discount only if THIS code failed.
+      if (appliedDiscount?.code === code.trim().toUpperCase()) {
+        setDiscountPreview(null);
+        clearApplied();
+      }
+      toast.error(getApiErrorMessage(error, "Discount code could not be applied"));
     },
   });
 
-  // Auto-apply claimed discount code when drawer opens with items in cart
-  useEffect(() => {
-    if (
-      (panel === "cart" || panel === "checkout") &&
-      claimedCode &&
-      !appliedDiscount &&
-      !previewDiscount.isPending &&
-      (cartItems.length > 0 || (cart?.totalItemCount ?? 0) > 0)
-    ) {
-      previewDiscount.mutate(claimedCode);
-    }
-  }, [panel, claimedCode, appliedDiscount, cartItems.length, cart?.totalItemCount, previewDiscount]);
+  // Applies a claimed voucher and keeps the applied amount in step with the
+  // cart (shared with the cart page and checkout; cannot loop on failure).
+  useClaimedVoucherSync({
+    items: cartItems,
+    enabled: panel === "cart" || panel === "checkout",
+  });
 
   const handleApplyDiscount = () => {
     const code = effectiveDiscountCode.trim();

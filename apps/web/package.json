@@ -9,7 +9,7 @@
     "start": "cross-env NODE_ENV=production NODE_OPTIONS=\"--max-old-space-size=384\" next start -p 5173",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:unit": "node --experimental-strip-types --test src/api/core/token-storage.test.mjs src/lib/portal-role.test.mjs src/lib/safe-internal-path.test.mjs src/lib/product-path.test.mjs src/lib/notification-stream-policy.test.mjs src/lib/category-product-groups.test.mjs src/proxy.test.mjs",
+    "test:unit": "node --experimental-strip-types --test src/api/core/token-storage.test.mjs src/lib/portal-role.test.mjs src/lib/safe-internal-path.test.mjs src/lib/product-path.test.mjs src/lib/notification-stream-policy.test.mjs src/lib/category-product-groups.test.mjs src/proxy.test.mjs src/zustand/discount.test.mjs",
     "start:staging": "cross-env NODE_ENV=staging NODE_OPTIONS=\"--max-old-space-size=384\" next start -p 5173"
   },
   "dependencies": {

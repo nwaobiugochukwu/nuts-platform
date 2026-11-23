@@ -8,6 +8,7 @@ import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
 import { formatPrice } from "@/lib/util";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useDiscountStore } from "@/zustand/discount";
@@ -21,7 +22,7 @@ Tag,
 Trash2,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export interface CartPageViewProps {
@@ -32,36 +33,14 @@ export interface CartPageViewProps {
 export function CartPageView({ initialCart, categories }: CartPageViewProps) {
   const { items, cart, isLoading, updateItem, removeItem, clearCart } = useCart(initialCart);
   const [discountCode, setDiscountCode] = useState("");
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const { appliedDiscount, claimedCode, setAppliedDiscount, clearApplied, clearDiscount } = useDiscountStore();
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const effectiveDiscount = appliedDiscount;
   const effectiveDiscountCode = discountCode || appliedDiscount?.code || claimedCode || "";
 
-  // Auto-apply claimed discount code when arriving on cart page with items
-  useEffect(() => {
-    if (
-      claimedCode &&
-      !appliedDiscount &&
-      !isApplyingDiscount &&
-      (items.length > 0 || (cart?.totalItemCount ?? 0) > 0)
-    ) {
-      void (async () => {
-        setIsApplyingDiscount(true);
-        try {
-          const res = await cartService.previewDiscount(claimedCode);
-          setAppliedDiscount({
-            code: res.data.code,
-            amount: res.data.discountAmount,
-          });
-          toast.success(`Claimed code "${res.data.code}" auto-applied!`);
-        } catch {
-          // If code doesn't meet minimum spend yet, leave in input without disruptive error
-        } finally {
-          setIsApplyingDiscount(false);
-        }
-      })();
-    }
-  }, [claimedCode, appliedDiscount, isApplyingDiscount, items.length, cart?.totalItemCount, setAppliedDiscount]);
+  // Applies a claimed voucher and keeps the applied amount in step with the
+  // cart (shared with the drawer and checkout; cannot loop on failure).
+  useClaimedVoucherSync({ items });
 
   const handleApplyDiscount = async () => {
     if (!effectiveDiscountCode.trim()) return;
@@ -76,7 +55,11 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
       toast.success(`Discount code "${res.data.code}" applied!`);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Invalid or expired discount code"));
-      clearDiscount();
+      // A mistyped NEW code must not wipe a valid voucher that is already
+      // applied; only withdraw the discount if this very code just failed.
+      if (appliedDiscount?.code === effectiveDiscountCode.trim().toUpperCase()) {
+        clearApplied();
+      }
     } finally {
       setIsApplyingDiscount(false);
     }

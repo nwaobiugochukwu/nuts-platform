@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronRight, Clock, Copy, Sparkles, Tag, X } from 
 import { usePlatformPromos } from "@/hooks/use-product-deals";
 import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 import { useDiscountStore } from "@/zustand/discount";
+import { toast } from "sonner";
 import { formatPrice } from "@/lib/util";
 
 const DISMISS_KEY = "nuts_promo_banner_dismissed_v2";
@@ -223,6 +224,12 @@ export function PlatformPromoTicker({
   const handleClaim = (e: React.MouseEvent) => {
     if (hasDragged.current) return;
     e.stopPropagation();
+    // An upcoming promo cannot be redeemed yet: claiming it would only produce
+    // a "not active yet" failure at checkout. Tell the shopper instead.
+    if (countdown?.type === "starts_in") {
+      toast.info(`This voucher isn't active yet. It starts in ${countdown.formatted}.`);
+      return;
+    }
     claimCode(activePromo.code);
     setCopiedCode(activePromo.code);
     setTimeout(() => {

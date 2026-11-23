@@ -14,6 +14,7 @@ import { clearClientCart } from "@/lib/cart-cleanup";
 import { formatPrice } from "@/lib/util";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";
+import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -53,7 +54,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { appliedDiscount, claimedCode, setAppliedDiscount, clearDiscount } = useDiscountStore();
+  const { appliedDiscount, claimedCode, claimCode, setAppliedDiscount, clearApplied, clearDiscount } = useDiscountStore();
   const [discountCode, setDiscountCode] = useState(() => searchParams.get("code") ?? appliedDiscount?.code ?? claimedCode ?? "");
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [addressMode, setAddressMode] = useState<"default" | "new">("default");
@@ -108,26 +109,19 @@ export default function CheckoutPage() {
     }
   }, [defaultAddress, form]);
 
-  // Revalidate an applied discount code against the server before applying it.
-  const appliedDiscountCode = appliedDiscount?.code;
+  // A voucher arriving via ?code=... is treated exactly like a claim, so there
+  // is a single path (useClaimedVoucherSync) that validates and applies it.
+  const codeFromUrl = searchParams.get("code");
   useEffect(() => {
-    const initialCode = searchParams.get("code") ?? appliedDiscountCode ?? "";
-    if (!initialCode) return;
-    void cartService
-      .previewDiscount(initialCode)
-      .then((res) => {
-        setDiscountCode(res.data.code);
-        setAppliedDiscount({
-          code: res.data.code,
-          amount: res.data.discountAmount,
-        });
-        toast.success(`Discount code "${res.data.code}" applied!`);
-      })
-      .catch(() => {
-        clearDiscount();
-      })
-      .finally(() => setIsApplyingDiscount(false));
-  }, [searchParams, appliedDiscountCode, clearDiscount, setAppliedDiscount]);
+    if (codeFromUrl) claimCode(codeFromUrl, { silent: true, copy: false });
+  }, [codeFromUrl, claimCode]);
+
+  // Keeps the applied voucher valid for the live cart (and re-checks it when the
+  // cart changes) instead of trusting an amount captured earlier.
+  const { isSyncing: isSyncingVoucher } = useClaimedVoucherSync({
+    items: cartData?.cartItems ?? [],
+    enabled: !cartLoading && !cartError,
+  });
 
   const checkoutMutation = useMutation({
     mutationFn: (payload: CheckoutPayload) => orderService.checkout(payload),
@@ -260,7 +254,11 @@ export default function CheckoutPage() {
       toast.success(`Discount code "${res.data.code}" applied!`);
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, "Invalid or expired discount code"));
-      clearDiscount();
+      // Only withdraw the discount if THIS code failed; a mistyped new code
+      // must not remove a voucher that is already applied.
+      if (appliedDiscount?.code === discountCode.trim().toUpperCase()) {
+        clearApplied();
+      }
     } finally {
       setIsApplyingDiscount(false);
     }
@@ -475,14 +473,14 @@ export default function CheckoutPage() {
                       placeholder="Discount code"
                       value={discountCode}
                       onChange={(e) => setDiscountCode(e.target.value)}
-                      disabled={checkoutMutation.isPending || isApplyingDiscount}
+                      disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
                       className="h-9 rounded-xl bg-background text-xs uppercase min-w-0"
                     />
                     <Button
                       type="button"
                       variant="outline"
                       onClick={handleApplyDiscount}
-                      disabled={checkoutMutation.isPending || isApplyingDiscount || !discountCode.trim()}
+                      disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher || !discountCode.trim()}
                       className="h-9 rounded-xl px-3 text-xs font-semibold shrink-0 cursor-pointer"
                     >
                       {isApplyingDiscount ? (
@@ -829,14 +827,14 @@ export default function CheckoutPage() {
                     placeholder="Discount code"
                     value={discountCode}
                     onChange={(e) => setDiscountCode(e.target.value)}
-                    disabled={checkoutMutation.isPending || isApplyingDiscount}
+                    disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
                     className="h-10 rounded-xl bg-background text-xs sm:text-sm uppercase min-w-0"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleApplyDiscount}
-                    disabled={checkoutMutation.isPending || isApplyingDiscount || !discountCode.trim()}
+                    disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher || !discountCode.trim()}
                     className="h-10 rounded-xl px-4 text-xs sm:text-sm font-semibold shrink-0"
                   >
                     {isApplyingDiscount ? (
@@ -889,7 +887,7 @@ export default function CheckoutPage() {
             <Button
               type="submit"
               form="checkout-form"
-              disabled={checkoutMutation.isPending || isApplyingDiscount}
+              disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
               className="hidden w-full rounded-full bg-primary py-6 text-sm sm:text-base font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 lg:flex lg:items-center lg:justify-center lg:gap-2 cursor-pointer"
             >
               {checkoutMutation.isPending ? (
@@ -935,7 +933,7 @@ export default function CheckoutPage() {
                 )();
               }
             }}
-            disabled={checkoutMutation.isPending || isApplyingDiscount}
+            disabled={checkoutMutation.isPending || isApplyingDiscount || isSyncingVoucher}
             className="h-11 rounded-xl px-5 sm:px-6 text-xs sm:text-sm font-bold shadow-sm cursor-pointer shrink-0"
           >
             {checkoutMutation.isPending ? (
