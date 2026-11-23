@@ -123,57 +123,116 @@ export class RefreshSessionService {
   /**
    * Issues a new admin session.
    *
-   * Admin accounts do not use the UserAuthSession table â€” the refresh
-   * token is stored directly on the Admin row (single-session model).
+   * Every sign-in gets its own AccountAuthSession (refresh token + id), so a
+   * second browser or device never invalidates this one. The legacy pointer on
+   * the Admin row is still written for API instances that predate sessions.
    */
   async issueAdminSession(admin: AdminAuthRecord): Promise<AuthSession> {
     if (!admin.isActive) {
       throw new UnauthorizedException('Admin account is deactivated');
     }
 
+    const sessionId = randomUUID();
     const tokens = await this.generateTokens(
       admin.id,
       ROLE.ADMIN,
       admin.tokenVersion,
+      sessionId,
     );
 
-    await this.prisma.admin.update({
-      where: { id: admin.id },
-      data: {
-        refreshToken: this.hashRefreshToken(tokens.refreshId),
-        refreshTokenId: tokens.refreshId,
-      },
-    });
+    await this.createAccountSession(
+      ROLE.ADMIN,
+      admin.id,
+      admin.tokenVersion,
+      sessionId,
+      tokens,
+    );
+    await this.writeLegacyPointer(ROLE.ADMIN, admin.id, tokens);
 
     return { user: this.toAuthUserDto(admin), tokens };
   }
 
   /**
-   * Issues a new vendor session.
-   *
-   * Like admin, vendors use a single-session model with the token stored
-   * directly on the Vendor row.
+   * Issues a new vendor session (one AccountAuthSession per sign-in, like admins).
    */
   async issueVendorSession(vendor: VendorAuthRecord): Promise<AuthSession> {
     if (!vendor.isActive) {
       throw new UnauthorizedException('Vendor account is deactivated');
     }
 
+    const sessionId = randomUUID();
     const tokens = await this.generateTokens(
       vendor.id,
       ROLE.VENDOR,
       vendor.tokenVersion,
+      sessionId,
     );
 
-    await this.prisma.vendor.update({
-      where: { id: vendor.id },
-      data: {
-        refreshToken: this.hashRefreshToken(tokens.refreshId),
-        refreshTokenId: tokens.refreshId,
-      },
-    });
+    await this.createAccountSession(
+      ROLE.VENDOR,
+      vendor.id,
+      vendor.tokenVersion,
+      sessionId,
+      tokens,
+    );
+    await this.writeLegacyPointer(ROLE.VENDOR, vendor.id, tokens);
 
     return { user: this.toAuthUserDto(vendor), tokens };
+  }
+
+  private async createAccountSession(
+    role: ROLE,
+    subjectId: string,
+    tokenVersion: number,
+    sessionId: string,
+    tokens: AuthTokens,
+  ): Promise<void> {
+    await this.prisma.accountAuthSession.deleteMany({
+      where: { role, subjectId, expiresAt: { lte: new Date() } },
+    });
+    await this.prisma.accountAuthSession.create({
+      data: {
+        id: sessionId,
+        role,
+        subjectId,
+        tokenVersion,
+        refreshToken: this.hashRefreshToken(tokens.refreshId),
+        refreshTokenId: tokens.refreshId,
+        expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
+      },
+    });
+  }
+
+  /** Keeps older API instances (no sessions yet) able to refresh during a rolling deploy. */
+  private async writeLegacyPointer(
+    role: ROLE,
+    subjectId: string,
+    tokens: Pick<AuthTokens, 'refreshId'>,
+  ): Promise<void> {
+    const data = {
+      refreshToken: this.hashRefreshToken(tokens.refreshId),
+      refreshTokenId: tokens.refreshId,
+    };
+    try {
+      if (role === ROLE.ADMIN) {
+        await this.prisma.admin.updateMany({ where: { id: subjectId }, data });
+      } else if (role === ROLE.VENDOR) {
+        await this.prisma.vendor.updateMany({ where: { id: subjectId }, data });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Legacy refresh pointer update failed: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Signs ONE device out: only this session is revoked, other devices stay signed in. */
+  async revokeAccountSession(sessionId: string): Promise<void> {
+    await this.prisma.accountAuthSession.updateMany({
+      where: { id: sessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await this.authSessionService?.invalidateSession(sessionId);
   }
 
   async refresh(payload: RefreshJwtPayload): Promise<AuthSession> {
@@ -217,6 +276,7 @@ export class RefreshSessionService {
         where: activeOnly ? { id: userId, isActive: true } : { id: userId },
         data,
       });
+      await this.revokeAllAccountSessions(role, userId);
       await this.authSessionService?.invalidateAccountStamp(userId, role);
       return;
     }
@@ -226,6 +286,7 @@ export class RefreshSessionService {
         where: activeOnly ? { id: userId, isActive: true } : { id: userId },
         data,
       });
+      await this.revokeAllAccountSessions(role, userId);
       await this.authSessionService?.invalidateAccountStamp(userId, role);
       return;
     }
@@ -235,6 +296,17 @@ export class RefreshSessionService {
       data,
     });
     await this.authSessionService?.invalidateAccountStamp(userId, role);
+  }
+
+  /** Every device of an ADMIN/VENDOR account (password change, deactivation, lock). */
+  private async revokeAllAccountSessions(
+    role: ROLE,
+    subjectId: string,
+  ): Promise<void> {
+    await this.prisma.accountAuthSession.updateMany({
+      where: { role, subjectId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   async revokeUserSession(userId: string, sessionId: string): Promise<void> {
@@ -361,6 +433,10 @@ export class RefreshSessionService {
       select: ADMIN_REFRESH_SELECT,
     });
 
+    if (payload.sessionId) {
+      return this.rotateAccountSession(admin, payload);
+    }
+
     return this.rotateRefreshSession(
       admin,
       payload,
@@ -388,6 +464,13 @@ export class RefreshSessionService {
 
     if (!vendor?.isApproved) {
       throw new UnauthorizedException('Invalid refresh session');
+    }
+
+    if (payload.sessionId) {
+      return this.rotateAccountSession(
+        { ...vendor, role: ROLE.VENDOR },
+        payload,
+      );
     }
 
     return this.rotateRefreshSession(
@@ -545,6 +628,123 @@ export class RefreshSessionService {
     };
 
     // Cache in grace period window so concurrent requests don't fail
+    if (this.redis) {
+      try {
+        await this.redis.set(
+          graceKey,
+          JSON.stringify(sessionResult),
+          'EX',
+          RefreshSessionService.GRACE_PERIOD_SECONDS,
+        );
+      } catch (err) {
+        this.logger.warn(`Grace cache write error: ${(err as Error).message}`);
+      }
+    }
+
+    return sessionResult;
+  }
+
+  /**
+   * Per-session refresh for ADMIN/VENDOR. Mirrors the customer flow: the token
+   * must match THIS session's current refresh id; a replay inside the grace
+   * window gets the same result (two tabs refreshing at once), and a stale token
+   * revokes only its own session, never the account's other devices.
+   */
+  private async rotateAccountSession(
+    account: RefreshableAccount | null,
+    payload: RefreshJwtPayload,
+  ): Promise<AuthSession> {
+    if (
+      !account ||
+      account.role !== payload.role ||
+      !account.isActive ||
+      !payload.sessionId
+    ) {
+      throw new UnauthorizedException('Invalid refresh session');
+    }
+
+    const session = await this.prisma.accountAuthSession.findUnique({
+      where: { id: payload.sessionId },
+    });
+    if (
+      !session ||
+      session.role !== payload.role ||
+      session.subjectId !== account.id ||
+      session.revokedAt ||
+      session.expiresAt <= new Date() ||
+      session.tokenVersion !== account.tokenVersion ||
+      !session.refreshToken
+    ) {
+      throw new UnauthorizedException('Invalid refresh session');
+    }
+
+    const graceKey = `auth:grace:${payload.role}:${payload.sub}:${payload.refreshId}`;
+
+    if (session.refreshTokenId !== payload.refreshId) {
+      if (this.redis) {
+        try {
+          const cached = await this.redis.get(graceKey);
+          if (cached) {
+            this.logger.log(
+              `Grace period refresh replay accepted for ${payload.role} ${payload.sub}`,
+            );
+            return JSON.parse(cached) as AuthSession;
+          }
+        } catch (err) {
+          this.logger.warn(`Grace cache read error: ${(err as Error).message}`);
+        }
+      }
+
+      this.logger.warn(
+        `Token reuse detected for ${payload.role} ${payload.sub} on session ${session.id}. Revoking that session only.`,
+      );
+      await this.revokeAccountSession(session.id);
+      throw new UnauthorizedException(
+        'Security violation: refresh token reuse detected',
+      );
+    }
+
+    const valid = await this.verifyRefreshTokenHash(
+      payload.refreshId,
+      session.refreshToken,
+    );
+    if (!valid) {
+      await this.revokeAccountSession(session.id);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const tokens = await this.generateTokens(
+      account.id,
+      account.role,
+      account.tokenVersion,
+      session.id,
+    );
+    const rotated = await this.prisma.accountAuthSession.updateMany({
+      where: {
+        id: session.id,
+        refreshTokenId: payload.refreshId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        refreshToken: this.hashRefreshToken(tokens.refreshId),
+        refreshTokenId: tokens.refreshId,
+        expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
+      },
+    });
+    if (rotated.count !== 1) {
+      throw new UnauthorizedException(
+        'Refresh session has already been rotated',
+      );
+    }
+
+    await this.writeLegacyPointer(account.role, account.id, tokens);
+
+    const sessionResult: AuthSession = {
+      user: this.toAuthUserDto(account),
+      tokens,
+    };
+
     if (this.redis) {
       try {
         await this.redis.set(

@@ -42,7 +42,9 @@ export class PublicDiscountCodesController {
   @OptionalAuth()
   @Header(
     'Cache-Control',
-    'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
+    // Per-customer: first-order and already-used offers are filtered per viewer, so a
+    // shared cache must never serve one customer's answer to another.
+    'private, max-age=60',
   )
   @ApiOperation({
     summary:

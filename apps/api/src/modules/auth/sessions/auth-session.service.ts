@@ -87,14 +87,15 @@ export class AuthSessionService {
       throw new UnauthorizedException('Session has been revoked');
     }
 
-    if (payload.role === ROLE.USER && payload.sessionId) {
+    if (payload.sessionId) {
       const isSessionValid = await this.validateSessionWithCache(
         payload.sessionId,
         payload.sub,
         payload.tokenVersion,
+        payload.role,
       );
       if (!isSessionValid) {
-        throw new UnauthorizedException('User session has been revoked');
+        throw new UnauthorizedException('Session has been revoked');
       }
     }
 
@@ -151,11 +152,12 @@ export class AuthSessionService {
       const account = await this.getAccountWithCache(userId, role);
       if (!account || !account.isActive) return false;
       if (role === ROLE.VENDOR && !account.isApproved) return false;
-      if (role === ROLE.USER && sessionId) {
+      if (sessionId) {
         return await this.validateSessionWithCache(
           sessionId,
           userId,
           account.tokenVersion,
+          role,
         );
       }
       return true;
@@ -218,6 +220,7 @@ export class AuthSessionService {
     sessionId: string,
     userId: string,
     tokenVersion: number,
+    role: ROLE = ROLE.USER,
   ): Promise<boolean> {
     const sessKey = `auth:sess:${sessionId}`;
 
@@ -231,16 +234,30 @@ export class AuthSessionService {
       }
     }
 
-    const session = await this.prisma.userAuthSession.findFirst({
-      where: {
-        id: sessionId,
-        userId,
-        tokenVersion,
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-      select: { id: true },
-    });
+    // Customers keep sessions in UserAuthSession; admins and vendors in AccountAuthSession.
+    const session =
+      role === ROLE.USER
+        ? await this.prisma.userAuthSession.findFirst({
+            where: {
+              id: sessionId,
+              userId,
+              tokenVersion,
+              revokedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+            select: { id: true },
+          })
+        : await this.prisma.accountAuthSession.findFirst({
+            where: {
+              id: sessionId,
+              role,
+              subjectId: userId,
+              tokenVersion,
+              revokedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+            select: { id: true },
+          });
 
     const isValid = Boolean(session);
 

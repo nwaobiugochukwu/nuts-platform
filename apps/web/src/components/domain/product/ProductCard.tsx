@@ -151,9 +151,6 @@ export function ProductCard({
 
   const currentPrice = discountPrice ?? price;
   const hasDiscount = !!originalPrice && originalPrice > currentPrice;
-  const discountPercent = hasDiscount
-    ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100)
-    : 0;
 
   const thumbnail = "thumbnail" in product ? product.thumbnail ?? null : null;
   const img =
@@ -299,11 +296,6 @@ export function ProductCard({
                 {effectiveDeal.type === "PERCENTAGE" ? `${effectiveDeal.value}% OFF` : `Save ${formatPrice(effectiveDeal.value)}`}
               </span>
             </button>
-          )}
-          {hasDiscount && (
-            <span className="inline-flex items-center rounded-md bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground shadow-xs">
-              -{discountPercent}%
-            </span>
           )}
           {isLowStock && (
             <span className="inline-flex items-center rounded-md bg-neutral-900/90 dark:bg-neutral-800 px-2 py-0.5 text-xs font-semibold text-white backdrop-blur-xs">

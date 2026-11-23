@@ -7,7 +7,7 @@ export default async function Layout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession();
+  const session = await getServerSession("vendor");
 
   if (session.isAuthenticated && session.role === "vendor") {
     return <VendorLayout>{children}</VendorLayout>;

@@ -8,9 +8,13 @@ import { useDiscountStore } from "@/zustand/discount";
 import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/util";
+import { RESUME_AFTER_INTERACTION_MS, dwellMs } from "@/lib/promo-timing";
 
 const COLLAPSE_KEY = "nuts_promo_banner_v4";
-const ROTATION_INTERVAL_MS = 6000;
+function subscribeVisibility(onChange: () => void) {
+  document.addEventListener("visibilitychange", onChange);
+  return () => document.removeEventListener("visibilitychange", onChange);
+}
 
 /**
  * The offers bar is COLLAPSIBLE, not dismissible: a slim "offers available" strip
@@ -162,10 +166,19 @@ export function PlatformPromoTicker({
     claimedCodes.includes(code) || appliedDiscounts.some((d) => d.code === code);
   const [currentIndex, setCurrentIndex] = useState(0);
   const collapse = useSyncExternalStore(subscribeCollapse, readCollapse, () => EMPTY_COLLAPSE);
-  const [isPaused, setIsPaused] = useState(false);
+  // Hover only counts on devices that can really hover: on touch screens a tap fires
+  // `mouseenter` but never `mouseleave`, which used to pause the rotation for good.
+  const [isHovering, setIsHovering] = useState(false);
+  const [hasFocus, setHasFocus] = useState(false);
+  const [holdUntil, setHoldUntil] = useState(0);
+  const tabVisible = useSyncExternalStore(
+    subscribeVisibility,
+    () => document.visibilityState === "visible",
+    () => true,
+  );
+  const holdRotation = () => setHoldUntil(Date.now() + RESUME_AFTER_INTERACTION_MS);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Wheel scroll throttling ref
   const lastWheelTime = useRef<number>(0);
@@ -205,21 +218,25 @@ export function PlatformPromoTicker({
     });
   }, [validPromos.length, promos, isError]);
 
-  // Automatic slide rotation
+  // Automatic slide rotation: one timer per slide, so each offer gets its own dwell time
+  // and any interaction (which changes the slide or the hold) restarts it cleanly.
+  const rotatingPromo = validPromos[Math.min(currentIndex, Math.max(0, validPromos.length - 1))];
+  const canRotate =
+    validPromos.length > 1 && !isHovering && !hasFocus && tabVisible;
   useEffect(() => {
-    if (validPromos.length <= 1 || isPaused) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
+    if (process.env.NODE_ENV === "development" && validPromos.length > 1 && !canRotate) {
+      console.debug("[promo-banner] rotation paused", { isHovering, hasFocus, tabVisible });
     }
+  }, [validPromos.length, canRotate, isHovering, hasFocus, tabVisible]);
 
-    timerRef.current = setInterval(() => {
+  useEffect(() => {
+    if (!canRotate || !rotatingPromo) return;
+    const delay = Math.max(dwellMs((rotatingPromo.description ?? "").length), holdUntil - Date.now());
+    const timer = window.setTimeout(() => {
       setCurrentIndex((prev) => (prev + 1) % validPromos.length);
-    }, ROTATION_INTERVAL_MS);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [validPromos.length, isPaused]);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [canRotate, rotatingPromo, currentIndex, holdUntil, validPromos.length]);
 
   if (validPromos.length === 0) {
     return null;
@@ -268,11 +285,13 @@ export function PlatformPromoTicker({
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    holdRotation();
     setCurrentIndex((prev) => (prev - 1 + validPromos.length) % validPromos.length);
   };
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    holdRotation();
     setCurrentIndex((prev) => (prev + 1) % validPromos.length);
   };
 
@@ -355,7 +374,7 @@ export function PlatformPromoTicker({
       <div
         role="region"
         aria-label="Platform promotional announcements (collapsed)"
-        className="w-full border-b border-neutral-200/90 bg-neutral-100 text-neutral-900 dark:border-neutral-800/60 dark:bg-neutral-950 dark:text-neutral-100"
+        className="relative z-10 w-full border-b border-neutral-200/90 bg-neutral-100 text-neutral-900 dark:border-neutral-800/60 dark:bg-neutral-950 dark:text-neutral-100"
       >
         <button
           type="button"
@@ -380,12 +399,24 @@ export function PlatformPromoTicker({
     <div
       role="region"
       aria-label="Platform promotional announcements"
-      className={`relative w-full overflow-hidden border-b transition-colors duration-300 select-none bg-neutral-100 text-neutral-900 border-neutral-200/90 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
+      className={`relative z-10 w-full overflow-hidden border-b transition-colors duration-300 select-none bg-neutral-100 text-neutral-900 border-neutral-200/90 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
         validPromos.length > 1 ? "cursor-grab active:cursor-grabbing" : ""
       }`}
-      onMouseEnter={() => setIsPaused(true)}
+      onMouseEnter={() => {
+        if (window.matchMedia("(hover: hover)").matches) setIsHovering(true);
+      }}
+      // Only KEYBOARD focus pauses: a mouse or tap click on an arrow/dot/claim button leaves
+      // it focused, which used to freeze the rotation until the shopper clicked elsewhere.
+      onFocus={(event) => {
+        if (event.target instanceof HTMLElement && event.target.matches(":focus-visible")) {
+          setHasFocus(true);
+        }
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHasFocus(false);
+      }}
       onMouseLeave={(e) => {
-        setIsPaused(false);
+        setIsHovering(false);
         handleMouseUp(e);
       }}
       onWheel={handleWheel}
@@ -414,7 +445,7 @@ export function PlatformPromoTicker({
         <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-center px-1 text-center sm:flex-1">
           <div
             key={activePromo.id}
-            className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 animate-in fade-in slide-in-from-bottom-1 duration-300"
+            className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
           >
             {/* Promo Discount Pill */}
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-100/90 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold sm:text-[13px]">
@@ -493,7 +524,10 @@ export function PlatformPromoTicker({
                 <button
                   key={idx}
                   type="button"
-                  onClick={() => setCurrentIndex(idx)}
+                  onClick={() => {
+                    holdRotation();
+                    setCurrentIndex(idx);
+                  }}
                   aria-label={`Go to promotion ${idx + 1}`}
                   className={`h-2 rounded-full transition-all cursor-pointer ${
                     idx === currentIndex
@@ -538,7 +572,10 @@ export function PlatformPromoTicker({
               <button
                 key={idx}
                 type="button"
-                onClick={() => setCurrentIndex(idx)}
+                onClick={() => {
+                    holdRotation();
+                    setCurrentIndex(idx);
+                  }}
                 aria-label={`Go to promotion ${idx + 1}`}
                 className={`h-1.5 rounded-full transition-all cursor-pointer ${
                   idx === currentIndex

@@ -35,16 +35,41 @@ function decodeJwtClaims(token: string): { sub?: string; role?: Role; exp?: numb
 }
 
 /**
- * Resolves verified authentication session from incoming HTTP-only cookies in Server Components.
+ * Each role has its own cookie pair (see the API's AUTH_COOKIE_NAMES), so a customer,
+ * a vendor and an admin can be signed in side by side in one browser. Customers keep the
+ * original names; vendor/admin fall back to them for sessions created before the split.
  */
-export async function getServerSession(): Promise<ServerSession> {
+const COOKIE_NAMES: Record<Role, { access: string[]; refresh: string[] }> = {
+  user: {
+    access: ["accessToken", "access_token"],
+    refresh: ["refreshToken", "refresh_token"],
+  },
+  vendor: {
+    access: ["vendorAccessToken", "accessToken", "access_token"],
+    refresh: ["vendorRefreshToken", "refreshToken", "refresh_token"],
+  },
+  admin: {
+    access: ["adminAccessToken", "accessToken", "access_token"],
+    refresh: ["adminRefreshToken", "refreshToken", "refresh_token"],
+  },
+};
+
+/**
+ * Resolves verified authentication session from incoming HTTP-only cookies in Server Components.
+ * `portal` selects which role's cookies are read (default: customer).
+ */
+export async function getServerSession(portal: Role = "user"): Promise<ServerSession> {
   const cookieStore = await cookies();
-  const accessToken =
-    cookieStore.get("accessToken")?.value ??
-    cookieStore.get("access_token")?.value;
-  const refreshToken =
-    cookieStore.get("refreshToken")?.value ??
-    cookieStore.get("refresh_token")?.value;
+  const names = COOKIE_NAMES[portal];
+  const firstCookie = (candidates: string[]) => {
+    for (const name of candidates) {
+      const value = cookieStore.get(name)?.value;
+      if (value) return value;
+    }
+    return undefined;
+  };
+  const accessToken = firstCookie(names.access);
+  const refreshToken = firstCookie(names.refresh);
   const secret = process.env.JWT_SECRET;
 
   // 1. If accessToken exists and secret is set, verify cryptographic signature
@@ -81,7 +106,7 @@ export async function getServerSession(): Promise<ServerSession> {
  * Automatically redirects unauthenticated or unauthorized visitors without hardcoding routes in proxy.
  */
 export async function enforceAuth(requiredRole?: Role, loginPath = "/auth/login") {
-  const session = await getServerSession();
+  const session = await getServerSession(requiredRole ?? "user");
 
   if (!session.isAuthenticated) {
     redirect(loginPath);

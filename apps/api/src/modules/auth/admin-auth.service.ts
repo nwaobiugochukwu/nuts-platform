@@ -205,6 +205,7 @@ export class AdminAuthService {
   async refresh(
     adminId: string,
     refreshId?: string,
+    sessionId?: string,
   ): Promise<{ user: AdminAuthUserDto; tokens: AuthSession['tokens'] }> {
     if (!refreshId) {
       throw new UnauthorizedException('Invalid refresh session');
@@ -218,6 +219,7 @@ export class AdminAuthService {
       sub: adminId,
       role: ROLE.ADMIN,
       refreshId,
+      ...(sessionId ? { sessionId } : {}),
     });
 
     return {
@@ -285,9 +287,15 @@ export class AdminAuthService {
     adminId: string,
     ipAddress?: string,
     userAgent?: string,
+    sessionId?: string,
   ): Promise<void> {
-    // Use consolidated session revocation which also invalidates the Redis stamp
-    await this.refreshSessionService.revokeSession(adminId, ROLE.ADMIN);
+    // Sign out THIS device only. Tokens issued before per-device sessions carry
+    // no session id and fall back to revoking the account's legacy session.
+    if (sessionId) {
+      await this.refreshSessionService.revokeAccountSession(sessionId);
+    } else {
+      await this.refreshSessionService.revokeSession(adminId, ROLE.ADMIN);
+    }
 
     await this.auditLog
       .log({
