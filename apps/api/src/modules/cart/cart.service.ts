@@ -6,8 +6,6 @@ import {
   Optional,
 } from '@nestjs/common';
 
-import { Cron, CronExpression } from '@nestjs/schedule';
-
 import { Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -1203,25 +1201,4 @@ export class CartService {
   // ---------------------------------------------------------------------------
   // ABANDONED CART CLEANUP
   // ---------------------------------------------------------------------------
-
-  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
-  async purgeAbandonedCarts(): Promise<void> {
-    const cutoff = new Date();
-
-    cutoff.setDate(cutoff.getDate() - 30);
-
-    this.logger.log(`Purging carts not updated since ${cutoff.toISOString()}`);
-
-    const result = await this.prisma.cart.deleteMany({
-      where: {
-        checkedOut: false,
-
-        updatedAt: {
-          lte: cutoff,
-        },
-      },
-    });
-
-    this.logger.log(`Purged ${result.count} abandoned carts`);
-  }
 }

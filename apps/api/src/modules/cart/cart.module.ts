@@ -7,6 +7,7 @@ import { DiscountsModule } from '@api/modules/discounts/discounts.module';
 import { CartController } from './controllers/cart.controller';
 import { CartService } from './cart.service';
 import { AbandonedCartCron } from './jobs/abandoned-cart.cron';
+import { AbandonedCartPurgeCron } from './jobs/abandoned-cart-purge.cron';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { AbandonedCartCron } from './jobs/abandoned-cart.cron';
     AnalyticsModule,
   ],
   controllers: [CartController],
-  providers: [CartService, AbandonedCartCron],
+  providers: [CartService, AbandonedCartCron, AbandonedCartPurgeCron],
   exports: [CartService],
 })
 export class CartModule {}
