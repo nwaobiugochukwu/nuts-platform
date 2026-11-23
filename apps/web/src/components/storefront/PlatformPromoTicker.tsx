@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronRight, Clock, Copy, Sparkles, Tag, X } from 
 import { usePlatformPromos } from "@/hooks/use-product-deals";
 import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 import { useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { toast } from "sonner";
 import { formatPrice } from "@/lib/util";
 
@@ -151,7 +152,11 @@ export function PlatformPromoTicker({
     return initialPromos ?? [];
   }, [rawPromos, initialPromos]);
 
-  const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
+  const { claim } = useClaimVoucher();
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const isVoucherClaimed = (code: string) =>
+    claimedCodes.includes(code) || appliedDiscounts.some((d) => d.code === code);
   const [currentIndex, setCurrentIndex] = useState(0);
   const dismissed = useSyncExternalStore(subscribeDismissed, readDismissed, () => EMPTY_DISMISS);
   const [isPaused, setIsPaused] = useState(false);
@@ -219,7 +224,7 @@ export function PlatformPromoTicker({
       ? computeCountdown(activePromo, now)
       : null;
   const isCurrentlyClaimed =
-    claimedCode === activePromo.code || appliedDiscount?.code === activePromo.code;
+    isVoucherClaimed(activePromo.code);
 
   const handleClaim = (e: React.MouseEvent) => {
     if (hasDragged.current) return;
@@ -230,11 +235,14 @@ export function PlatformPromoTicker({
       toast.info(`This voucher isn't active yet. It starts in ${countdown.formatted}.`);
       return;
     }
-    claimCode(activePromo.code);
-    setCopiedCode(activePromo.code);
-    setTimeout(() => {
-      setCopiedCode(null);
-    }, 2500);
+    const code = activePromo.code;
+    void claim(code).then((claimed) => {
+      if (!claimed) return;
+      setCopiedCode(code);
+      setTimeout(() => {
+        setCopiedCode(null);
+      }, 2500);
+    });
   };
 
   const handleDismiss = () => {

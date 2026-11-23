@@ -50,6 +50,7 @@ interface AdminDiscount {
   isActive: boolean;
   platformwide?: boolean;
   firstOrderOnly?: boolean;
+  stackable?: boolean;
   applicableCategoryIds?: string[];
   perUserUsageLimit?: number | null;
   minOrderAmount?: number | null;
@@ -131,6 +132,7 @@ const createDiscountSchema = z
     expiresAt: z.string().optional().or(z.literal("")),
     platformwide: z.boolean().default(true),
     firstOrderOnly: z.boolean().default(false),
+    stackable: z.boolean().default(false),
     applicableCategoryIds: z.array(z.string()).default([]),
   })
   .superRefine((data, ctx) => {
@@ -359,6 +361,7 @@ export default function AdminDiscountPage() {
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
+      stackable: false,
       applicableCategoryIds: [],
     },
   });
@@ -393,6 +396,7 @@ export default function AdminDiscountPage() {
     startsAt: values.startsAt ? new Date(values.startsAt).toISOString() : null,
     platformwide: values.platformwide ?? true,
     firstOrderOnly: values.firstOrderOnly ?? false,
+    stackable: values.stackable ?? false,
     applicableCategoryIds: values.applicableCategoryIds ?? [],
   });
 
@@ -487,6 +491,7 @@ export default function AdminDiscountPage() {
       expiresAt: "",
       platformwide: true,
       firstOrderOnly: false,
+      stackable: false,
       applicableCategoryIds: [],
     });
     setOpen(true);
@@ -507,6 +512,7 @@ export default function AdminDiscountPage() {
       expiresAt: toInputDateTime(discount.expiresAt),
       platformwide: discount.platformwide ?? true,
       firstOrderOnly: discount.firstOrderOnly ?? false,
+      stackable: discount.stackable ?? false,
       applicableCategoryIds: discount.applicableCategoryIds ?? [],
     });
     setOpen(true);
@@ -907,6 +913,21 @@ export default function AdminDiscountPage() {
                     <span className="font-semibold text-foreground block">First-Time Buyers Only</span>
                     <span className="text-muted-foreground block text-[11px] mt-0.5">
                       Strictly limit this discount code to new shoppers who haven&apos;t bought any item before. Existing buyers will be rejected at checkout.
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="stackable"
+                    {...methods.register("stackable")}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                  />
+                  <label htmlFor="stackable" className="text-xs cursor-pointer select-none">
+                    <span className="font-semibold text-foreground block">Can be combined with another voucher</span>
+                    <span className="text-muted-foreground block text-[11px] mt-0.5">
+                      Shoppers can use this together with ONE other combinable voucher (one store voucher plus one platform voucher). Leave off to make it exclusive.
                     </span>
                   </label>
                 </div>

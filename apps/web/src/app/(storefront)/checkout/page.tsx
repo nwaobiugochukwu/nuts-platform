@@ -13,7 +13,8 @@ import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
 import { clearClientCart } from "@/lib/cart-cleanup";
 import { formatPrice } from "@/lib/util";
 import { useAuthStore } from "@/zustand/auth";
-import { useDiscountStore } from "@/zustand/discount";
+import { MAX_CLAIMED_VOUCHERS, useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,8 +55,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const { appliedDiscount, claimedCode, claimCode, setAppliedDiscount, clearApplied, clearDiscount } = useDiscountStore();
-  const [discountCode, setDiscountCode] = useState(() => searchParams.get("code") ?? appliedDiscount?.code ?? claimedCode ?? "");
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const setAppliedDiscounts = useDiscountStore((state) => state.setAppliedDiscounts);
+  const { claim, release } = useClaimVoucher();
+  const [discountCode, setDiscountCode] = useState("");
+  // Room for one store voucher + one platform voucher.
+  const canAddVoucher = claimedCodes.length < MAX_CLAIMED_VOUCHERS;
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
   const [addressMode, setAddressMode] = useState<"default" | "new">("default");
   const [saveAsDefault, setSaveAsDefault] = useState(false);
@@ -113,8 +119,8 @@ export default function CheckoutPage() {
   // is a single path (useClaimedVoucherSync) that validates and applies it.
   const codeFromUrl = searchParams.get("code");
   useEffect(() => {
-    if (codeFromUrl) claimCode(codeFromUrl, { silent: true, copy: false });
-  }, [codeFromUrl, claimCode]);
+    if (codeFromUrl) void claim(codeFromUrl, { silent: true, copy: false });
+  }, [codeFromUrl, claim]);
 
   // Keeps the applied voucher valid for the live cart (and re-checks it when the
   // cart changes) instead of trusting an amount captured earlier.
@@ -198,36 +204,45 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!appliedDiscount) {
+    if (appliedDiscounts.length === 0) {
       checkoutMutation.mutate({ shippingAddress: shipping });
       return;
     }
 
-    // Re-validate the code against the live cart right before ordering so the
-    // shopper is never charged a different discount than the one displayed
-    // (the code may have expired, been exhausted, or the cart may have changed).
-    const discountToConfirm = appliedDiscount;
+    // Re-validate the vouchers against the live cart right before ordering so
+    // the shopper is never charged a different discount than the one displayed
+    // (a code may have expired, been exhausted, or the cart may have changed).
+    const codesToConfirm = appliedDiscounts.map((d) => d.code);
+    const confirmedTotal = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
     setIsApplyingDiscount(true);
     void (async () => {
       try {
-        const fresh = await cartService.previewDiscount(discountToConfirm.code);
-        if (fresh.data.discountAmount !== discountToConfirm.amount) {
-          setAppliedDiscount({
-            code: fresh.data.code,
-            amount: fresh.data.discountAmount,
-          });
+        const fresh = (await cartService.previewDiscount(codesToConfirm)).data;
+        const freshCodes = fresh.discounts.map((d) => d.code);
+        const unchanged =
+          freshCodes.length === codesToConfirm.length &&
+          freshCodes.every((code) => codesToConfirm.includes(code)) &&
+          fresh.discountAmount === confirmedTotal &&
+          (fresh.rejected ?? []).length === 0;
+        if (!unchanged) {
+          setAppliedDiscounts(
+            fresh.discounts.map((d) => ({ code: d.code, amount: d.amount, scope: d.scope })),
+          );
+          for (const rejected of fresh.rejected ?? []) {
+            if (rejected.permanent) void release(rejected.code);
+          }
           toast.info(
-            "Your discount was updated. Please review your new total, then place your order again.",
+            "Your vouchers were updated. Please review your new total, then place your order again.",
           );
           return;
         }
       } catch (err: unknown) {
-        clearDiscount();
-        setDiscountCode("");
+        // Strict single-voucher failure: it no longer applies.
+        setAppliedDiscounts([]);
         toast.error(
           getApiErrorMessage(
             err,
-            "This discount code is no longer valid and has been removed. Please review your total.",
+            "A voucher is no longer valid. Please review your total.",
           ),
         );
         return;
@@ -236,39 +251,32 @@ export default function CheckoutPage() {
       }
       checkoutMutation.mutate({
         shippingAddress: shipping,
-        discountCode: discountToConfirm.code,
+        discountCodes: codesToConfirm,
       });
     })();
   };
 
   const handleApplyDiscount = async () => {
-    if (!discountCode.trim() || checkoutMutation.isPending) return;
+    const code = discountCode.trim().toUpperCase();
+    if (!code || checkoutMutation.isPending) return;
     setIsApplyingDiscount(true);
     try {
-      const res = await cartService.previewDiscount(discountCode.trim());
-      const discountData = {
-        code: res.data.code,
-        amount: res.data.discountAmount,
-      };
-      setAppliedDiscount(discountData);
-      toast.success(`Discount code "${res.data.code}" applied!`);
+      // Validate the typed code on its own first (precise reason, and a bad
+      // code never disturbs a voucher that is already applied)...
+      await cartService.previewDiscount(code);
+      // ...then claim it; the sync hook checks how it combines with the rest.
+      if (await claim(code, { silent: true, copy: false })) setDiscountCode("");
     } catch (err: unknown) {
       toast.error(getApiErrorMessage(err, "Invalid or expired discount code"));
-      // Only withdraw the discount if THIS code failed; a mistyped new code
-      // must not remove a voucher that is already applied.
-      if (appliedDiscount?.code === discountCode.trim().toUpperCase()) {
-        clearApplied();
-      }
     } finally {
       setIsApplyingDiscount(false);
     }
   };
 
-  const handleRemoveDiscount = () => {
+  const handleRemoveDiscount = (code: string) => {
     if (checkoutMutation.isPending) return;
-    clearDiscount();
-    setDiscountCode("");
-    toast.info("Discount code removed");
+    void release(code);
+    toast.info(`Voucher ${code} removed`);
   };
 
   if (cartLoading) {
@@ -309,7 +317,7 @@ export default function CheckoutPage() {
   const subtotal = cartData?.cart.subtotal ?? 0;
   const deliveryCharge = cartData?.cart.deliveryCharge ?? 0;
   const serviceCharge = cartData?.cart.serviceCharge ?? 0;
-  const discountAmount = appliedDiscount?.amount ?? (cartData?.cart.discountAmount ?? 0);
+  const discountAmount = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
   const totalAmount = Math.max(0, subtotal + deliveryCharge + serviceCharge - discountAmount);
 
   if (items.length === 0) {
@@ -430,12 +438,15 @@ export default function CheckoutPage() {
                   <span>Service Fee</span>
                   <span className="font-medium text-foreground">{serviceCharge > 0 ? formatPrice(serviceCharge) : "₦0.00"}</span>
                 </div>
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <span>Discount</span>
-                    <span>-{formatPrice(discountAmount)}</span>
+                {appliedDiscounts.map((d) => (
+                  <div
+                    key={d.code}
+                    className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
+                  >
+                    <span>Discount ({d.code})</span>
+                    <span>-{formatPrice(d.amount)}</span>
                   </div>
-                )}
+                ))}
               </div>
 
               {/* Discount Code inside Mobile Summary */}
@@ -446,25 +457,33 @@ export default function CheckoutPage() {
                 >
                   Discount Code
                 </label>
-                {appliedDiscount ? (
-                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <div className="min-w-0 truncate">
-                        <span className="font-semibold text-foreground uppercase">{appliedDiscount.code}</span>
-                        <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(discountAmount)})</span>
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="min-w-0 truncate">
+                            <span className="font-semibold text-foreground uppercase">{d.code}</span>
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDiscount(d.code)}
+                          disabled={checkoutMutation.isPending}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
                       </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleRemoveDiscount}
-                      disabled={checkoutMutation.isPending}
-                      className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
-                    >
-                      Remove
-                    </button>
+                    ))}
                   </div>
-                ) : (
+                )}
+                {canAddVoucher && (
                   <div className="flex gap-2">
                     <Input
                       id="mobile-checkout-discount-code"
@@ -800,25 +819,33 @@ export default function CheckoutPage() {
               >
                 Discount Code
               </label>
-              {appliedDiscount ? (
-                <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 sm:p-3 text-xs">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <div className="min-w-0 truncate">
-                      <span className="font-semibold text-foreground uppercase">{appliedDiscount.code}</span>
-                      <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(discountAmount)})</span>
-                    </div>
+                {appliedDiscounts.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {appliedDiscounts.map((d) => (
+                      <div
+                        key={d.code}
+                        className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <div className="min-w-0 truncate">
+                            <span className="font-semibold text-foreground uppercase">{d.code}</span>
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDiscount(d.code)}
+                          disabled={checkoutMutation.isPending}
+                          className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveDiscount}
-                    disabled={checkoutMutation.isPending}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold shrink-0 pl-2 cursor-pointer disabled:opacity-50"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ) : (
+                )}
+                {canAddVoucher && (
                 <div className="flex gap-2">
                   <Input
                     id="checkout-discount-code"
@@ -870,12 +897,15 @@ export default function CheckoutPage() {
                 </span>
               </div>
 
-              {discountAmount > 0 && (
-                <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
-                  <span>Discount</span>
-                  <span>-{formatPrice(discountAmount)}</span>
+              {appliedDiscounts.map((d) => (
+                <div
+                  key={d.code}
+                  className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
+                >
+                  <span>Discount ({d.code})</span>
+                  <span>-{formatPrice(d.amount)}</span>
                 </div>
-              )}
+              ))}
 
               <div className="border-t border-border pt-3 flex justify-between text-base sm:text-lg font-bold text-foreground">
                 <span>Total Due</span>

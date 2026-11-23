@@ -3,36 +3,42 @@ import { toast } from "sonner";
 
 export interface AppliedDiscount {
   code: string;
+  /** What this voucher takes off the current cart. */
   amount: number;
+  scope?: "VENDOR" | "PLATFORM";
 }
 
-interface StoredClaim {
-  code: string;
+interface StoredClaims {
+  codes: string[];
   claimedAt: number;
   /** null = claimed as a guest (not yet bound to an account). */
   ownerId: string | null;
 }
 
-const STORAGE_KEY = "nuts.claimed-voucher.v1";
-/** A claim is a convenience, not an entitlement: it expires after a day. */
+const STORAGE_KEY = "nuts.claimed-vouchers.v2";
+/** A local claim is a convenience, not an entitlement: it expires after a day. */
 const CLAIM_TTL_MS = 24 * 60 * 60 * 1000;
+/** One store voucher + one platform voucher can be combined, so hold two. */
+export const MAX_CLAIMED_VOUCHERS = 2;
 
-function readClaim(): StoredClaim | null {
+function readClaims(): StoredClaims | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredClaim>;
+    const parsed = JSON.parse(raw) as Partial<StoredClaims>;
     if (
-      typeof parsed.code !== "string" ||
+      !Array.isArray(parsed.codes) ||
       typeof parsed.claimedAt !== "number" ||
       Date.now() - parsed.claimedAt > CLAIM_TTL_MS
     ) {
       window.localStorage.removeItem(STORAGE_KEY);
       return null;
     }
+    const codes = parsed.codes.filter((c): c is string => typeof c === "string");
+    if (codes.length === 0) return null;
     return {
-      code: parsed.code,
+      codes: codes.slice(-MAX_CLAIMED_VOUCHERS),
       claimedAt: parsed.claimedAt,
       ownerId: typeof parsed.ownerId === "string" ? parsed.ownerId : null,
     };
@@ -41,33 +47,49 @@ function readClaim(): StoredClaim | null {
   }
 }
 
-function writeClaim(claim: StoredClaim | null): void {
+function writeClaims(claims: StoredClaims | null): void {
   if (typeof window === "undefined") return;
   try {
-    if (claim) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(claim));
-    else window.localStorage.removeItem(STORAGE_KEY);
+    if (claims && claims.codes.length > 0) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(claims));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
   } catch {
-    // Storage blocked: the claim still works for this page view.
+    // Storage blocked: the claims still work for this page view.
   }
 }
 
+const normalize = (code: string) => code.trim().toUpperCase();
+
+/** Newest last; a re-claimed code moves to the end; only the newest N are kept. */
+function withClaim(codes: string[], code: string): string[] {
+  return [...codes.filter((c) => c !== code), code].slice(-MAX_CLAIMED_VOUCHERS);
+}
+
 interface DiscountStore {
-  /** Last server-confirmed discount for the current cart (in memory only). */
-  appliedDiscount: AppliedDiscount | null;
-  /** Voucher the shopper picked; survives refresh and the login redirect. */
-  claimedCode: string | null;
+  /** Server-confirmed discounts for the current cart (in memory only). */
+  appliedDiscounts: AppliedDiscount[];
+  /** Vouchers the shopper picked (newest last); survive refresh and the login redirect. */
+  claimedCodes: string[];
   /**
    * Account the store currently belongs to: a user id, null for a guest, or
    * undefined while auth has not resolved yet (nothing is judged until then).
    */
   identityId: string | null | undefined;
-  setAppliedDiscount: (discount: AppliedDiscount | null) => void;
+
+  setAppliedDiscounts: (discounts: AppliedDiscount[]) => void;
+  /** Local claim (add/refresh). Server reservation is handled by useClaimVoucher. */
   claimCode: (code: string, options?: { silent?: boolean; copy?: boolean }) => void;
-  /** Forget only the applied amount (e.g. cart no longer qualifies); keep the claim. */
+  /** Replace the claim list (e.g. reconciled with the server's wallet). */
+  setClaims: (codes: string[]) => void;
+  /** Forget ONE claimed voucher (and its applied discount). */
+  removeClaim: (code: string) => void;
+  /** Forget only the applied amounts (cart no longer qualifies); keep the claims. */
   clearApplied: () => void;
-  /** Forget the claim too (explicit removal, order placed, voucher invalid). */
+  /** Forget everything (order placed, explicit removal). */
   clearDiscount: () => void;
-  /** Load the persisted claim after hydration (identity is resolved later by syncIdentity). */
+  /** Load persisted claims after hydration (identity is resolved later by syncIdentity). */
   hydrate: () => void;
   /** Call whenever the signed-in account changes (login, logout, switch). */
   syncIdentity: (identityId: string | null) => void;
@@ -77,33 +99,32 @@ interface DiscountStore {
  * Voucher claim state.
  *
  * Identity rules (so claims neither get lost nor leak between people):
- *  - A claim made as a GUEST is adopted by whoever signs in next, so
+ *  - Claims made as a GUEST are adopted by whoever signs in next, so
  *    "claim, then log in" works, including across the login page redirect.
- *  - A claim owned by an account is dropped on logout and when a DIFFERENT
- *    account signs in, so one person's voucher never shows for another.
- *  - Claims expire after 24h.
- * The applied amount is never persisted; it is re-derived from the server.
+ *  - Claims owned by an account are dropped on logout and when a DIFFERENT
+ *    account signs in, so one person's vouchers never show for another.
+ *  - Local claims expire after 24h. A signed-in customer's real wallet lives on
+ *    the server (reservations included) and is reconciled into this store.
+ * Applied amounts are never persisted; they are re-derived from the server.
  */
 export const useDiscountStore = create<DiscountStore>((set, get) => ({
-  appliedDiscount: null,
-  claimedCode: null,
+  appliedDiscounts: [],
+  claimedCodes: [],
   identityId: undefined,
 
-  setAppliedDiscount: (discount) => set({ appliedDiscount: discount }),
+  setAppliedDiscounts: (discounts) => set({ appliedDiscounts: discounts }),
 
   claimCode: (rawCode, options) => {
-    const code = rawCode.trim().toUpperCase();
+    const code = normalize(rawCode);
     if (!code) return;
 
-    const previous = get().claimedCode;
-    writeClaim({ code, claimedAt: Date.now(), ownerId: get().identityId ?? null });
-    set({
-      claimedCode: code,
-      // Claiming a different voucher replaces whatever was applied, so the
-      // newly chosen one is evaluated instead of silently ignored.
-      appliedDiscount:
-        previous && previous !== code ? null : get().appliedDiscount,
+    const codes = withClaim(get().claimedCodes, code);
+    writeClaims({
+      codes,
+      claimedAt: Date.now(),
+      ownerId: get().identityId ?? null,
     });
+    set({ claimedCodes: codes });
 
     const announce = (copied: boolean) => {
       if (options?.silent) return;
@@ -128,27 +149,58 @@ export const useDiscountStore = create<DiscountStore>((set, get) => ({
     }
   },
 
-  clearApplied: () => set({ appliedDiscount: null }),
+  setClaims: (rawCodes) => {
+    const codes = [...new Set(rawCodes.map(normalize).filter(Boolean))].slice(
+      -MAX_CLAIMED_VOUCHERS,
+    );
+    writeClaims(
+      codes.length > 0
+        ? { codes, claimedAt: Date.now(), ownerId: get().identityId ?? null }
+        : null,
+    );
+    set((state) => ({
+      claimedCodes: codes,
+      appliedDiscounts: state.appliedDiscounts.filter((d) =>
+        codes.includes(d.code),
+      ),
+    }));
+  },
+
+  removeClaim: (rawCode) => {
+    const code = normalize(rawCode);
+    const codes = get().claimedCodes.filter((c) => c !== code);
+    writeClaims(
+      codes.length > 0
+        ? { codes, claimedAt: Date.now(), ownerId: get().identityId ?? null }
+        : null,
+    );
+    set((state) => ({
+      claimedCodes: codes,
+      appliedDiscounts: state.appliedDiscounts.filter((d) => d.code !== code),
+    }));
+  },
+
+  clearApplied: () => set({ appliedDiscounts: [] }),
 
   clearDiscount: () => {
-    writeClaim(null);
-    set({ appliedDiscount: null, claimedCode: null });
+    writeClaims(null);
+    set({ appliedDiscounts: [], claimedCodes: [] });
   },
 
   hydrate: () => {
     // Auth has usually not resolved yet, so ownership is NOT judged here (that
-    // would wrongly drop an account's claim on every page load). Show the
-    // stored claim; syncIdentity() applies the ownership rules once the
-    // account is known.
-    const stored = readClaim();
-    set({ claimedCode: stored?.code ?? null });
+    // would wrongly drop an account's claims on every page load). Show what is
+    // stored; syncIdentity() applies the ownership rules once the account is
+    // known.
+    const stored = readClaims();
+    set({ claimedCodes: stored?.codes ?? [] });
 
     // Keep other tabs in step (claim, release, logout).
     if (typeof window !== "undefined" && !crossTabBound) {
       crossTabBound = true;
       window.addEventListener("storage", (event) => {
         if (event.key !== STORAGE_KEY) return;
-        const next = readClaim();
+        const next = readClaims();
         const current = get();
         if (
           next &&
@@ -158,12 +210,12 @@ export const useDiscountStore = create<DiscountStore>((set, get) => ({
         ) {
           return;
         }
+        const codes = next?.codes ?? [];
         set({
-          claimedCode: next?.code ?? null,
-          appliedDiscount:
-            next?.code === current.appliedDiscount?.code
-              ? current.appliedDiscount
-              : null,
+          claimedCodes: codes,
+          appliedDiscounts: current.appliedDiscounts.filter((d) =>
+            codes.includes(d.code),
+          ),
         });
       });
     }
@@ -172,37 +224,37 @@ export const useDiscountStore = create<DiscountStore>((set, get) => ({
   syncIdentity: (identityId) => {
     const previous = get().identityId;
     if (previous === identityId) return;
-    set({ identityId, appliedDiscount: null });
+    set({ identityId, appliedDiscounts: [] });
 
-    const dropClaim = () => {
-      writeClaim(null);
-      set({ claimedCode: null });
+    const dropClaims = () => {
+      writeClaims(null);
+      set({ claimedCodes: [] });
     };
 
     // Leaving an account (logout, or a different account signing in): whatever
     // was claimed belonged to the account that is gone.
     if (previous && previous !== identityId) {
-      dropClaim();
+      dropClaims();
       return;
     }
 
     // From here the store was unresolved (page load) or a guest.
-    const stored = readClaim();
-    // Nothing persisted (e.g. storage blocked): keep the in-memory claim.
+    const stored = readClaims();
+    // Nothing persisted (e.g. storage blocked): keep the in-memory claims.
     if (!stored) return;
 
     if (identityId === null) {
       // Resolved as a guest: an account-owned leftover (expired session) is
       // not theirs to use.
-      if (stored.ownerId !== null) dropClaim();
+      if (stored.ownerId !== null) dropClaims();
       return;
     }
     if (stored.ownerId === null) {
-      // A guest's claim is adopted by the account that just signed in.
-      writeClaim({ ...stored, ownerId: identityId });
-      set({ claimedCode: stored.code });
+      // A guest's claims are adopted by the account that just signed in.
+      writeClaims({ ...stored, ownerId: identityId });
+      set({ claimedCodes: stored.codes });
     } else if (stored.ownerId !== identityId) {
-      dropClaim();
+      dropClaims();
     }
   },
 }));

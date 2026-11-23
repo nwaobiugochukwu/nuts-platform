@@ -13,6 +13,7 @@ import { resolveProductDetailPath } from "@/lib/product-path";
 import { storeRecommendationAttribution } from "@/lib/recommendation-attribution";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { Heart,Plus,ShoppingBag,Tag } from "lucide-react";
 import Image from "next/image";
 import Link from "@/components/navigation/AppLink";
@@ -96,7 +97,11 @@ export function ProductCard({
   const canPurchase = capabilities ? capabilities.canPurchase : !isAuthenticated;
   const { toggleItem, isInWishlist } = useWishlist();
   const { addItem: addToCart } = useCart();
-  const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
+  const { claim } = useClaimVoucher();
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const isVoucherClaimed = (code: string) =>
+    claimedCodes.includes(code) || appliedDiscounts.some((d) => d.code === code);
   const [isWishlistPending, setIsWishlistPending] = useState(false);
   const isLiked = isInWishlist(product.id);
 
@@ -105,13 +110,13 @@ export function ProductCard({
   const effectiveDeal = deal ?? null;
 
   const isDealClaimed =
-    effectiveDeal ? (claimedCode === effectiveDeal.code || appliedDiscount?.code === effectiveDeal.code) : false;
+    effectiveDeal ? isVoucherClaimed(effectiveDeal.code) : false;
 
   const handleClaimDeal = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (effectiveDeal) {
-      claimCode(effectiveDeal.code);
+      void claim(effectiveDeal.code);
     }
   };
   const trackRecommendationClick = () => {

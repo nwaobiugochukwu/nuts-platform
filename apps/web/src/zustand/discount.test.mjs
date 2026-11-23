@@ -11,115 +11,149 @@ globalThis.window = {
   },
   addEventListener: () => {},
 };
-Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async () => {} } }, configurable: true });
+Object.defineProperty(globalThis, "navigator", {
+  value: { clipboard: { writeText: async () => {} } },
+  configurable: true,
+});
 
-const { useDiscountStore } = await import("./discount.ts");
-const KEY = "nuts.claimed-voucher.v1";
+const { useDiscountStore, MAX_CLAIMED_VOUCHERS } = await import("./discount.ts");
+const KEY = "nuts.claimed-vouchers.v2";
 const state = () => useDiscountStore.getState();
+const claim = (code) => state().claimCode(code, { silent: true, copy: false });
 
 beforeEach(() => {
   storage.clear();
   useDiscountStore.setState({
-    appliedDiscount: null,
-    claimedCode: null,
+    appliedDiscounts: [],
+    claimedCodes: [],
     identityId: undefined,
   });
 });
 
-test("a guest's claim is adopted by the account that signs in", () => {
+test("a guest's claims are adopted by the account that signs in", () => {
   state().syncIdentity(null);
-  state().claimCode("save10", { silent: true, copy: false });
-  assert.equal(state().claimedCode, "SAVE10");
+  claim("save10");
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
 
   state().syncIdentity("user-1");
-  assert.equal(state().claimedCode, "SAVE10");
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
   assert.equal(JSON.parse(storage.get(KEY)).ownerId, "user-1");
 });
 
-test("a claim survives a page reload for the same account", () => {
+test("claims survive a page reload for the same account", () => {
   state().syncIdentity("user-1");
-  state().claimCode("SAVE10", { silent: true, copy: false });
+  claim("SAVE10");
 
   // Fresh page: nothing in memory, identity not yet resolved.
-  useDiscountStore.setState({ claimedCode: null, identityId: undefined });
+  useDiscountStore.setState({ claimedCodes: [], identityId: undefined });
   state().hydrate();
-  assert.equal(state().claimedCode, "SAVE10");
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
 
   state().syncIdentity("user-1");
-  assert.equal(state().claimedCode, "SAVE10");
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
 });
 
-test("logout drops an account's claim", () => {
+test("logout drops an account's claims", () => {
   state().syncIdentity("user-1");
-  state().claimCode("SAVE10", { silent: true, copy: false });
+  claim("SAVE10");
   state().syncIdentity(null);
-  assert.equal(state().claimedCode, null);
+  assert.deepEqual(state().claimedCodes, []);
   assert.equal(storage.has(KEY), false);
 });
 
-test("a different account never inherits someone else's claim", () => {
+test("a different account never inherits someone else's claims", () => {
   state().syncIdentity("user-1");
-  state().claimCode("SAVE10", { silent: true, copy: false });
+  claim("SAVE10");
   state().syncIdentity("user-2");
-  assert.equal(state().claimedCode, null);
+  assert.deepEqual(state().claimedCodes, []);
 });
 
 test("an account-owned leftover is dropped when the session resolves as guest", () => {
-  storage.set(KEY, JSON.stringify({ code: "SAVE10", claimedAt: Date.now(), ownerId: "user-1" }));
+  storage.set(
+    KEY,
+    JSON.stringify({ codes: ["SAVE10"], claimedAt: Date.now(), ownerId: "user-1" }),
+  );
   state().hydrate();
-  assert.equal(state().claimedCode, "SAVE10"); // shown until auth resolves
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]); // shown until auth resolves
   state().syncIdentity(null);
-  assert.equal(state().claimedCode, null);
+  assert.deepEqual(state().claimedCodes, []);
 });
 
 test("claims expire after 24 hours", () => {
   storage.set(
     KEY,
-    JSON.stringify({ code: "OLD", claimedAt: Date.now() - 25 * 60 * 60 * 1000, ownerId: null }),
+    JSON.stringify({
+      codes: ["OLD"],
+      claimedAt: Date.now() - 25 * 60 * 60 * 1000,
+      ownerId: null,
+    }),
   );
   state().hydrate();
-  assert.equal(state().claimedCode, null);
+  assert.deepEqual(state().claimedCodes, []);
   assert.equal(storage.has(KEY), false);
 });
 
-test("claiming a different voucher replaces the applied discount so it is re-evaluated", () => {
+test("two vouchers can be held (one store + one platform); a third replaces the oldest", () => {
+  assert.equal(MAX_CLAIMED_VOUCHERS, 2);
   state().syncIdentity("user-1");
-  state().claimCode("OLD10", { silent: true, copy: false });
-  state().setAppliedDiscount({ code: "OLD10", amount: 500 });
+  claim("STORE20");
+  claim("PLAT10");
+  assert.deepEqual(state().claimedCodes, ["STORE20", "PLAT10"]);
 
-  state().claimCode("BIG50", { silent: true, copy: false });
-  assert.equal(state().claimedCode, "BIG50");
-  assert.equal(state().appliedDiscount, null);
+  claim("NEWER5");
+  assert.deepEqual(state().claimedCodes, ["PLAT10", "NEWER5"]);
 });
 
-test("re-claiming the same voucher keeps the applied discount", () => {
+test("re-claiming a held voucher refreshes it instead of duplicating", () => {
   state().syncIdentity("user-1");
-  state().claimCode("SAVE10", { silent: true, copy: false });
-  state().setAppliedDiscount({ code: "SAVE10", amount: 500 });
-  state().claimCode("save10", { silent: true, copy: false });
-  assert.deepEqual(state().appliedDiscount, { code: "SAVE10", amount: 500 });
+  claim("STORE20");
+  claim("PLAT10");
+  claim("store20");
+  assert.deepEqual(state().claimedCodes, ["PLAT10", "STORE20"]);
 });
 
-test("clearApplied keeps the claim; clearDiscount removes both", () => {
+test("removeClaim forgets one voucher and its applied discount only", () => {
   state().syncIdentity("user-1");
-  state().claimCode("SAVE10", { silent: true, copy: false });
-  state().setAppliedDiscount({ code: "SAVE10", amount: 500 });
+  claim("STORE20");
+  claim("PLAT10");
+  state().setAppliedDiscounts([
+    { code: "STORE20", amount: 2000 },
+    { code: "PLAT10", amount: 1800 },
+  ]);
+
+  state().removeClaim("store20");
+  assert.deepEqual(state().claimedCodes, ["PLAT10"]);
+  assert.deepEqual(state().appliedDiscounts, [{ code: "PLAT10", amount: 1800 }]);
+});
+
+test("clearApplied keeps the claims; clearDiscount removes everything", () => {
+  state().syncIdentity("user-1");
+  claim("SAVE10");
+  state().setAppliedDiscounts([{ code: "SAVE10", amount: 500 }]);
 
   state().clearApplied();
-  assert.equal(state().appliedDiscount, null);
-  assert.equal(state().claimedCode, "SAVE10");
+  assert.deepEqual(state().appliedDiscounts, []);
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
 
   state().clearDiscount();
-  assert.equal(state().claimedCode, null);
+  assert.deepEqual(state().claimedCodes, []);
   assert.equal(storage.has(KEY), false);
 });
 
-test("with storage blocked the in-memory claim survives identity resolution", () => {
+test("setClaims reconciles with the server wallet (newest two kept, applied pruned)", () => {
+  state().syncIdentity("user-1");
+  state().setAppliedDiscounts([{ code: "GONE", amount: 100 }]);
+  state().setClaims(["a1", "b2", "c3"]);
+  assert.deepEqual(state().claimedCodes, ["B2", "C3"]);
+  assert.deepEqual(state().appliedDiscounts, []);
+});
+
+test("with storage blocked the in-memory claims survive identity resolution", () => {
   globalThis.window.localStorage.setItem = () => {
     throw new Error("blocked");
   };
   state().syncIdentity(null);
-  state().claimCode("SAVE10", { silent: true, copy: false });
+  claim("SAVE10");
   state().syncIdentity("user-1");
-  assert.equal(state().claimedCode, "SAVE10");
+  assert.deepEqual(state().claimedCodes, ["SAVE10"]);
 });

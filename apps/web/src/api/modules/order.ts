@@ -16,7 +16,10 @@ export interface CheckoutPayload {
     state: string;
     country?: string;
   };
+  /** Legacy single code. */
   discountCode?: string;
+  /** Up to two combinable vouchers (one store + one platform). */
+  discountCodes?: string[];
   addressId?: string;
 }
 

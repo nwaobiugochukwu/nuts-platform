@@ -51,6 +51,7 @@ interface VendorDiscount {
   expiresAt?: string | null;
   description?: string | null;
   applicableProductIds?: string[];
+  stackable?: boolean;
 }
 
 interface VendorProductOption {
@@ -136,6 +137,7 @@ const createDiscountSchema = z
     usageLimit: optionalPositiveInt("Global usage limit"),
     expiresAt: z.string().optional().or(z.literal("")),
     applicableProductIds: z.array(z.string()).default([]),
+    stackable: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     if (data.type === "PERCENTAGE" && data.value > VENDOR_MAX_DISCOUNT_PERCENT) {
@@ -207,6 +209,7 @@ export default function DashboardDiscountPage() {
       usageLimit: undefined,
       expiresAt: "",
       applicableProductIds: [],
+      stackable: false,
     },
   });
 
@@ -229,6 +232,7 @@ export default function DashboardDiscountPage() {
         : null,
     expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
     applicableProductIds: values.applicableProductIds?.length ? values.applicableProductIds : [],
+    stackable: values.stackable ?? false,
   });
 
   const refreshDiscounts = () =>
@@ -314,6 +318,7 @@ export default function DashboardDiscountPage() {
       usageLimit: undefined,
       expiresAt: "",
       applicableProductIds: [],
+      stackable: false,
     });
     setOpen(true);
   };
@@ -335,6 +340,7 @@ export default function DashboardDiscountPage() {
       usageLimit: discount.usageLimit ?? undefined,
       expiresAt: toInputDateTime(discount.expiresAt),
       applicableProductIds: discount.applicableProductIds ?? [],
+      stackable: discount.stackable ?? false,
     });
     setOpen(true);
   };
@@ -667,6 +673,21 @@ export default function DashboardDiscountPage() {
                 label="Expiration Date & Time (Optional)"
                 type="datetime-local"
               />
+
+              <div className="flex items-start gap-3 rounded-2xl border border-border/80 bg-muted/20 p-3 sm:p-4">
+                <input
+                  type="checkbox"
+                  id="stackable"
+                  {...methods.register("stackable")}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                />
+                <label htmlFor="stackable" className="text-xs cursor-pointer select-none">
+                  <span className="font-semibold text-foreground block">Can be combined with a platform voucher</span>
+                  <span className="text-muted-foreground block text-[11px] mt-0.5">
+                    Shoppers can use this store voucher together with one combinable platform voucher. The platform voucher then applies to what is left. Leave off to make it exclusive.
+                  </span>
+                </label>
+              </div>
 
               {/* Product Application Scope */}
               <div className="space-y-2 rounded-2xl border border-border/80 bg-muted/20 p-3 sm:p-4">

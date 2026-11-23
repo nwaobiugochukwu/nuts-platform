@@ -41,7 +41,11 @@ export const cartService = {
   clear() {
     return userApi.delete<CartResponseDto>("/cart");
   },
-  previewDiscount(code: string) {
-    return userApi.get<DiscountPreviewDto>(`/cart/discount-preview?code=${encodeURIComponent(code)}`);
+  /** One code (throws if it cannot apply) or up to two combinable codes (per-code results). */
+  previewDiscount(codeOrCodes: string | string[]) {
+    const codes = Array.isArray(codeOrCodes) ? codeOrCodes : [codeOrCodes];
+    return userApi.get<DiscountPreviewDto>("/cart/discount-preview", {
+      params: { codes: codes.join(",") },
+    });
   },
 };

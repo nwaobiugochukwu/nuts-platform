@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Copy, Sparkles, Tag, Ticket } from "lucide-react";
 import { useProductDeal } from "@/hooks/use-product-deals";
 import { useDiscountStore } from "@/zustand/discount";
+import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { formatPrice } from "@/lib/util";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 
@@ -26,7 +27,11 @@ function calculateSavings(voucher: ProductVoucherSummaryDto, price: number): num
 
 export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDockProps) {
   const { data: dealData, isLoading } = useProductDeal(productId);
-  const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
+  const { claim } = useClaimVoucher();
+  const claimedCodes = useDiscountStore((state) => state.claimedCodes);
+  const appliedDiscounts = useDiscountStore((state) => state.appliedDiscounts);
+  const isVoucherClaimed = (code: string) =>
+    claimedCodes.includes(code) || appliedDiscounts.some((d) => d.code === code);
   const [justClaimedCode, setJustClaimedCode] = useState<string | null>(null);
 
   const rawVouchers = dealData?.allVouchers;
@@ -42,11 +47,13 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
 
   const handleClaim = (voucher: ProductVoucherSummaryDto, e: React.MouseEvent) => {
     e.stopPropagation();
-    claimCode(voucher.code);
-    setJustClaimedCode(voucher.code);
-    setTimeout(() => {
-      setJustClaimedCode(null);
-    }, 3000);
+    void claim(voucher.code).then((claimed) => {
+      if (!claimed) return;
+      setJustClaimedCode(voucher.code);
+      setTimeout(() => {
+        setJustClaimedCode(null);
+      }, 3000);
+    });
   };
 
   return (
@@ -75,9 +82,7 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
       <div className="mt-3 space-y-2.5">
         {vouchers.map((voucher) => {
           const isClaimed =
-            claimedCode === voucher.code ||
-            appliedDiscount?.code === voucher.code ||
-            justClaimedCode === voucher.code;
+            isVoucherClaimed(voucher.code) || justClaimedCode === voucher.code;
 
           const isBest = voucher.code === bestVoucherCode;
           const liveSavings = calculateSavings(voucher, currentPrice);

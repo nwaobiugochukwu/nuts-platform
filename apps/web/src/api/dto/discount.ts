@@ -16,6 +16,7 @@ export interface DiscountCodeResponseDto {
   isActive: boolean;
   platformwide: boolean;
   firstOrderOnly?: boolean;
+  stackable?: boolean;
   startsAt?: Date | null;
   expiresAt?: Date | null;
   scope: DiscountCodeScope;
