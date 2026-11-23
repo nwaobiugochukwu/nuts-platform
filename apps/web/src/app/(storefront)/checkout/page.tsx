@@ -1,13 +1,13 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { cartService,orderService,paymentService,userService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { CheckoutPayload } from "@/api/order";
-import { FormInput } from "@/component/form/FormInput";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
+import { FormInput } from "@/components/form/FormInput";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
 import { clearClientCart } from "@/lib/cart-cleanup";

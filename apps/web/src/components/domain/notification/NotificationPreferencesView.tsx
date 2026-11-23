@@ -3,7 +3,7 @@
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import {
   Bell,
   CreditCard,

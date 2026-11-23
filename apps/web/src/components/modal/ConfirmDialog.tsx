@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { AlertTriangle,Info,Trash2 } from "lucide-react";
 import { type ReactNode } from "react";
 

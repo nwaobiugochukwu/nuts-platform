@@ -1,8 +1,8 @@
 "use client";
 
-import { PublicOnlyLayout } from "@/component/auth/PublicOnlyLayout";
-import { FormInput } from "@/component/form/FormInput";
-import { Button } from "@/component/ui/button";
+import { PublicOnlyLayout } from "@/components/auth/PublicOnlyLayout";
+import { FormInput } from "@/components/form/FormInput";
+import { Button } from "@/components/ui/button";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@/lib/zod-resolver";

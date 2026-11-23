@@ -2,21 +2,21 @@
 
 import { vendorApi } from "@/api/core/client";
 import { getApiErrorMessage } from "@/api/core/error";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+import { ManagementToolbar } from "@/components/common/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import { zodResolver } from "@/lib/zod-resolver";

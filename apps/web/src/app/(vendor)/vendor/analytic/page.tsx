@@ -1,7 +1,7 @@
 "use client";
 
 import { vendorAnalyticsService } from "@/api";
-import { StatCard } from "@/component/common/PageHeader";
+import { StatCard } from "@/components/common/PageHeader";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import {

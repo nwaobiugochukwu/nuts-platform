@@ -1,8 +1,8 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { adminApi, UPLOAD_REQUEST_TIMEOUT_MS, vendorApi } from "@/api/core/client";
-import { Label } from "@/component/ui/label";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/util";
 import {
 AlertCircle,

@@ -3,7 +3,7 @@
 import { reviewService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

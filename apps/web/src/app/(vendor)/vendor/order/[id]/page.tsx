@@ -3,11 +3,11 @@
 import { dashboardOrderService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { OrderStatus } from "@/api/core/types";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
-import { Button } from "@/component/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/component/ui/card";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { OrderStatusBadge } from "@/components/order/OrderItemSnapshot";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { queryKey } from "@/lib/query-key";
 import { formatDate, formatPrice } from "@/lib/util";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

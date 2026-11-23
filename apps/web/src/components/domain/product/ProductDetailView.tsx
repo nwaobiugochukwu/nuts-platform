@@ -1,6 +1,6 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { analyticsEventService, productService, recommendationService } from "@/api";
 import type { RecommendationAttribution } from "@/api/modules/analytics";
 import type { AddedFromType } from "@/api/dto/cart";
@@ -10,11 +10,11 @@ import type {
   PublicVariantSummaryDto,
 } from "@/api/dto/product";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
-import { ProductReviews } from "@/component/review/ProductReviews";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { RecommendationProductCard } from "@/components/product/RecommendationProductCard";
+import { ProductReviews } from "@/components/review/ProductReviews";
 import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDock";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";

@@ -2,7 +2,7 @@
 
 import type { FeaturedVendorDto } from "@/api/dto/vendor";
 import { analyticsEventService, type RecommendationAttribution } from "@/api/modules/analytics";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import Link from "@/components/navigation/AppLink";
 import { useVendorFollowing } from "@/hooks/use-vendor-following";
 import { useAuthStore } from "@/zustand/auth";

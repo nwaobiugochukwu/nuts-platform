@@ -3,7 +3,7 @@
 import type { ProductCardDto } from "@/api/dto/product";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 import type { RecommendationAttribution, RecommendationSurface } from "@/api/modules/analytics";
-import { ProductCard } from "@/component/product/ProductCard";
+import { ProductCard } from "@/components/product/ProductCard";
 import { useRecommendationImpression } from "@/hooks/use-recommendation-impression";
 import { useAuthStore } from "@/zustand/auth";
 import { useMemo, useRef } from "react";

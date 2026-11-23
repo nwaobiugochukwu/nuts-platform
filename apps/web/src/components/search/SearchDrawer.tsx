@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ChevronRight, History, Layers3, Loader2, Search, ShoppingBag, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { publicApi } from "@/api/core/client";
 import { recommendationService } from "@/api/modules/recommendations";
 import { analyticsEventService, type RecommendationAttribution } from "@/api/modules/analytics";

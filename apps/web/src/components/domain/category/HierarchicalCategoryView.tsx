@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "@/components/navigation/AppLink";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ProductCard } from "@/component/product/ProductCard";
-import { ProductDetailView } from "@/component/product/ProductDetailView";
-import { ProductGridSkeleton } from "@/component/product/ProductGridSkeleton";
-import { CategoryFilterDrawer } from "@/component/category/CategoryFilterDrawer";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ProductCard } from "@/components/product/ProductCard";
+import { ProductDetailView } from "@/components/product/ProductDetailView";
+import { ProductGridSkeleton } from "@/components/product/ProductGridSkeleton";
+import { CategoryFilterDrawer } from "@/components/category/CategoryFilterDrawer";
 import { useQuery } from "@tanstack/react-query";
 import { productService } from "@/api";
 import type { CategoryResponseDto } from "@/api/dto/category";

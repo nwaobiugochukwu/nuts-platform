@@ -1,14 +1,14 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { orderService,paymentService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
-import { WriteReviewDialog } from "@/component/review/WriteReviewDialog";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardHeader,CardTitle } from "@/component/ui/card";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { OrderStatusBadge } from "@/components/order/OrderItemSnapshot";
+import { WriteReviewDialog } from "@/components/review/WriteReviewDialog";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
 import { formatDate,formatPrice } from "@/lib/util";

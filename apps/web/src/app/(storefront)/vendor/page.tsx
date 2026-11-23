@@ -1,5 +1,5 @@
 import { serverGetCategories,serverGetVendors } from "@/api/server";
-import { VendorsPageView } from "@/component/domain/vendor/VendorsPageView";
+import { VendorsPageView } from "@/components/domain/vendor/VendorsPageView";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {

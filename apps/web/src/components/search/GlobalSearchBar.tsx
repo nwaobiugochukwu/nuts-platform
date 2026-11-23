@@ -1,6 +1,6 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { publicApi } from "@/api/core/client";
 import { formatPrice } from "@/lib/util";
 import { useQuery } from "@tanstack/react-query";

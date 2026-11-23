@@ -2,8 +2,8 @@
 
 import type { AppNotification, NotificationType } from "@/api/notifications";
 import { notificationsApiForRole } from "@/api/notifications";
-import { Button } from "@/component/ui/button";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { queryKey } from "@/lib/query-key";
 import {
   notificationListPath,

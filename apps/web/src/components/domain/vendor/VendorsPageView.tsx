@@ -1,11 +1,11 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { publicVendorService } from "@/api";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { VendorResponseDto } from "@/api/dto/vendor";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
-import { Input } from "@/component/ui/input";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
+import { Input } from "@/components/ui/input";
 import { useQuery } from "@tanstack/react-query";
 import { Search,Sparkles,Store,X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";

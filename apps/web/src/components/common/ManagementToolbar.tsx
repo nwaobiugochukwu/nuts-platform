@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/util";
 import { RefreshCw,Search,X } from "lucide-react";
 import { type ReactNode } from "react";

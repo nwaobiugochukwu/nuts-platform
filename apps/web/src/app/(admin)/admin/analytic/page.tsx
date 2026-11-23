@@ -1,7 +1,7 @@
 "use client";
 
 import { adminAnalyticsService } from "@/api/analytics";
-import { StatCard } from "@/component/common/PageHeader";
+import { StatCard } from "@/components/common/PageHeader";
 import { formatPrice } from "@/lib/util";
 import {
   CalendarPeriodFilter,

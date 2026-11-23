@@ -1,6 +1,6 @@
 "use client";
 
-import { Label } from "@/component/ui/label";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/util";
 import { useFormContext,type FieldError } from "react-hook-form";
 

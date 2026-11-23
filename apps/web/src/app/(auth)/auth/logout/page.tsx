@@ -2,7 +2,7 @@
 
 import { useAuthStore } from "@/zustand/auth";
 import { logoutWithFeedback } from "@/lib/logout";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 export default function LogoutPage() {

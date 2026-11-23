@@ -1,7 +1,7 @@
 "use client";
 // @refresh reset
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { cartService,orderService,paymentService,userService } from "@/api";
 import type {
 CartItemResponseDto,
@@ -10,9 +10,9 @@ DiscountPreviewDto,
 import type { CheckoutResponseDto } from "@/api/dto/order";
 import type { PaymentResponseDto } from "@/api/dto/payment";
 import type { CheckoutPayload } from "@/api/order";
-import { Button } from "@/component/ui/button";
-import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/component/ui/dialog";
-import { Input } from "@/component/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
 import { useDiscountStore } from "@/zustand/discount";
 import { useWishlist } from "@/hooks/use-wishlist";

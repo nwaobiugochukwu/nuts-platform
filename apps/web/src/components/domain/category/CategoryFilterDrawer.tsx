@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Check, RotateCcw, Search, SlidersHorizontal, Store, Tag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 

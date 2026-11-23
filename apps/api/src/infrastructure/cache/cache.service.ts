@@ -319,15 +319,36 @@ export class CacheService {
   ): Promise<void> {
     const ids = [...new Set(identities.filter((id): id is string => !!id))];
     if (ids.length === 0) return;
-    const dayKey = new Date().toISOString().slice(0, 10);
-    await Promise.all(
+    // The daily marketplace mix is deterministic per shopper+day (it does not
+    // depend on behavioural signals), so it is intentionally NOT cleared here.
+    await this.delMany(
       ids.flatMap((id) => [
-        this.del(`recommendations:for-you:${id}`),
-        this.del(`recommendations:search-discover:${id}`),
-        this.del(`recommendations:stores:${id}`),
-        this.del(`recommendations:mix:${id}:${dayKey}`),
+        `recommendations:for-you:${id}`,
+        `recommendations:search-discover:${id}`,
+        `recommendations:stores:${id}`,
       ]),
     );
+  }
+
+  /**
+   * Deletes several keys with ONE Redis round trip (vs one per key), while
+   * still dropping local copies and in-flight computations for each key.
+   */
+  async delMany(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    for (const key of keys) {
+      this.invalidateInFlight(key);
+      this.forgetLocally(key);
+    }
+    try {
+      await this.redis.del(...keys);
+    } catch (error) {
+      this.logger.warn(
+        `Redis DEL failed for ${keys.length} keys: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /**

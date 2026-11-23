@@ -1,15 +1,15 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
-import { OrderStatusBadge } from "@/component/order/OrderItemSnapshot";
+import { RemoteImage } from "@/components/ui/RemoteImage";
+import { OrderStatusBadge } from "@/components/order/OrderItemSnapshot";
 import type { CheckoutShippingAddressDto } from "@/api/dto/order";
 import type { OrderStatus } from "@/api/core/types";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogHeader
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { formatPrice } from "@/lib/util";
 import {
 Calendar,

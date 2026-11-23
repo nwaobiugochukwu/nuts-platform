@@ -1,7 +1,7 @@
 "use client";
 
 import type { AppNotification,NotificationType } from "@/api/notifications";
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/hooks/use-notifications";
 import {
   notificationDetailPath,

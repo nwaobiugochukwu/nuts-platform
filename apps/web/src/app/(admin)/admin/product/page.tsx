@@ -1,31 +1,31 @@
 "use client";
 
-import { RemoteImage } from "@/component/ui/RemoteImage";
+import { RemoteImage } from "@/components/ui/RemoteImage";
 import { adminCategoryService } from "@/api";
 import { adminApi } from "@/api/core/client";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { AdminVariantResponseDto } from "@/api/dto/variant";
-import { ManagementToolbar } from "@/component/common/ManagementToolbar";
-import { DataTable,type Column } from "@/component/data/DataTable";
-import { CategoryPicker } from "@/component/form/CategoryPicker";
-import { FormInput } from "@/component/form/FormInput";
-import { FormSelect } from "@/component/form/FormSelect";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ImageUpload } from "@/component/form/ImageUpload";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
+import { ManagementToolbar } from "@/components/common/ManagementToolbar";
+import { DataTable,type Column } from "@/components/data/DataTable";
+import { CategoryPicker } from "@/components/form/CategoryPicker";
+import { FormInput } from "@/components/form/FormInput";
+import { FormSelect } from "@/components/form/FormSelect";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ImageUpload } from "@/components/form/ImageUpload";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import {
 ProductVariantBuilder,
 type ProductVariantItem,
-} from "@/component/product/ProductVariantBuilder";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
+} from "@/components/product/ProductVariantBuilder";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 Dialog,
 DialogContent,
 DialogFooter,
 DialogHeader,
 DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";

@@ -2,14 +2,14 @@
 
 import { vendorAccountService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import { FormInput } from "@/component/form/FormInput";
-import { ImageUpload } from "@/component/form/ImageUpload";
-import { FormTextarea } from "@/component/form/FormTextarea";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { ThemeSelector } from "@/component/theme/ThemeSelector";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
+import { FormInput } from "@/components/form/FormInput";
+import { ImageUpload } from "@/components/form/ImageUpload";
+import { FormTextarea } from "@/components/form/FormTextarea";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { ThemeSelector } from "@/components/theme/ThemeSelector";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@/lib/zod-resolver";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";

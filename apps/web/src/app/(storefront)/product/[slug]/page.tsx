@@ -2,7 +2,7 @@ import {
 serverGetProductBySlug,
 serverGetProductReviews,
 } from "@/api/server";
-import { ProductDetailView } from "@/component/product/ProductDetailView";
+import { ProductDetailView } from "@/components/product/ProductDetailView";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 

@@ -18,8 +18,8 @@ import Link from "@/components/navigation/AppLink";
 import { usePathname } from "next/navigation";
 import { useEffect,useRef,useState } from "react";
 
-import { NotificationBell } from "@/component/notification/NotificationBell";
-import { CategoryNavMenu } from "@/component/category/CategoryNavMenu";
+import { NotificationBell } from "@/components/notification/NotificationBell";
+import { CategoryNavMenu } from "@/components/category/CategoryNavMenu";
 import { PlatformPromoTicker } from "@/components/storefront/PlatformPromoTicker";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PublicPlatformPromoDto } from "@/api/dto/discount";

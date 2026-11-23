@@ -15,12 +15,12 @@ import {
   type AdminStaffMember,
   type GovernanceAuditLog,
 } from "@/api";
-import { DataTable, type Column } from "@/component/data/DataTable";
-import { ConfirmDialog } from "@/component/modal/ConfirmDialog";
-import { Badge } from "@/component/ui/badge";
-import { Button } from "@/component/ui/button";
-import { Input } from "@/component/ui/input";
-import { Label } from "@/component/ui/label";
+import { DataTable, type Column } from "@/components/data/DataTable";
+import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +28,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/component/ui/dialog";
+} from "@/components/ui/dialog";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { queryKey } from "@/lib/query-key";
 import { getApiErrorMessage } from "@/api/core/error";

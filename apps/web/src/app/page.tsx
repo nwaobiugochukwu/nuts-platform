@@ -4,7 +4,7 @@ import {
   serverGetFeaturedVendors,
   serverGetProductDiscovery,
 } from "@/api/server";
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { HomeProductShelves } from "@/components/home/HomeProductShelves";
 
 export default async function HomePage() {

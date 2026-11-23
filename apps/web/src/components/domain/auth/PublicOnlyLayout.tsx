@@ -1,6 +1,6 @@
 "use client";
 
-import { CustomerLayout } from "@/component/layout/CustomerLayout";
+import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";

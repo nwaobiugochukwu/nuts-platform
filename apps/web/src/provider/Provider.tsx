@@ -1,8 +1,8 @@
 "use client";
 
-import { SessionHydrator } from "@/component/auth/SessionHydrator";
-import { ThemeProvider } from "@/component/provider/ThemeProvider";
-import { Toaster } from "@/component/ui/sonner";
+import { SessionHydrator } from "@/components/auth/SessionHydrator";
+import { ThemeProvider } from "@/components/provider/ThemeProvider";
+import { Toaster } from "@/components/ui/sonner";
 import { MaintenanceModeHost } from "@/components/maintenance/MaintenanceModeHost";
 import { NotificationStreamHost } from "@/hooks/use-notifications";
 import { PushNotificationHost } from "@/hooks/use-push-notifications";

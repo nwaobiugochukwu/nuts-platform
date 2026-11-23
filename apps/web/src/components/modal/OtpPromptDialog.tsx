@@ -1,14 +1,14 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/component/ui/dialog";
-import { SegmentedOtpInput } from "@/component/ui/SegmentedOtpInput";
+} from "@/components/ui/dialog";
+import { SegmentedOtpInput } from "@/components/ui/SegmentedOtpInput";
 import { Loader2, Send, ShieldAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { orderService,referralService,userService,walletService,vendorFollowingService } from "@/api";
-import { Button } from "@/component/ui/button";
-import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/component/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { queryKey } from "@/lib/query-key";
 import { formatDate,formatPrice } from "@/lib/util";

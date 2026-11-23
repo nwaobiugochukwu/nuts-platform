@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/component/ui/button";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/util";
 import { ChevronLeft,ChevronRight,Inbox } from "lucide-react";
 import { type ReactNode } from "react";

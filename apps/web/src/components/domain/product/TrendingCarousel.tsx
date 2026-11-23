@@ -2,8 +2,8 @@
 
 import type { ProductCardDto } from "@/api/dto/product";
 import type { AddedFromType } from "@/api/dto/cart";
-import { ProductCard } from "@/component/product/ProductCard";
-import { RecommendationProductCard } from "@/component/product/RecommendationProductCard";
+import { ProductCard } from "@/components/product/ProductCard";
+import { RecommendationProductCard } from "@/components/product/RecommendationProductCard";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
 import type { RecommendationSurface } from "@/api/modules/analytics";
 import { createRecommendationRequestId } from "@/lib/recommendation-session";
