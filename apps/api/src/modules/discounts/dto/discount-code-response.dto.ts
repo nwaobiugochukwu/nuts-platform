@@ -89,6 +89,13 @@ export class DiscountCodeResponseDto {
   })
   firstOrderOnly!: boolean;
 
+  @ApiProperty({
+    description:
+      'Whether the code may be combined with one other stackable code.',
+    example: false,
+  })
+  stackable!: boolean;
+
   @ApiPropertyOptional({
     description: 'Timestamp when the discount code becomes valid.',
     example: '2025-06-01T00:00:00.000Z',

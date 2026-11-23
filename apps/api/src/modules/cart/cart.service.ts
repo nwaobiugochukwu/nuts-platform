@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -154,8 +155,22 @@ export class CartService {
   // DISCOUNT PREVIEW
   // ---------------------------------------------------------------------------
 
-  async previewDiscount(userId: string, code: string) {
+  /**
+   * Previews one or two vouchers against the live cart.
+   *
+   * One code: behaves exactly as before (a rejection is thrown). Several: every
+   * valid, combinable voucher is applied and the rest come back in `rejected`
+   * with the reason and whether it can ever work (`permanent`), so the UI can
+   * tell the shopper which voucher was dropped without losing the others.
+   */
+  async previewDiscount(userId: string, codeOrCodes: string | string[]) {
     await this.usersService.assertActiveAccount(userId);
+    const codes = (Array.isArray(codeOrCodes) ? codeOrCodes : [codeOrCodes])
+      .map((c) => c.trim())
+      .filter(Boolean);
+    if (codes.length === 0) {
+      throw new BadRequestException('A discount code is required');
+    }
 
     /*
      * We intentionally don't call getCart() here because that would introduce
@@ -171,9 +186,9 @@ export class CartService {
       throw new BadRequestException('Your cart is empty');
     }
 
-    // Eligibility, minimum spend and the discount itself are all measured on
-    // the lines the code actually covers - the same engine checkout uses, so
-    // the previewed saving is exactly what will be charged.
+    // Eligibility, minimum spend, stacking and every amount are computed by the
+    // same engine checkout uses, so the previewed saving is exactly what will
+    // be charged.
     const lines: DiscountLineItem[] = cart.cartItems.map((item) => ({
       productId: item.productId,
       vendorId: item.product.vendorId,
@@ -186,27 +201,47 @@ export class CartService {
       lineTotal: new Prisma.Decimal(item.unitPrice).mul(item.quantity),
     }));
 
-    const { discount: discountCode, discountAmount: discountDecimal } =
-      await this.discountCodeService.validateForCart(code, userId, lines);
+    const resolved = await this.discountCodeService.resolveVoucherStack(
+      codes,
+      userId,
+      lines,
+      { strict: codes.length === 1 },
+    );
 
-    const discountAmount = Number(discountDecimal);
-
+    const discountAmount = Number(resolved.totalDiscount);
     const deliveryCharge = response.cart.deliveryCharge;
-
     const serviceCharge = response.cart.serviceCharge;
-
     const totalAmount = Math.max(
       0,
       response.cart.subtotal - discountAmount + deliveryCharge + serviceCharge,
     );
 
+    const isPermanent = (error: Error) =>
+      error instanceof NotFoundException ||
+      error instanceof ConflictException ||
+      /expired|no longer active|invalid or inactive/i.test(error.message);
+
     return {
-      code: discountCode.code,
+      // Kept for single-code clients.
+      code: resolved.applied[0]?.discount.code ?? codes[0],
       subtotal: response.cart.subtotal,
       discountAmount,
       deliveryCharge,
       serviceCharge,
       totalAmount,
+      discounts: resolved.applied.map(
+        ({ discount, discountAmount: amount }) => ({
+          code: discount.code,
+          amount: Number(amount),
+          scope: discount.scope,
+          stackable: discount.stackable,
+        }),
+      ),
+      rejected: resolved.rejected.map(({ code, error }) => ({
+        code,
+        reason: error.message,
+        permanent: isPermanent(error),
+      })),
     };
   }
 

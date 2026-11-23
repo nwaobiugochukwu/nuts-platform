@@ -181,6 +181,15 @@ export class CreateDiscountCodeDto {
   @IsOptional()
   @IsBoolean()
   firstOrderOnly?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Whether this code may be combined with ONE other stackable code on the same order (at most one store voucher plus one platform voucher). Defaults to false.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  stackable?: boolean;
 }
 
 /** Admin codes may be platform-wide. */

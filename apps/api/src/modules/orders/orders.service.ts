@@ -1696,17 +1696,30 @@ export class OrdersService {
         let discountAmount = new Prisma.Decimal(0);
         let discountCode: string | null = null;
 
-        let discountRecord: Awaited<
-          ReturnType<typeof this.discountCodeService.validate>
-        > | null = null;
+        // Every voucher applied to this order, with the amount IT took off.
+        let appliedVouchers: Array<{
+          id: string;
+          code: string;
+          amount: Prisma.Decimal;
+        }> = [];
 
-        if (dto.discountCode?.trim()) {
-          // One engine for eligibility, minimum spend and the amount, shared
-          // with the cart preview: the discount is measured on the lines the
-          // code covers (a vendor code only ever covers that vendor's items),
-          // never on the whole cart.
-          const evaluated = await this.discountCodeService.validateForCart(
-            dto.discountCode.trim(),
+        // `discountCodes` (up to two, combinable) and the legacy single
+        // `discountCode` are merged so older clients keep working.
+        const requestedCodes = [
+          ...(dto.discountCodes ?? []),
+          ...(dto.discountCode ? [dto.discountCode] : []),
+        ]
+          .map((code) => code.trim())
+          .filter(Boolean);
+
+        if (requestedCodes.length > 0) {
+          // One engine for eligibility, minimum spend, stacking and amounts,
+          // shared with the cart preview: each voucher is measured on the lines
+          // it covers (a store voucher only ever covers that store's items),
+          // never on the whole cart. strict: any rejected voucher fails the
+          // checkout rather than silently charging a different price.
+          const resolved = await this.discountCodeService.resolveVoucherStack(
+            requestedCodes,
             userId,
             cart.cartItems.map((item) => ({
               productId: item.productId,
@@ -1719,11 +1732,18 @@ export class OrdersService {
               ],
               lineTotal: item.unitPrice.mul(item.quantity),
             })),
+            { strict: true },
           );
 
-          discountRecord = evaluated.discount;
-          discountCode = discountRecord.code;
-          discountAmount = evaluated.discountAmount.toDecimalPlaces(2);
+          appliedVouchers = resolved.applied.map(
+            ({ discount, discountAmount: amount }) => ({
+              id: discount.id,
+              code: discount.code,
+              amount: amount.toDecimalPlaces(2),
+            }),
+          );
+          discountAmount = resolved.totalDiscount;
+          discountCode = appliedVouchers.map((v) => v.code).join(', ');
         }
 
         // The cart page shows delivery and service charges in its total, so
@@ -2006,7 +2026,7 @@ export class OrdersService {
         // DISCOUNT USAGE
         // ---------------------------------------------------------------
 
-        if (discountRecord) {
+        if (appliedVouchers.length > 0) {
           /**
            * Discount usage is recorded inside the same checkout transaction.
            *
@@ -2016,14 +2036,21 @@ export class OrdersService {
            * - usage counters cannot commit without the order
            * - a failed checkout cannot consume the discount
            * - concurrent redemptions are serialized by recordUsage()
+           *
+           * Codes are locked in a fixed (id) order so two checkouts combining
+           * the same pair of vouchers can never deadlock each other.
            */
-          await this.discountCodeService.recordUsage(
-            discountRecord.id,
-            order.id,
-            userId,
-            discountAmount,
-            tx,
-          );
+          for (const voucher of [...appliedVouchers].sort((x, y) =>
+            x.id.localeCompare(y.id),
+          )) {
+            await this.discountCodeService.recordUsage(
+              voucher.id,
+              order.id,
+              userId,
+              voucher.amount,
+              tx,
+            );
+          }
         }
 
         // ---------------------------------------------------------------

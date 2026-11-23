@@ -82,19 +82,38 @@ export class CartController {
   })
   @ApiQuery({
     name: 'code',
-    required: true,
+    required: false,
+    description: 'A single discount code.',
+  })
+  @ApiQuery({
+    name: 'codes',
+    required: false,
+    description:
+      'Comma-separated list of up to two combinable codes (store voucher + platform voucher).',
   })
   @ApiBadRequestResponse({
     description: 'Invalid or missing discount code',
   })
-  previewDiscount(@GetUser('id') userId: string, @Query('code') code?: string) {
-    const normalizedCode = code?.trim();
+  previewDiscount(
+    @GetUser('id') userId: string,
+    @Query('code') code?: string,
+    @Query('codes') codes?: string,
+  ) {
+    const requested = [
+      ...(codes ? codes.split(',') : []),
+      ...(code ? [code] : []),
+    ]
+      .map((c) => c.trim())
+      .filter(Boolean);
 
-    if (!normalizedCode) {
+    if (requested.length === 0) {
       throw new BadRequestException('A discount code is required');
     }
+    if (requested.length > 5) {
+      throw new BadRequestException('Too many discount codes');
+    }
 
-    return this.cartService.previewDiscount(userId, normalizedCode);
+    return this.cartService.previewDiscount(userId, requested);
   }
 
   @Post('items/:productId')

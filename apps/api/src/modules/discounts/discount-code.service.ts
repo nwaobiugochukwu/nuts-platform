@@ -26,6 +26,9 @@ import {
 import {
   type DiscountEvaluation,
   type DiscountLineItem,
+  MAX_STACKED_VOUCHERS,
+  allocateAcrossLines,
+  eligibleLineIndexes,
   evaluateEligibleLines,
   isProductEligible,
 } from './discount-eligibility';
@@ -414,6 +417,8 @@ export class DiscountCodeService {
 
           firstOrderOnly: dto.firstOrderOnly ?? false,
 
+          stackable: dto.stackable ?? false,
+
           scope,
         },
       });
@@ -590,6 +595,7 @@ export class DiscountCodeService {
           ...(dto.firstOrderOnly !== undefined && {
             firstOrderOnly: dto.firstOrderOnly,
           }),
+          ...(dto.stackable !== undefined && { stackable: dto.stackable }),
         },
       });
     } catch (error) {
@@ -610,10 +616,8 @@ export class DiscountCodeService {
   // ============================================================
 
   /**
-   * Validates a code against the cart's ELIGIBLE lines (not the whole cart)
-   * and returns the discount the shopper will actually receive.
-   *
-   * Used by the cart preview and by checkout so both always agree.
+   * Validates ONE code against the cart's eligible lines. Same engine as
+   * `resolveVoucherStack`, so single and combined vouchers can never disagree.
    */
   async validateForCart(
     rawCode: string,
@@ -624,33 +628,174 @@ export class DiscountCodeService {
     evaluation: DiscountEvaluation;
     discountAmount: Prisma.Decimal;
   }> {
-    const discount = await this.validate(rawCode, userId);
-    const evaluation = evaluateEligibleLines(discount, lines);
+    const stack = await this.resolveVoucherStack([rawCode], userId, lines, {
+      strict: true,
+    });
+    return stack.applied[0];
+  }
 
-    if (evaluation.eligibleSubtotal.lessThanOrEqualTo(0)) {
-      throw new BadRequestException(
-        discount.scope === DiscountCodeScope.VENDOR
-          ? 'This discount code only applies to products from the store that issued it, and none are in your cart.'
-          : 'This discount code does not apply to any items in your cart.',
+  /**
+   * Resolves up to two vouchers for a cart.
+   *
+   * Rules:
+   *  - Combining needs every code to be `stackable`, and at most one store
+   *    voucher plus one platform voucher.
+   *  - Store voucher applies first, on its own items; the platform voucher then
+   *    discounts only what is still left, so total discount never exceeds the
+   *    goods total and each code's funding stays attributable.
+   *  - Minimum spend is measured on the code's eligible items BEFORE other
+   *    vouchers; the amount is computed on what remains.
+   *
+   * `strict` (checkout): the first problem is thrown, so an order is never
+   * placed with a voucher the shopper did not see applied. Non-strict
+   * (cart preview): problems are returned per code so the UI can say which
+   * voucher was dropped and why, while the valid ones still apply.
+   */
+  async resolveVoucherStack(
+    rawCodes: string[],
+    userId: string,
+    lines: DiscountLineItem[],
+    { strict }: { strict: boolean },
+  ): Promise<{
+    applied: Array<{
+      discount: DiscountCode;
+      evaluation: DiscountEvaluation;
+      discountAmount: Prisma.Decimal;
+    }>;
+    rejected: Array<{ code: string; error: Error }>;
+    totalDiscount: Prisma.Decimal;
+  }> {
+    const codes = [
+      ...new Set(rawCodes.map((c) => this.normalizeCode(c)).filter(Boolean)),
+    ];
+    const rejected: Array<{ code: string; error: Error }> = [];
+    const fail = (code: string, error: Error) => {
+      if (strict) throw error;
+      rejected.push({ code, error });
+    };
+
+    if (codes.length > MAX_STACKED_VOUCHERS) {
+      const overflow = new BadRequestException(
+        `You can apply at most ${MAX_STACKED_VOUCHERS} vouchers to one order.`,
       );
+      if (strict) throw overflow;
+      for (const code of codes.slice(MAX_STACKED_VOUCHERS)) {
+        rejected.push({ code, error: overflow });
+      }
+      codes.length = MAX_STACKED_VOUCHERS;
     }
 
-    if (evaluation.eligibleSubtotal.lessThan(discount.minOrderAmount)) {
-      const shortfall = new Prisma.Decimal(discount.minOrderAmount)
-        .sub(evaluation.eligibleSubtotal)
-        .toFixed(2);
-      throw new BadRequestException(
-        `Add ${shortfall} more of eligible items to use this discount (minimum ${discount.minOrderAmount.toFixed(2)}).`,
+    // 1. Each code must be usable by this shopper on its own.
+    const usable: DiscountCode[] = [];
+    for (const code of codes) {
+      try {
+        usable.push(await this.validate(code, userId));
+      } catch (error) {
+        fail(code, error as Error);
+      }
+    }
+
+    // 2. Combination rules (the first usable code is the anchor).
+    const combined: DiscountCode[] = [];
+    for (const candidate of usable) {
+      const anchor = combined[0];
+      if (!anchor) {
+        combined.push(candidate);
+        continue;
+      }
+      if (!anchor.stackable || !candidate.stackable) {
+        const exclusive = !anchor.stackable ? anchor : candidate;
+        fail(
+          candidate.code,
+          new BadRequestException(
+            `${exclusive.code} can't be combined with other vouchers.`,
+          ),
+        );
+      } else if (anchor.scope === candidate.scope) {
+        fail(
+          candidate.code,
+          new BadRequestException(
+            `${anchor.code} and ${candidate.code} are both ${anchor.scope === DiscountCodeScope.VENDOR ? 'store' : 'platform'} vouchers. You can combine one store voucher with one platform voucher.`,
+          ),
+        );
+      } else {
+        combined.push(candidate);
+      }
+    }
+
+    // 3. Store voucher first, then platform, each on what is still unpaid.
+    combined.sort(
+      (a, b) =>
+        Number(b.scope === DiscountCodeScope.VENDOR) -
+        Number(a.scope === DiscountCodeScope.VENDOR),
+    );
+
+    const remaining = lines.map((line) => line.lineTotal);
+    const applied: Array<{
+      discount: DiscountCode;
+      evaluation: DiscountEvaluation;
+      discountAmount: Prisma.Decimal;
+    }> = [];
+    let totalDiscount = new Prisma.Decimal(0);
+
+    for (const discount of combined) {
+      const evaluation = evaluateEligibleLines(discount, lines);
+
+      if (evaluation.eligibleSubtotal.lessThanOrEqualTo(0)) {
+        fail(
+          discount.code,
+          new BadRequestException(
+            discount.scope === DiscountCodeScope.VENDOR
+              ? 'This discount code only applies to products from the store that issued it, and none are in your cart.'
+              : 'This discount code does not apply to any items in your cart.',
+          ),
+        );
+        continue;
+      }
+
+      if (evaluation.eligibleSubtotal.lessThan(discount.minOrderAmount)) {
+        const shortfall = new Prisma.Decimal(discount.minOrderAmount)
+          .sub(evaluation.eligibleSubtotal)
+          .toFixed(2);
+        fail(
+          discount.code,
+          new BadRequestException(
+            `Add ${shortfall} more of eligible items to use this discount (minimum ${discount.minOrderAmount.toFixed(2)}).`,
+          ),
+        );
+        continue;
+      }
+
+      const indexes = eligibleLineIndexes(discount, lines);
+      const eligibleRemaining = indexes.reduce(
+        (sum, i) => sum.add(remaining[i]),
+        new Prisma.Decimal(0),
       );
+      if (eligibleRemaining.lessThanOrEqualTo(0)) {
+        fail(
+          discount.code,
+          new BadRequestException(
+            'Nothing is left for this voucher to discount after your other voucher.',
+          ),
+        );
+        continue;
+      }
+
+      // Minimum spend was checked on the original eligible subtotal above, so
+      // compute the amount on what remains without re-applying the minimum.
+      const discountAmount = this.calculateDiscount(
+        { ...discount, minOrderAmount: new Prisma.Decimal(0) },
+        eligibleRemaining,
+      );
+      allocateAcrossLines(remaining, indexes, discountAmount);
+      totalDiscount = totalDiscount.add(discountAmount);
+      applied.push({ discount, evaluation, discountAmount });
     }
 
     return {
-      discount,
-      evaluation,
-      discountAmount: this.calculateDiscount(
-        discount,
-        evaluation.eligibleSubtotal,
-      ),
+      applied,
+      rejected,
+      totalDiscount: totalDiscount.toDecimalPlaces(2),
     };
   }
 
@@ -1377,6 +1522,7 @@ export class DiscountCodeService {
       isActive: code.isActive,
       platformwide: code.platformwide,
       firstOrderOnly: code.firstOrderOnly,
+      stackable: code.stackable,
       startsAt: code.startsAt,
       expiresAt: code.expiresAt,
       scope: code.scope,

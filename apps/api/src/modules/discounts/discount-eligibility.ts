@@ -101,3 +101,50 @@ export function isProductEligible(
     categoryIds: product.categoryIds,
   });
 }
+
+/** At most one store voucher + one platform voucher per order. */
+export const MAX_STACKED_VOUCHERS = 2;
+
+/**
+ * Spreads `discount` across the given lines in proportion to what each still
+ * costs, mutating `remaining`. The last line absorbs the rounding remainder so
+ * the allocations always sum to exactly `discount`.
+ *
+ * Tracking what is left per line is what lets a second voucher discount only
+ * what the first one did not already take off.
+ */
+export function allocateAcrossLines(
+  remaining: Prisma.Decimal[],
+  lineIndexes: number[],
+  discount: Prisma.Decimal,
+): void {
+  if (lineIndexes.length === 0 || discount.lessThanOrEqualTo(0)) return;
+  const base = lineIndexes.reduce(
+    (sum, i) => sum.add(remaining[i]),
+    new Prisma.Decimal(0),
+  );
+  if (base.lessThanOrEqualTo(0)) return;
+
+  let allocated = new Prisma.Decimal(0);
+  lineIndexes.forEach((lineIndex, position) => {
+    const isLast = position === lineIndexes.length - 1;
+    const share = isLast
+      ? discount.sub(allocated)
+      : discount.mul(remaining[lineIndex]).div(base).toDecimalPlaces(2);
+    const take = Prisma.Decimal.min(share, remaining[lineIndex]);
+    remaining[lineIndex] = remaining[lineIndex].sub(take);
+    allocated = allocated.add(take);
+  });
+}
+
+/** Indexes of the lines a code is allowed to discount. */
+export function eligibleLineIndexes(
+  code: DiscountEligibilityCode,
+  lines: DiscountLineItem[],
+): number[] {
+  const indexes: number[] = [];
+  lines.forEach((line, index) => {
+    if (isLineEligible(code, line)) indexes.push(index);
+  });
+  return indexes;
+}
