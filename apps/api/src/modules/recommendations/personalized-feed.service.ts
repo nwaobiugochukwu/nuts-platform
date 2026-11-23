@@ -536,10 +536,25 @@ export class PersonalizedFeedService {
         ...viewedSeedIds,
       ]);
       const popular = await this.popular.discoverPool();
-      const topUp = popular
-        .filter((card) => !taken.has(card.id))
-        .slice(0, RECOMMENDATION_LIMIT - personalized.length);
-      return [...personalized, ...topUp];
+      const filled = [
+        ...personalized,
+        ...popular
+          .filter((card) => !taken.has(card.id))
+          .slice(0, RECOMMENDATION_LIMIT - personalized.length),
+      ];
+
+      // Last resort for small catalogues / heavy browsers: a shopper who has
+      // already viewed most products must still get a shelf. Unseen items
+      // always rank first; re-showing a viewed product beats an empty row.
+      if (filled.length < RECOMMENDATION_LIMIT) {
+        const used = new Set(filled.map((card) => card.id));
+        filled.push(
+          ...popular
+            .filter((card) => !used.has(card.id))
+            .slice(0, RECOMMENDATION_LIMIT - filled.length),
+        );
+      }
+      return filled;
     };
 
     return this.cacheService
@@ -619,7 +634,7 @@ export class PersonalizedFeedService {
   }
 
   async claimRecentlyViewed(userId: string, visitorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const visitorViews = await tx.recentProductView.findMany({
         where: { visitorId },
         orderBy: { lastViewedAt: 'desc' },
@@ -669,8 +684,17 @@ export class PersonalizedFeedService {
 
       // Keep visitor rows through the guest-history retention window so a
       // delayed auth hydration or another tab can still claim them safely.
-      return { claimed: visitorViews.length };
+      // Report only rows that actually changed, so re-running this (it is
+      // idempotent) is correctly seen as "nothing new".
+      return { claimed: toCreate.length + toAdvance.length };
     });
+
+    if (result.claimed > 0) {
+      // History just changed under this user: drop shelves cached for either
+      // identity so the next read reflects the merged history.
+      await this.cacheService?.invalidateRecommendations(userId, visitorId);
+    }
+    return result;
   }
 
   async following(userId: string) {

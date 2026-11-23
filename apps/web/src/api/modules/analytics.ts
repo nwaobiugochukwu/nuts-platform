@@ -294,9 +294,15 @@ export const analyticsEventService = {
     const client = authenticated ? userApi : publicApi;
     const endpoint = "/analytics/events";
     const request = client.post<{ accepted: boolean }>(endpoint, payload);
-    // Every non-impression signal (click, dismiss, category view) changes what
-    // the shopper should see next. Product clicks are followed by a
-    // product-view event, which refreshes again once durable history exists.
+    // Every non-impression signal (dismiss, category view, store click)
+    // changes what the shopper should see next, so shelves refresh after it.
+    //
+    // A PRODUCT click is the exception: it always navigates to the product
+    // page, whose product_view event refreshes the shelves once the view is
+    // durably recorded. Refreshing here too would re-fetch four shelves on the
+    // page being left, in parallel with the navigation.
+    if (eventType === "CLICK" && item.productId) return request;
+
     return request.then((result) => {
       refreshPersonalizedRecommendations();
       return result;

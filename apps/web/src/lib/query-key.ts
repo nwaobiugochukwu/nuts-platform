@@ -25,7 +25,6 @@ export const queryKey = {
     stores: recommendationKey("stores"),
     marketplaceMix: recommendationKey("marketplace-mix"),
     searchDiscover: recommendationKey("search-discover"),
-    recentHistoryClaim: recommendationKey("recent-history-claim"),
     /** Shelf-level prefixes (match every user/session). */
     marketplaceMixAll: ["recommendations", "marketplace-mix"] as const,
     storesAll: ["recommendations", "stores"] as const,

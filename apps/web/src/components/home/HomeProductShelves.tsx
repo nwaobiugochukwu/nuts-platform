@@ -216,6 +216,17 @@ export function HomeProductShelves({
       {/* 3. Picked for you                                                   */}
       {/* Renders when activity-based recommendations are available.          */}
       {/* ------------------------------------------------------------------ */}
+      {/* Reserve the shelf's space while it loads so the page does not jump
+          when it appears (and it never looks like it "disappeared"). */}
+      {visibleForYou.length < MIN_PICKED_FOR_YOU_PRODUCTS && (clientHydrating || isLoadingForYou) && (
+        <section
+          className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
+          aria-busy="true"
+          aria-label="Picked based on your activity — loading"
+        >
+          <TrendingSkeleton />
+        </section>
+      )}
       {visibleForYou.length >= MIN_PICKED_FOR_YOU_PRODUCTS && (
         <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 animate-in fade-in duration-300" aria-labelledby="for-you-heading">
           <TrendingCarousel

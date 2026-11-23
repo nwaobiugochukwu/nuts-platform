@@ -3,7 +3,7 @@
 import { recommendationService } from "@/api/modules/recommendations";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   useRecommendationSessionId,
   useRecommendationVisitorId,
@@ -67,6 +67,11 @@ export function useForYouRecommendations(enabled = true) {
     queryKey: queryKey.recommendations.forYou(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.forYou(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: requestEnabled,
     // Freshness after the shopper DOES something comes from explicit
     // invalidation (see refreshPersonalizedRecommendations), not from this
@@ -108,6 +113,11 @@ export function usePersonalizedRecommendations(enabled = true) {
   const recentQuery = useQuery({
     queryKey: queryKey.recommendations.recentlyViewed(userId, sessionId, visitorId),
     queryFn: async ({ signal }) => (await recommendationService.recentlyViewed(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
     // any new views from product pages visited in the same session.
@@ -122,7 +132,9 @@ export function usePersonalizedRecommendations(enabled = true) {
     queryFn: async ({ signal }) => (await recommendationService.following(signal)).data,
     enabled: enabled && isCustomer,
     // Never blank the shelf while a refetch (or auth refresh) is in flight.
-    placeholderData: keepPreviousData,
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     staleTime: 120_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
@@ -135,6 +147,11 @@ export function usePersonalizedRecommendations(enabled = true) {
       (await recommendationService.stores(sessionId, isCustomer, visitorId, signal)).data,
     // Store discovery is a separate shelf and must not wait for For You or the
     // cold-start store mix to finish.
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
     refetchOnMount: true,
@@ -146,6 +163,11 @@ export function usePersonalizedRecommendations(enabled = true) {
     queryKey: queryKey.recommendations.marketplaceMix(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
       (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId, signal)).data,
+    // Keep the previous result on screen while a refresh is in flight so the
+    // shelf never blanks out and pops back in (same user only).
+    // queryKey[2] is the user id: never show a previous identity's picks.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
     staleTime: 120_000,
     refetchOnMount: true,
