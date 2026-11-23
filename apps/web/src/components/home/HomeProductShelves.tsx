@@ -64,20 +64,35 @@ export function HomeProductShelves({
     isLoadingFollowing,
   } = usePersonalizedRecommendations();
 
+  // Shelf priority, most personal first. Each shelf only excludes shelves that
+  // rank above it, so a lower-priority generic shelf can never swallow the
+  // personalised ones.
   const visibleRecent = uniqueProducts(recentlyViewed, 12);
-  const visibleStarterPicks = uniqueProducts(starterPicks, 12);
-  let visibleForYou = uniqueProducts(
-    forYou,
-    12,
-    new Set([...visibleRecent, ...visibleStarterPicks].map(({ id }) => id)),
-  );
-  if (visibleForYou.length === 0 && forYou.length > 0) {
-    visibleForYou = uniqueProducts(forYou, 12, new Set(visibleRecent.map(({ id }) => id)));
-  }
-  const visibleFollowing = uniqueProducts(
+  // Dedupe against higher-priority shelves only while that still leaves a
+  // meaningful shelf; in a small catalog, overlap beats a near-empty row.
+  const MIN_DEDUPED_SHELF = 6;
+  const dedupeOrKeep = (
+    products: ProductCardDto[],
+    excluded: Set<string>,
+  ) => {
+    const deduped = uniqueProducts(products, 12, excluded);
+    return deduped.length >= MIN_DEDUPED_SHELF || deduped.length === products.length
+      ? deduped
+      : uniqueProducts(products, 12);
+  };
+  const visibleFollowing = dedupeOrKeep(
     fromFollowedVendors,
-    12,
-    new Set([...visibleRecent, ...visibleStarterPicks, ...visibleForYou].map(({ id }) => id)),
+    new Set(visibleRecent.map(({ id }) => id)),
+  );
+  const visibleForYou = dedupeOrKeep(
+    forYou,
+    new Set([...visibleRecent, ...visibleFollowing].map(({ id }) => id)),
+  );
+  const visibleStarterPicks = dedupeOrKeep(
+    starterPicks,
+    new Set(
+      [...visibleRecent, ...visibleFollowing, ...visibleForYou].map(({ id }) => id),
+    ),
   );
   const vendorCandidates = storesToDiscover.length > 0 ? storesToDiscover : initialVendors;
   const seenVendorIds = new Set<string>();
@@ -103,7 +118,8 @@ export function HomeProductShelves({
 
   // "New from followed vendors" — customer-only shelf.
   const showFollowingSkeleton = isCustomer && (clientHydrating || isLoadingFollowing);
-  const followingSettled = isCustomer && !clientHydrating && !isLoadingFollowing;
+  // Keep showing the last followed-stores data through brief auth refreshes.
+  const followingSettled = !clientHydrating && !isLoadingFollowing;
 
   // "Vendors to explore": show skeleton loader while client query resolves.
   const showStoresSkeleton = clientHydrating || isLoadingStores;

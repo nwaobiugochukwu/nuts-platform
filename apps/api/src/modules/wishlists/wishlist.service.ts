@@ -443,6 +443,7 @@ export class WishlistService {
 
   private async invalidateCache(userId: string): Promise<void> {
     await this.cacheService.del(this.getCacheKey(userId));
+    await this.cacheService.invalidateRecommendations(userId);
   }
 
   // ---------------------------------------------------------------------------

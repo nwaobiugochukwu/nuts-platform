@@ -176,7 +176,7 @@ export default function VendorSettingPage() {
         {activeTab === "store" && (
           <div className="max-w-2xl space-y-6">
             <Card className="rounded-2xl border-neutral-200/80 dark:border-neutral-800">
-              <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <CardHeader className="flex flex-col items-start gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <CardTitle className="text-base font-bold">Store Brand & Contacts</CardTitle>
                   <CardDescription className="text-sm">

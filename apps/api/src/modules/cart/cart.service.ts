@@ -1159,6 +1159,7 @@ export class CartService {
 
   private async invalidateCartCache(userId: string): Promise<void> {
     await this.cacheService.del(this.getCacheKey(userId));
+    await this.cacheService.invalidateRecommendations(userId);
   }
 
   // ---------------------------------------------------------------------------

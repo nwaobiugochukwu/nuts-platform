@@ -14,6 +14,7 @@ Info,
 Package,
 SlidersHorizontal,
 Users,
+X,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useRouter } from "next/navigation";
@@ -151,9 +152,9 @@ export function NotificationBell({
           <div
             className={`${
               placement === "bottom"
-                ? "fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-2 right-2 mx-auto w-auto max-w-sm sm:left-auto sm:right-4"
-                : "fixed inset-x-2 top-16 mx-auto w-[calc(100vw-1rem)] max-w-sm sm:max-w-md sm:w-96 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2"
-            } z-50 overflow-hidden rounded-2xl border border-border bg-popover p-0 text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
+                ? "fixed inset-0 flex flex-col sm:inset-auto sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-4 sm:mx-auto sm:w-auto sm:max-w-sm"
+                : "fixed inset-0 flex flex-col sm:inset-auto sm:block sm:max-w-md sm:w-96 sm:absolute sm:right-0 sm:top-full sm:mt-2"
+            } z-50 overflow-hidden rounded-none border-0 pt-[env(safe-area-inset-top)] sm:rounded-2xl sm:border sm:pt-0 bg-popover p-0 text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
           >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-secondary/30">
@@ -165,6 +166,7 @@ export function NotificationBell({
                 </span>
               )}
             </div>
+            <div className="flex items-center gap-1">
             {unreadCount > 0 && (
               <button
                 type="button"
@@ -175,10 +177,19 @@ export function NotificationBell({
                 Mark all read
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close notifications"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary sm:hidden"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            </div>
           </div>
 
           {/* List */}
-          <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto divide-y divide-border/60 sm:max-h-80">
+          <div className="min-h-0 flex-1 overflow-y-auto divide-y divide-border/60 sm:max-h-80 sm:flex-none">
             {isLoading && recentNotifications.length === 0 ? (
               <div className="divide-y divide-border/40 p-2 space-y-2">
                 {[1, 2, 3].map((idx) => (

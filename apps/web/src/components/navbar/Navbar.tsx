@@ -102,8 +102,8 @@ export function Navbar({
   const DashboardIcon = canAdminister ? Shield : LayoutDashboard;
 
   return (
+    <>
     <header className="sticky top-0 z-50 flex w-full flex-col">
-      <PlatformPromoTicker initialPromos={initialPromos} />
       <div className="w-full border-b border-border/80 bg-background/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 lg:px-8">
         {/* Brand Logo and primary navigation */}
@@ -446,5 +446,8 @@ export function Navbar({
       />
       </div>
     </header>
+    {/* Campaign banner sits in normal flow directly beneath the main header */}
+    <PlatformPromoTicker initialPromos={initialPromos} />
+    </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { recommendationService } from "@/api/modules/recommendations";
 import { useAuthStore } from "@/zustand/auth";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   useRecommendationSessionId,
   useRecommendationVisitorId,
@@ -70,7 +70,7 @@ export function useForYouRecommendations(enabled = true) {
     // 90s before data is considered stale — fresh enough so navigating around
     // the app reuses the response, but short enough to pick up new signals when
     // the user returns to the page after some browsing.
-    staleTime: 90_000,
+    staleTime: 15_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -108,7 +108,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
     // any new views from product pages visited in the same session.
-    staleTime: 30_000,
+    staleTime: 5_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -118,9 +118,11 @@ export function usePersonalizedRecommendations(enabled = true) {
     queryKey: ["recommendations", "following", userId],
     queryFn: async ({ signal }) => (await recommendationService.following(signal)).data,
     enabled: enabled && isCustomer,
-    staleTime: 120_000,
+    // Never blank the shelf while a refetch (or auth refresh) is in flight.
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 
@@ -131,9 +133,9 @@ export function usePersonalizedRecommendations(enabled = true) {
     // Store discovery is a separate shelf and must not wait for For You or the
     // cold-start store mix to finish.
     enabled: publicDiscoveryEnabled,
-    staleTime: 120_000,
+    staleTime: 30_000,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
 

@@ -460,3 +460,26 @@ body::-webkit-scrollbar,
   background: transparent !important;
 }
 
+/* Mobile: dialogs are full-screen sheets rather than floating pop-ups. */
+@media (max-width: 639px) {
+  .nuts-dialog {
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border-width: 0 !important;
+    border-radius: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    align-content: start;
+    padding-top: max(1.25rem, env(safe-area-inset-top)) !important;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
+    padding-right: 3.5rem;
+  }
+}

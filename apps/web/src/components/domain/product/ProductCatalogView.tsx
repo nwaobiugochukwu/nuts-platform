@@ -22,7 +22,10 @@ import { Loader2, Search, SlidersHorizontal, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/zustand/auth";
-import { useRecommendationSessionId } from "@/hooks/use-recommendation-session";
+import {
+  useRecommendationSessionId,
+  useRecommendationVisitorId,
+} from "@/hooks/use-recommendation-session";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
 
 const EMPTY_CATEGORIES: CategoryResponseDto[] = [];
@@ -87,6 +90,7 @@ export function ProductCatalogView({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const sessionId = useRecommendationSessionId();
+  const visitorId = useRecommendationVisitorId();
   const { addSearch } = useRecentSearches();
 
   useEffect(() => {
@@ -258,7 +262,7 @@ export function ProductCatalogView({
     const dedupeKey = `${userId ?? sessionId}:${search}`;
     if (trackedSearchRef.current === dedupeKey) return;
     trackedSearchRef.current = dedupeKey;
-    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer).then(() => {
+    void analyticsEventService.trackSearch(search, searchResultCount, sessionId, authenticatedCustomer, visitorId).then(() => {
       void queryClient.invalidateQueries({
         queryKey: ["recommendations", "for-you", userId ?? null, sessionId],
         refetchType: "all",
@@ -266,7 +270,7 @@ export function ProductCatalogView({
     }).catch(() => {
       if (trackedSearchRef.current === dedupeKey) trackedSearchRef.current = "";
     });
-  }, [search, searchResultCount, userId, sessionId, isAuthenticated, canPurchase, isLoading, isError, queryClient]);
+  }, [search, searchResultCount, userId, sessionId, visitorId, isAuthenticated, canPurchase, isLoading, isError, queryClient]);
 
   // Auto-load next page when user scrolls near the bottom of the feed
   useEffect(() => {

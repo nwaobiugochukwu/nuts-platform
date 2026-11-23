@@ -590,7 +590,7 @@ export default function AdminProductPage() {
             setSelectedCategory(e.target.value);
             setPage(1);
           }}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer min-w-[200px]"
+          className="h-10 rounded-xl border border-input bg-background px-3 text-xs text-foreground focus:outline-hidden focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer w-full min-w-0 sm:w-auto sm:min-w-[200px]"
         >
           <option value="ALL">All Categories</option>
           {categoryFilterList.map((cat) => (

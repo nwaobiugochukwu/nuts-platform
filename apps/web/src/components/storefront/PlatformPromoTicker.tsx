@@ -1,14 +1,75 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Check, ChevronLeft, ChevronRight, Clock, Copy, Sparkles, Tag, X } from "lucide-react";
 import { usePlatformPromos } from "@/hooks/use-product-deals";
 import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 import { useDiscountStore } from "@/zustand/discount";
 import { formatPrice } from "@/lib/util";
 
-const DISMISS_KEY = "nuts_promo_ticker_dismissed";
+const DISMISS_KEY = "nuts_promo_banner_dismissed_v2";
+const DISMISS_TTL_MS = 24 * 60 * 60 * 1000;
 const ROTATION_INTERVAL_MS = 6000;
+
+/**
+ * Dismissals are remembered per campaign (promo id), site-wide and across tabs,
+ * for 24 hours. A brand-new campaign always shows, an already-dismissed one
+ * stays hidden on every page until it expires or the TTL lapses.
+ */
+type DismissMap = Record<string, number>;
+const dismissListeners = new Set<() => void>();
+let dismissCache: { raw: string | null; map: DismissMap } = { raw: null, map: {} };
+const EMPTY_DISMISS: DismissMap = {};
+
+function readDismissed(): DismissMap {
+  if (typeof window === "undefined") return EMPTY_DISMISS;
+  let raw: string | null = null;
+  try {
+    raw = window.localStorage.getItem(DISMISS_KEY);
+  } catch {
+    return dismissCache.map;
+  }
+  if (raw === dismissCache.raw) return dismissCache.map;
+  let map: DismissMap = {};
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    if (parsed && typeof parsed === "object") {
+      const cutoff = Date.now() - DISMISS_TTL_MS;
+      for (const [id, at] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof at === "number" && at > cutoff) map[id] = at;
+      }
+    }
+  } catch {
+    map = {};
+  }
+  dismissCache = { raw, map };
+  return map;
+}
+
+function subscribeDismissed(listener: () => void) {
+  dismissListeners.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === DISMISS_KEY) listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    dismissListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function dismissPromos(ids: string[]) {
+  const next: DismissMap = { ...readDismissed() };
+  const at = Date.now();
+  for (const id of ids) next[id] = at;
+  try {
+    window.localStorage.setItem(DISMISS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked: fall back to in-memory dismissal for this page view.
+    dismissCache = { raw: dismissCache.raw, map: next };
+  }
+  dismissListeners.forEach((listener) => listener());
+}
 
 interface CountdownInfo {
   type: "starts_in" | "ends_in" | "none";
@@ -91,7 +152,7 @@ export function PlatformPromoTicker({
 
   const { claimCode, claimedCode, appliedDiscount } = useDiscountStore();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isDismissed, setIsDismissed] = useState(false);
+  const dismissed = useSyncExternalStore(subscribeDismissed, readDismissed, () => EMPTY_DISMISS);
   const [isPaused, setIsPaused] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [now, setNow] = useState<number | null>(null);
@@ -104,13 +165,6 @@ export function PlatformPromoTicker({
   const dragStartX = useRef<number | null>(null);
   const isDragging = useRef<boolean>(false);
   const hasDragged = useRef<boolean>(false);
-
-  // Clear any stale dismissal lock on mount so user always sees promotions
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem(DISMISS_KEY);
-    }
-  }, []);
 
   useEffect(() => {
     const updateNow = () => setNow(Date.now());
@@ -125,16 +179,17 @@ export function PlatformPromoTicker({
   const validPromos = useMemo(() => {
     return promos.filter((p) => {
       if (!p.code) return false;
+      if (dismissed[p.id]) return false;
       if (now !== null && p.expiresAt && new Date(p.expiresAt).getTime() <= now) {
         return false;
       }
       return true;
     });
-  }, [promos, now]);
+  }, [promos, now, dismissed]);
 
   // Automatic slide rotation
   useEffect(() => {
-    if (validPromos.length <= 1 || isPaused || isDismissed) {
+    if (validPromos.length <= 1 || isPaused) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -146,9 +201,9 @@ export function PlatformPromoTicker({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [validPromos.length, isPaused, isDismissed]);
+  }, [validPromos.length, isPaused]);
 
-  if (isDismissed || validPromos.length === 0) {
+  if (validPromos.length === 0) {
     return null;
   }
 
@@ -176,7 +231,7 @@ export function PlatformPromoTicker({
   };
 
   const handleDismiss = () => {
-    setIsDismissed(true);
+    dismissPromos(validPromos.map((promo) => promo.id));
   };
 
   const handlePrev = (e?: React.MouseEvent) => {
@@ -263,7 +318,7 @@ export function PlatformPromoTicker({
     <div
       role="region"
       aria-label="Platform promotional announcements"
-      className={`relative z-50 w-full border-b transition-colors duration-300 select-none bg-neutral-100 text-neutral-900 border-neutral-200/90 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
+      className={`relative w-full overflow-hidden border-b transition-colors duration-300 select-none bg-neutral-100 text-neutral-900 border-neutral-200/90 shadow-xs dark:bg-neutral-950 dark:text-neutral-100 dark:border-neutral-800/60 ${
         validPromos.length > 1 ? "cursor-grab active:cursor-grabbing" : ""
       }`}
       onMouseEnter={() => setIsPaused(true)}

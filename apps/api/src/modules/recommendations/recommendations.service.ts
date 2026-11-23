@@ -273,18 +273,37 @@ export class RecommendationsService {
             lastViewedAt: { gte: historyStart },
           };
 
-      const [recentViews, discoveredStores] = await Promise.all([
-        this.prisma.recentProductView.findMany({
-          where: historyWhere,
-          orderBy: [{ lastViewedAt: 'desc' }, { id: 'asc' }],
-          take: 40,
-          select: {
-            productId: true,
-            product: { select: { categoryId: true, vendorId: true } },
-          },
-        }),
-        this.discoverStores(userId, sessionId, visitorId),
-      ]);
+      const searchActorWhere: Prisma.SearchQueryWhereInput[] = [
+        ...(userId ? [{ userId }] : []),
+        ...(sessionId ? [{ userId: null, sessionId }] : []),
+      ];
+      const [recentViews, discoveredStores, recentSearches] = await Promise.all(
+        [
+          this.prisma.recentProductView.findMany({
+            where: historyWhere,
+            orderBy: [{ lastViewedAt: 'desc' }, { id: 'asc' }],
+            take: 40,
+            select: {
+              productId: true,
+              product: { select: { categoryId: true, vendorId: true } },
+            },
+          }),
+          this.discoverStores(userId, sessionId, visitorId),
+          searchActorWhere.length
+            ? this.prisma.searchQuery.findMany({
+                where: {
+                  OR: searchActorWhere,
+                  createdAt: { gte: historyStart },
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+                select: { query: true },
+              })
+            : Promise.resolve([] as Array<{ query: string }>),
+        ],
+      );
+      // Fresh searches are the strongest short-term intent signal.
+      const searchIntent = searchTokens(recentSearches.map((q) => q.query));
 
       const viewedProductIds = [
         ...new Set(recentViews.map(({ productId }) => productId)),
@@ -305,6 +324,11 @@ export class RecommendationsService {
         });
       if (vendorWeights.size)
         signalConditions.push({ vendorId: { in: [...vendorWeights.keys()] } });
+      for (const token of searchIntent.keys()) {
+        signalConditions.push({
+          name: { contains: token, mode: 'insensitive' },
+        });
+      }
       const notRecentlyViewed: Prisma.ProductWhereInput =
         viewedProductIds.length ? { id: { notIn: viewedProductIds } } : {};
       const matchingCandidates = signalConditions.length
@@ -316,7 +340,12 @@ export class RecommendationsService {
             },
             orderBy: { id: 'asc' },
             take: SEARCH_DISCOVERY_POOL_LIMIT,
-            select: { id: true, categoryId: true, vendorId: true },
+            select: {
+              id: true,
+              name: true,
+              categoryId: true,
+              vendorId: true,
+            },
           })
         : [];
 
@@ -333,7 +362,7 @@ export class RecommendationsService {
           where: { AND: [where, { id: { gte: cursorId } }] },
           orderBy: { id: 'asc' },
           take: SEARCH_DISCOVERY_POOL_LIMIT,
-          select: { id: true, categoryId: true, vendorId: true },
+          select: { id: true, name: true, categoryId: true, vendorId: true },
         });
         const remaining = SEARCH_DISCOVERY_POOL_LIMIT - tail.length;
         const head =
@@ -342,7 +371,12 @@ export class RecommendationsService {
                 where: { AND: [where, { id: { lt: cursorId } }] },
                 orderBy: { id: 'asc' },
                 take: remaining,
-                select: { id: true, categoryId: true, vendorId: true },
+                select: {
+                  id: true,
+                  name: true,
+                  categoryId: true,
+                  vendorId: true,
+                },
               })
             : [];
         return [...tail, ...head];
@@ -354,16 +388,29 @@ export class RecommendationsService {
         fallbackCandidates = await sampleCircularCandidates(availableWhere);
       }
 
-      const candidateById = new Map<string, SearchDiscoveryCandidate>();
+      const candidateById = new Map<
+        string,
+        SearchDiscoveryCandidate & { name?: string }
+      >();
       for (const candidate of [...matchingCandidates, ...fallbackCandidates]) {
         candidateById.set(candidate.id, candidate);
       }
+      const searchBonus = (name?: string) => {
+        if (!name || searchIntent.size === 0) return 0;
+        const lowered = name.toLocaleLowerCase();
+        let bonus = 0;
+        for (const [token, weight] of searchIntent) {
+          if (lowered.includes(token)) bonus += weight;
+        }
+        return bonus * 6;
+      };
       const candidates = [...candidateById.values()]
         .map((candidate) => ({
           ...candidate,
           score:
             (categoryWeights.get(candidate.categoryId) ?? 0) * 4 +
             (vendorWeights.get(candidate.vendorId) ?? 0) * 1.5 +
+            searchBonus(candidate.name) +
             (stableHash(`${actorId}:${dayKey}:${candidate.id}`) / 0xffffffff) *
               0.2,
         }))
@@ -1196,7 +1243,7 @@ export class RecommendationsService {
       const followedVendorIds = new Set(
         follows.map(({ vendorId }) => vendorId),
       );
-      return cards.map((card) => {
+      const personalized = cards.map((card) => {
         const candidate = candidateById.get(card.id);
         return candidate
           ? {
@@ -1212,6 +1259,20 @@ export class RecommendationsService {
             }
           : card;
       });
+
+      // Interest matching can be narrow (small catalog, niche taste). Keep the
+      // shelf full by topping up with popular products the shopper has not
+      // already viewed; personalised picks always stay first.
+      if (personalized.length >= RECOMMENDATION_LIMIT) return personalized;
+      const taken = new Set([
+        ...personalized.map(({ id }) => id),
+        ...viewedSeedIds,
+      ]);
+      const popular = await this.discover();
+      const topUp = popular
+        .filter((card) => !taken.has(card.id))
+        .slice(0, RECOMMENDATION_LIMIT - personalized.length);
+      return [...personalized, ...topUp];
     };
 
     return this.cacheService
@@ -1346,93 +1407,62 @@ export class RecommendationsService {
   }
 
   async following(userId: string) {
-    const [followed, recentImpressions] = await Promise.all([
-      this.prisma.vendorFollow.findMany({
-        where: { userId, vendor: { isActive: true, isApproved: true } },
-        orderBy: { createdAt: 'desc' },
-        take: 24,
-        select: { vendorId: true },
-      }),
-      this.prisma.recommendationEvent.findMany({
-        where: {
-          userId,
-          eventType: 'IMPRESSION',
-          surface: 'HOME_FOLLOWING',
-          productId: { not: null },
-          createdAt: {
-            gte: new Date(
-              Date.now() - EXPOSURE_SUPPRESSION_DAYS * 24 * 60 * 60 * 1000,
-            ),
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 500,
-        select: { productId: true },
-      }),
-    ]);
+    const followed = await this.prisma.vendorFollow.findMany({
+      where: { userId, vendor: { isActive: true, isApproved: true } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: { vendorId: true },
+    });
     const vendorIds = followed.map(({ vendorId }) => vendorId);
     if (!vendorIds.length) return [];
-    const suppressedIds = recentImpressions.flatMap(({ productId }) =>
-      productId ? [productId] : [],
-    );
-    // Fetch each followed store's small product pool separately so a store
-    // with many recent products cannot crowd the other followed stores out.
-    const findStoreProducts = async (vendorId: string) => {
-      const availableWhere: Prisma.ProductWhereInput = {
-        vendorId,
-        isActive: true,
-        isDeleted: false,
-        category: { is: { isActive: true } },
-        ...AVAILABLE_PRODUCT,
-      };
-      const unseenProducts = await this.prisma.product.findMany({
-        where: suppressedIds.length
-          ? { ...availableWhere, id: { notIn: suppressedIds } }
-          : availableWhere,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 4,
-        select: { id: true },
-      });
-      if (unseenProducts.length) return unseenProducts;
 
-      // Keep a followed store represented when all of its available products
-      // were recently shown; impression suppression should not hide the store.
-      return this.prisma.product.findMany({
-        where: availableWhere,
+    // A follow feed must be stable: newest products first, never hidden because
+    // the shopper already saw them. Each store contributes its newest few so a
+    // prolific store cannot crowd out the others.
+    const PER_STORE_FETCH = 4;
+    const PER_STORE_SHOWN = 3;
+    const FEED_SIZE = 24;
+    const findStoreProducts = (vendorId: string) =>
+      this.prisma.product.findMany({
+        where: {
+          vendorId,
+          isActive: true,
+          isDeleted: false,
+          category: { is: { isActive: true } },
+          ...AVAILABLE_PRODUCT,
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 1,
-        select: { id: true },
+        take: PER_STORE_FETCH,
+        select: { id: true, vendorId: true, createdAt: true },
       });
-    };
-    const storeProducts: Array<Array<{ id: string }>> = [];
+    const pool: Array<{ id: string; vendorId: string; createdAt: Date }> = [];
     for (let offset = 0; offset < vendorIds.length; offset += 10) {
       const batch = await Promise.all(
         vendorIds.slice(offset, offset + 10).map(findStoreProducts),
       );
-      storeProducts.push(...batch);
+      pool.push(...batch.flat());
     }
-    const selectedIds: string[] = [];
-    for (let productIndex = 0; productIndex < 4; productIndex += 1) {
-      for (const productsForStore of storeProducts) {
-        if (productIndex > 0 && selectedIds.length >= 24) break;
-        const product = productsForStore[productIndex];
-        if (!product) continue;
-        selectedIds.push(product.id);
-      }
-      // Give every followed store its newest eligible product before adding
-      // more picks. Keep the optional extra picks within the normal shelf size.
-      if (productIndex === 0 && storeProducts.length >= 24) break;
-      if (selectedIds.length >= 24) break;
-    }
-    const cardBatches = await Promise.all(
-      Array.from({ length: Math.ceil(selectedIds.length / 24) }, (_, index) =>
-        this.products.findPublicCardsByIds(
-          selectedIds.slice(index * 24, (index + 1) * 24),
-          true,
-        ),
-      ),
+    pool.sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() ||
+        b.id.localeCompare(a.id),
     );
-    return cardBatches.flat();
+    const shownPerStore = new Map<string, number>();
+    const selectedIds: string[] = [];
+    for (const product of pool) {
+      const shown = shownPerStore.get(product.vendorId) ?? 0;
+      if (shown >= PER_STORE_SHOWN) continue;
+      shownPerStore.set(product.vendorId, shown + 1);
+      selectedIds.push(product.id);
+      if (selectedIds.length >= FEED_SIZE) break;
+    }
+    const cards = await this.products.findPublicCardsByIds(selectedIds, true);
+    // findPublicCardsByIds does not guarantee input order; keep newest-first.
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    return selectedIds.flatMap((id) => {
+      const card = byId.get(id);
+      return card ? [card] : [];
+    });
   }
 
   async discoverStores(

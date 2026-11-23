@@ -171,6 +171,23 @@ async function flushRecommendationImpressions() {
   }
 }
 
+/**
+ * Marks every personalised recommendation shelf stale after a behavioural
+ * signal has been durably accepted by the API. Active shelves (home, search
+ * drawer, catalog) refetch immediately; inactive ones refetch on next mount.
+ * The daily-stable marketplace mix and product-related lists are left alone.
+ */
+export function refreshPersonalizedRecommendations(): void {
+  if (typeof window === "undefined") return;
+  void getQueryClient().invalidateQueries({
+    predicate: ({ queryKey }) =>
+      queryKey[0] === "recommendations" &&
+      queryKey[1] !== "marketplace-mix" &&
+      queryKey[1] !== "related",
+    refetchType: "active",
+  });
+}
+
 export const analyticsEventService = {
   trackStoreView(
     vendorId: string,
@@ -187,6 +204,9 @@ export const analyticsEventService = {
       vendorId,
       sessionId,
       visitorId,
+    }).then((result) => {
+      refreshPersonalizedRecommendations();
+      return result;
     });
   },
   trackProductView(
@@ -203,6 +223,9 @@ export const analyticsEventService = {
       productId,
       sessionId,
       visitorId,
+    }).then((result) => {
+      refreshPersonalizedRecommendations();
+      return result;
     });
   },
   trackSearch(
@@ -210,6 +233,7 @@ export const analyticsEventService = {
     resultsCount: number,
     sessionId: string,
     authenticated: boolean = false,
+    visitorId?: string,
   ) {
     const client = authenticated ? userApi : publicApi;
     return client.post<{ accepted: true }>("/analytics/events", {
@@ -217,6 +241,10 @@ export const analyticsEventService = {
       query,
       resultsCount,
       sessionId,
+      visitorId,
+    }).then((result) => {
+      refreshPersonalizedRecommendations();
+      return result;
     });
   },
   trackRecommendation(
@@ -261,28 +289,11 @@ export const analyticsEventService = {
     const client = authenticated ? userApi : publicApi;
     const endpoint = "/analytics/events";
     const request = client.post<{ accepted: boolean }>(endpoint, payload);
-    // Product clicks are followed by a product-view event, which refreshes the
-    // shelves after durable history is written. Refresh here only for store
-    // clicks that don't navigate to a product, and for category browsing.
-    const shouldRefreshForSignal = eventType === "CATEGORY_VIEW" ||
-      (eventType === "CLICK" && Boolean(item.vendorId) && !item.productId);
-    if (!shouldRefreshForSignal) return request;
-
+    // Every non-impression signal (click, dismiss, category view) changes what
+    // the shopper should see next. Product clicks are followed by a
+    // product-view event, which refreshes again once durable history exists.
     return request.then((result) => {
-      if (typeof window !== "undefined") {
-        const queryClient = getQueryClient();
-        const signalShelves = eventType === "CATEGORY_VIEW"
-          ? new Set(["for-you", "stores"])
-          : new Set(["for-you"]);
-        void queryClient.invalidateQueries({
-          predicate: ({ queryKey }) =>
-            queryKey[0] === "recommendations" &&
-            typeof queryKey[1] === "string" &&
-            signalShelves.has(queryKey[1]) &&
-            queryKey[3] === attribution.sessionId,
-          refetchType: "active",
-        });
-      }
+      refreshPersonalizedRecommendations();
       return result;
     });
   },

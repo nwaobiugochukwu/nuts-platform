@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
 import { DomainEvents } from '@api/common/events/domain-events';
 
@@ -20,6 +26,7 @@ export class VendorFollowsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    @Optional() private readonly cache?: CacheService,
   ) {}
 
   list(userId: string) {
@@ -101,7 +108,7 @@ export class VendorFollowsService {
 
   async follow(userId: string, vendorId: string) {
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const vendor = await tx.vendor.findFirst({
           where: { id: vendorId, isActive: true, isApproved: true },
           select: { id: true },
@@ -145,6 +152,10 @@ export class VendorFollowsService {
           followerCount: await this.activeFollowerCount(vendorId, tx),
         };
       });
+      // Invalidate only after commit so a concurrent read cannot re-cache
+      // pre-follow data.
+      if (result.changed) await this.cache?.invalidateRecommendations(userId);
+      return result;
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -164,7 +175,7 @@ export class VendorFollowsService {
   }
 
   async unfollow(userId: string, vendorId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const deleted = await tx.vendorFollow.deleteMany({
         where: { userId, vendorId },
       });
@@ -194,6 +205,8 @@ export class VendorFollowsService {
         followerCount: await this.activeFollowerCount(vendorId, tx),
       };
     });
+    if (result.changed) await this.cache?.invalidateRecommendations(userId);
+    return result;
   }
 
   private activeFollowerCount(vendorId: string, tx?: Prisma.TransactionClient) {

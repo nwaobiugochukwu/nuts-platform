@@ -150,6 +150,8 @@ export class AnalyticsEventsController {
           trackEvent.resultsCount,
           userRole === ROLE.VENDOR ? undefined : userId,
           trackEvent.sessionId,
+          trackEvent.visitorId,
+          userId,
         );
         return { accepted: true };
       }

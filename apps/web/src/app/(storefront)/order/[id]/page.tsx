@@ -605,8 +605,8 @@ export default function OrderDetailPage() {
 
         {/* Dialog 2: Edit Shipping Address */}
         {isEditShippingOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-            <div className="w-full max-w-md rounded-2xl bg-card p-5 sm:p-6 shadow-2xl border border-border space-y-4">
+          <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 backdrop-blur-xs sm:items-center sm:p-4">
+            <div className="h-full w-full max-w-none overflow-y-auto bg-card p-5 pt-[max(1.25rem,env(safe-area-inset-top))] shadow-2xl space-y-4 sm:h-auto sm:max-w-md sm:rounded-2xl sm:border sm:border-border sm:p-6">
               <h3 className="text-base font-semibold text-foreground">Update Shipping Address</h3>
               <p className="text-xs text-muted-foreground">
                 You can change the delivery destination before the order begins processing.

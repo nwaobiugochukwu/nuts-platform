@@ -87,7 +87,11 @@ export function SearchDrawer({ isOpen, onClose, initialQuery = "" }: SearchDrawe
     // Refresh when the drawer is reopened so a product visited since the last
     // search session can influence the next set of picks.
     staleTime: 0,
-    refetchOnWindowFocus: false,
+    // Never paint a previous open's picks; always show what the latest
+    // activity produces.
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const { data: results = [], isFetching } = useQuery({

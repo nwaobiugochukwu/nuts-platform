@@ -309,6 +309,28 @@ export class CacheService {
   }
 
   /**
+   * Drops every cached recommendation payload for the given shopper identities
+   * (user, visitor and/or session id). Called whenever a behavioural signal is
+   * written (view, search, cart, wishlist, follow, click) so the next read
+   * reflects what the shopper just did instead of waiting for a TTL.
+   */
+  async invalidateRecommendations(
+    ...identities: Array<string | null | undefined>
+  ): Promise<void> {
+    const ids = [...new Set(identities.filter((id): id is string => !!id))];
+    if (ids.length === 0) return;
+    const dayKey = new Date().toISOString().slice(0, 10);
+    await Promise.all(
+      ids.flatMap((id) => [
+        this.del(`recommendations:for-you:${id}`),
+        this.del(`recommendations:search-discover:${id}`),
+        this.del(`recommendations:stores:${id}`),
+        this.del(`recommendations:mix:${id}:${dayKey}`),
+      ]),
+    );
+  }
+
+  /**
    * Deletes keys matching a glob pattern.
    *
    * SCAN is used instead of KEYS so we do not block Redis
