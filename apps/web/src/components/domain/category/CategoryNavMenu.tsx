@@ -148,10 +148,7 @@ export function CategoryNavMenu({
             className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden border-t border-border bg-background text-foreground shadow-xl md:bottom-auto md:max-h-[75dvh] md:bg-background/95 md:backdrop-blur-xl"
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
-            style={{
-              top: `${topOffset}px`,
-              fontFamily: "Georgia, 'Times New Roman', serif",
-            }}
+            style={{ top: `${topOffset}px` }}
           >
             {/* Mobile Header */}
             <div className="flex items-center border-b border-border/70 px-4 py-2 bg-secondary/30 md:hidden shrink-0">

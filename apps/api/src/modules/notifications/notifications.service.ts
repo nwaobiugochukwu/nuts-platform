@@ -222,6 +222,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
           body: dto.message,
           icon: '/icon-192x192.png',
           url: dto.link ?? '/',
+          tag: notificationId,
           data: {
             notificationId,
             type: dto.type,

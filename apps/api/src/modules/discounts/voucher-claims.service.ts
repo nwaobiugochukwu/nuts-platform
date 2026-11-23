@@ -34,6 +34,12 @@ export interface VoucherClaimView {
   startsAt: Date | null;
   expiresAt: Date;
   claimedAt: Date;
+  /**
+   * ACTIVE: can be used. USED: the customer has used it the maximum number of times
+   * allowed per customer; kept for history, never offered again.
+   */
+  status: 'ACTIVE' | 'USED';
+  usedAt: Date | null;
   /** What the voucher covers (store, specific products, categories). */
   appliesTo: DiscountTargets;
 }
@@ -184,23 +190,74 @@ export class VoucherClaimsService {
   }
 
   async list(userId: string): Promise<VoucherClaimView[]> {
-    const claims = await this.prisma.discountCodeClaim.findMany({
-      where: {
-        userId,
-        status: DiscountClaimStatus.ACTIVE,
-        expiresAt: { gt: new Date() },
-        discountCode: { isActive: true, deletedAt: null },
-      },
-      include: { discountCode: true },
-      orderBy: { claimedAt: 'desc' },
-      take: 50,
-    });
+    const [active, redeemed] = await Promise.all([
+      this.prisma.discountCodeClaim.findMany({
+        where: {
+          userId,
+          status: DiscountClaimStatus.ACTIVE,
+          expiresAt: { gt: new Date() },
+          discountCode: { isActive: true, deletedAt: null },
+        },
+        include: { discountCode: true },
+        orderBy: { claimedAt: 'desc' },
+        take: 50,
+      }),
+      this.prisma.discountCodeClaim.findMany({
+        where: {
+          userId,
+          status: DiscountClaimStatus.REDEEMED,
+          discountCode: { perUserUsageLimit: { not: null }, deletedAt: null },
+        },
+        include: { discountCode: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 30,
+      }),
+    ]);
+
+    // Which of these codes has this customer used the maximum number of times?
+    const codeIds = [
+      ...new Set([...active, ...redeemed].map((c) => c.discountCodeId)),
+    ];
+    const usages = codeIds.length
+      ? await this.prisma.discountCodeUserUsage.findMany({
+          where: { userId, discountCodeId: { in: codeIds } },
+          select: { discountCodeId: true, usageCount: true },
+        })
+      : [];
+    const usedCount = new Map(
+      usages.map((u) => [u.discountCodeId, u.usageCount]),
+    );
+    const isUsedUp = (claim: (typeof active)[number]) => {
+      const limit = claim.discountCode.perUserUsageLimit;
+      return (
+        limit !== null && (usedCount.get(claim.discountCodeId) ?? 0) >= limit
+      );
+    };
+
+    const available = active.filter((claim) => !isUsedUp(claim));
+    const seen = new Set<string>();
+    const used = [...active.filter(isUsedUp), ...redeemed.filter(isUsedUp)]
+      .filter((claim) => {
+        if (seen.has(claim.discountCodeId)) return false;
+        seen.add(claim.discountCodeId);
+        return true;
+      })
+      .slice(0, 30);
+
+    const rows = [...available, ...used];
     const targets = await describeDiscountTargets(
       this.prisma,
-      claims.map((c) => c.discountCode),
+      rows.map((c) => c.discountCode),
     );
-    return claims.map((c, i) =>
-      this.toView(c.discountCode, c.claimedAt, c.expiresAt, targets[i]),
+    return rows.map((c, i) =>
+      this.toView(
+        c.discountCode,
+        c.claimedAt,
+        c.expiresAt,
+        targets[i],
+        i < available.length ? 'ACTIVE' : 'USED',
+        i < available.length ? null : c.updatedAt,
+      ),
     );
   }
 
@@ -255,6 +312,8 @@ export class VoucherClaimsService {
     claimedAt: Date,
     expiresAt: Date,
     appliesTo: DiscountTargets,
+    status: 'ACTIVE' | 'USED' = 'ACTIVE',
+    usedAt: Date | null = null,
   ): VoucherClaimView {
     return {
       code: d.code,
@@ -270,6 +329,8 @@ export class VoucherClaimsService {
       startsAt: d.startsAt,
       expiresAt,
       claimedAt,
+      status,
+      usedAt,
       appliesTo,
     };
   }

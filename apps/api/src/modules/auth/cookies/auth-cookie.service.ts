@@ -3,9 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import type { CookieOptions, Response } from 'express';
 
 import {
-  AUTH_ACCESS_COOKIE,
-  AUTH_REFRESH_COOKIE,
+  AUTH_COOKIE_NAMES,
   AUTH_COOKIE_PATH,
+  type AuthCookieRole,
 } from '../constants/auth-cookies.constants';
 import type { AuthTokens } from '../types/auth.types';
 
@@ -74,40 +74,51 @@ export class AuthCookieService {
     );
   }
 
-  setAuthCookies(res: Response, tokens: AuthTokens): void {
-    // 1. Standard HttpOnly accessToken cookie
-    res.cookie(AUTH_ACCESS_COOKIE, tokens.accessToken, {
+  setAuthCookies(
+    res: Response,
+    tokens: AuthTokens,
+    role: AuthCookieRole = 'user',
+  ): void {
+    const names = AUTH_COOKIE_NAMES[role];
+
+    // 1. HttpOnly access token cookie (this role only)
+    res.cookie(names.access, tokens.accessToken, {
       ...this.baseOptions,
       maxAge: this.accessMaxAge,
       path: AUTH_COOKIE_PATH,
     });
 
-    // 2. Standard HttpOnly refreshToken cookie
-    res.cookie(AUTH_REFRESH_COOKIE, tokens.refreshToken, {
+    // 2. HttpOnly refresh token cookie (this role only)
+    res.cookie(names.refresh, tokens.refreshToken, {
       ...this.baseOptions,
       maxAge: this.refreshMaxAge,
       path: AUTH_COOKIE_PATH,
     });
   }
 
-  clearAuthCookies(res: Response): void {
-    res.clearCookie(AUTH_ACCESS_COOKIE, {
+  clearAuthCookies(res: Response, role: AuthCookieRole = 'user'): void {
+    const names = AUTH_COOKIE_NAMES[role];
+    res.clearCookie(names.access, {
       ...this.baseOptions,
       path: AUTH_COOKIE_PATH,
     });
-    res.clearCookie(AUTH_REFRESH_COOKIE, {
+    res.clearCookie(names.refresh, {
       ...this.baseOptions,
       path: AUTH_COOKIE_PATH,
     });
-    // Clear legacy snake_case cookie names if present
-    res.clearCookie('access_token', {
-      ...this.baseOptions,
-      path: AUTH_COOKIE_PATH,
-    });
-    res.clearCookie('refresh_token', {
-      ...this.baseOptions,
-      path: AUTH_COOKIE_PATH,
-    });
+
+    // Only the customer cookies may carry the legacy snake_case names; never
+    // touch another role's cookies when one role signs out.
+    if (role === 'user') {
+      res.clearCookie('access_token', {
+        ...this.baseOptions,
+        path: AUTH_COOKIE_PATH,
+      });
+      res.clearCookie('refresh_token', {
+        ...this.baseOptions,
+        path: AUTH_COOKIE_PATH,
+      });
+    }
   }
 
   private msFromExpires(value: string): number {

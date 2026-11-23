@@ -193,7 +193,7 @@ export class VendorAccountController {
       extractUserAgent(req),
     );
 
-    this.authCookies.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res, 'vendor');
 
     return result;
   }
@@ -225,7 +225,7 @@ export class VendorAccountController {
       extractUserAgent(req),
     );
 
-    this.authCookies.clearAuthCookies(res);
+    this.authCookies.clearAuthCookies(res, 'vendor');
 
     return null;
   }

@@ -30,7 +30,10 @@ export function VoucherWalletSync() {
 
     void (async () => {
       try {
-        const server = (await voucherService.list()).data ?? [];
+        // Used-up vouchers are history; only usable ones belong in the cart.
+        const server = ((await voucherService.list()).data ?? []).filter(
+          (voucher) => voucher.status !== "USED",
+        );
         // Oldest first, so the newest claims win when only two are kept.
         const serverCodes = [...server]
           .sort((a, b) => a.claimedAt.localeCompare(b.claimedAt))

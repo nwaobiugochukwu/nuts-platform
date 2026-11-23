@@ -603,9 +603,9 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
 
 #### 4. Client-Side Architecture & UX Flow
 
-- **Announcement Ticker (`PlatformPromoTicker`):** Rotating promo bar pinned under the header, with live countdowns and one-click claim. It is collapsible, not dismissible: collapsing leaves a slim "N offers available" strip that reopens it, the choice is remembered across pages and tabs, and a campaign the shopper has not seen reopens the bar automatically. Automatic offers show "Applied automatically" instead of a code.
+- **Announcement Ticker (`PlatformPromoTicker`):** Rotating promo bar pinned under the header, with live countdowns and one-click claim. It is collapsible, not dismissible: collapsing leaves a slim "N offers available" strip that reopens it, the choice is remembered across pages and tabs, and a campaign the shopper has not seen reopens the bar automatically. Automatic offers show "Applied automatically" instead of a code. Offers rotate automatically: each stays at least 5 seconds, longer for long text (+40 ms per character past 40, capped at 8 seconds); hovering (on devices that can hover), keyboard focus, or tapping, swiping or using the arrows/dots pauses rotation until 10 seconds after the last interaction (a mouse or tap click that merely leaves a button focused does not pause it); it never rotates in a background tab, and when the OS requests reduced motion the offers still rotate but without the slide animation. The timing rule lives in `src/lib/promo-timing.ts`.
 - **Voucher Dock (`ProductVoucherDock`):** Interactive voucher tray on product pages showing applicable vouchers, minimum spend or quantity targets, and real-time deal pricing. Automatic offers show "No code needed".
-- **My vouchers (`/account/vouchers`):** the customer's server-side wallet with what each voucher covers; the cart explains any claimed voucher that is not applied yet and links to the eligible items.
+- **My vouchers (`/vouchers`):** the customer's server-side wallet with what each voucher covers; the cart explains any claimed voucher that is not applied yet and links to the eligible items.
 - **Mobile Responsive Experience:** Refined touch targets, swipeable carousels, responsive image viewports, and a sticky mobile action bar (`sm:hidden`) ensuring effortless add-to-cart across all viewports (320px–1440px+).
 
 #### 5. Acronym & Concept Glossary
@@ -667,7 +667,7 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
      - _Tokens (JWT):_ Self-contained, stateless, cryptographically signed JSON documents encoding claims (`sub`, `roles`, `exp`).
    - **NUTS Production Implementation:** NUTS uses a hybrid **Defense-in-Depth Session/Token Architecture**:
      - The **Access Token** is a 15-minute stateless JWT held in client memory closures (React state) and sent via `Authorization: Bearer` headers (immune to CSRF).
-     - The **Refresh Token** is a 7-day cryptographically random token stored in an `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/api/v1/auth` cookie (immune to XSS).
+     - The **Refresh Token** is a 7-day cryptographically random token stored in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie (immune to XSS). Each role (customer, vendor, admin) has its own cookie pair, and vendor/admin sign-ins are per-device sessions, so concurrent roles and devices do not sign each other out.
      - The **Session Record** is stored in Redis/PostgreSQL (`refreshTokenId`), allowing immediate remote revocation (`POST /api/v1/auth/logout-all`).
    - **Architecture & Interview Takeaway:** _Storing access tokens in `localStorage` leaves users vulnerable to XSS token exfiltration. Relying purely on stateless JWTs makes instant session revocation impossible. Use short-lived in-memory tokens for requests, HttpOnly cookies for refresh, and server-side session tracking for revocability._
 

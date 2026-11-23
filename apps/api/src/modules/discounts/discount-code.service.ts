@@ -1781,6 +1781,35 @@ export class DiscountCodeService {
   // PUBLIC STOREFRONT PROMOTIONS & DEALS
   // ============================================================
 
+  /**
+   * Discounts this customer has already used the maximum number of times
+   * (`perUserUsageLimit`). Storefront surfaces hide them for that customer: a
+   * "10% OFF" chip or a "with CODE" hint for an offer they can no longer use is noise,
+   * and the claim/checkout rules would refuse it anyway.
+   */
+  async findExhaustedCodeIds(
+    userId: string | undefined,
+    codeIds: string[],
+  ): Promise<Set<string>> {
+    if (!userId || codeIds.length === 0) return new Set();
+    const [codes, usages] = await Promise.all([
+      this.prisma.discountCode.findMany({
+        where: { id: { in: codeIds }, perUserUsageLimit: { not: null } },
+        select: { id: true, perUserUsageLimit: true },
+      }),
+      this.prisma.discountCodeUserUsage.findMany({
+        where: { userId, discountCodeId: { in: codeIds } },
+        select: { discountCodeId: true, usageCount: true },
+      }),
+    ]);
+    const used = new Map(usages.map((u) => [u.discountCodeId, u.usageCount]));
+    return new Set(
+      codes
+        .filter((c) => (used.get(c.id) ?? 0) >= (c.perUserUsageLimit ?? 0))
+        .map((c) => c.id),
+    );
+  }
+
   async getPublicPlatformPromos(
     userId?: string,
   ): Promise<PublicPlatformPromoDto[]> {
@@ -1854,10 +1883,16 @@ export class DiscountCodeService {
           fetcher,
         )
       : await fetcher();
-    if (await this.hasPriorNonCancelledOrders(userId)) {
-      return promos.filter((promo) => !promo.isFirstOrderOnly);
-    }
-    return promos;
+    const visible = (await this.hasPriorNonCancelledOrders(userId))
+      ? promos.filter((promo) => !promo.isFirstOrderOnly)
+      : promos;
+    const exhausted = await this.findExhaustedCodeIds(
+      userId,
+      visible.map((promo) => promo.id),
+    );
+    return exhausted.size > 0
+      ? visible.filter((promo) => !exhausted.has(promo.id))
+      : visible;
   }
 
   async getPublicProductDeals(
@@ -2034,9 +2069,16 @@ export class DiscountCodeService {
         )
       : await fetcher();
 
-    if (await this.hasPriorNonCancelledOrders(userId)) {
+    const hasPriorOrders = await this.hasPriorNonCancelledOrders(userId);
+    const exhausted = await this.findExhaustedCodeIds(
+      userId,
+      cachedDeal.allVouchers.map((voucher) => voucher.id),
+    );
+    if (hasPriorOrders || exhausted.size > 0) {
       const allVouchers = cachedDeal.allVouchers.filter(
-        (voucher) => !voucher.isFirstOrderOnly,
+        (voucher) =>
+          (!hasPriorOrders || !voucher.isFirstOrderOnly) &&
+          !exhausted.has(voucher.id),
       );
       const topApplicable = allVouchers.find(
         (v) => v.isApplicable && v.estimatedSavings > 0,
@@ -2079,7 +2121,37 @@ export class DiscountCodeService {
     };
   }
 
+  /** Card deals for a batch of products, minus offers this customer has used up. */
   async getBatchProductDeals(
+    dto: BatchProductDiscountsDto,
+    userId?: string,
+  ): ReturnType<DiscountCodeService['computeBatchProductDeals']> {
+    const result = await this.computeBatchProductDeals(dto, userId);
+    if (!userId) return result;
+
+    const ids = new Set<string>();
+    for (const entry of Object.values(result)) {
+      if (entry.bestDiscount) ids.add(entry.bestDiscount.id);
+      if (entry.unlockableDiscount) ids.add(entry.unlockableDiscount.id);
+    }
+    const exhausted = await this.findExhaustedCodeIds(userId, [...ids]);
+    if (exhausted.size === 0) return result;
+
+    for (const entry of Object.values(result)) {
+      if (entry.bestDiscount && exhausted.has(entry.bestDiscount.id)) {
+        entry.bestDiscount = null;
+      }
+      if (
+        entry.unlockableDiscount &&
+        exhausted.has(entry.unlockableDiscount.id)
+      ) {
+        entry.unlockableDiscount = null;
+      }
+    }
+    return result;
+  }
+
+  private async computeBatchProductDeals(
     dto: BatchProductDiscountsDto,
     userId?: string,
   ): Promise<

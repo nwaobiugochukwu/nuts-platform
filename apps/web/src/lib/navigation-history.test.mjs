@@ -30,13 +30,33 @@ test("going back drops the page being left, and does not duplicate", () => {
   assert.equal(previousPath(), "/a");
 });
 
-test("names common origins", () => {
+test("names common origins accurately", () => {
   assert.equal(describePath("/notifications?x=1"), "notifications");
   assert.equal(describePath("/vendor/notifications"), "notifications");
-  assert.equal(describePath("/order/o1"), "your orders");
-  assert.equal(describePath("/vendor/order/o1"), "orders");
   assert.equal(describePath("/unknown/page"), null);
   assert.equal(describePath(null), null);
+});
+
+test("a single page is never called its list", () => {
+  assert.equal(describePath("/notifications/n1"), "the notification");
+  assert.equal(describePath("/vendor/notifications/n1"), "the notification");
+  assert.equal(describePath("/order"), "your orders");
+  assert.equal(describePath("/order/o1"), "your order");
+  assert.equal(describePath("/vendor/order"), "orders");
+  assert.equal(describePath("/vendor/order/o1"), "the order");
+  assert.equal(describePath("/admin/order/o1"), "the order");
+});
+
+test("portal pages get their own name instead of a generic dashboard", () => {
+  assert.equal(describePath("/vendor/product"), "your products");
+  assert.equal(describePath("/vendor/discount"), "your discounts");
+  assert.equal(describePath("/vendor/wallet"), "your wallet");
+  assert.equal(describePath("/admin/discount"), "discounts");
+  assert.equal(describePath("/admin/category"), "categories");
+  assert.equal(describePath("/vendor"), "stores");
+  assert.equal(describePath("/vendor/aba-shoes"), "the store");
+  assert.equal(describePath("/vouchers"), "your vouchers");
+  assert.equal(describePath("/cart"), "your cart");
 });
 
 test("a page that renders before it is recorded still finds its origin", () => {

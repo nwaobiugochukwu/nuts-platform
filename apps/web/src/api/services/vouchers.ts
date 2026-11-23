@@ -15,6 +15,9 @@ export interface VoucherClaimDto {
   /** When the held reservation ends. */
   expiresAt: string;
   claimedAt: string;
+  /** USED: used the maximum times allowed per customer (history only). */
+  status?: "ACTIVE" | "USED";
+  usedAt?: string | null;
   /** What the voucher covers (whole store, specific products, categories). */
   appliesTo?: DiscountTargetsDto;
 }

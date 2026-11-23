@@ -193,6 +193,26 @@ model UserAuthSession {
   @@map("user_auth_sessions")
 }
 
+/// One row per signed-in browser/device for ADMIN and VENDOR accounts (customers use
+/// UserAuthSession). Each session rotates its own refresh token, so signing in on a
+/// second device no longer invalidates the first, and a stale token revokes only its
+/// own session instead of every session of the account.
+model AccountAuthSession {
+  id             String    @id @default(uuid())
+  role           ROLE
+  subjectId      String
+  tokenVersion   Int
+  refreshToken   String?
+  refreshTokenId String?   @unique
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([role, subjectId, revokedAt, expiresAt])
+  @@map("account_auth_sessions")
+}
+
 /// Short-lived encrypted response used to make refresh-token rotation retries idempotent.
 /// Refresh IDs are stored only as keyed hashes, and receipts expire after the replay window.
 model RefreshRotationReceipt {
