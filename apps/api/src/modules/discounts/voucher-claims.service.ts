@@ -13,6 +13,11 @@ import {
 
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 
+import {
+  describeDiscountTargets,
+  type DiscountTargets,
+} from './discount-targets';
+
 /** How long a claim holds its reservation before it is given back. */
 export const CLAIM_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -29,6 +34,8 @@ export interface VoucherClaimView {
   startsAt: Date | null;
   expiresAt: Date;
   claimedAt: Date;
+  /** What the voucher covers (store, specific products, categories). */
+  appliesTo: DiscountTargets;
 }
 
 /**
@@ -68,7 +75,7 @@ export class VoucherClaimsService {
     const code = this.normalize(rawCode);
     if (!code) throw new BadRequestException('A voucher code is required.');
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // Serialise concurrent claims of the same code: the capacity check and
       // the insert below must see each other.
       const locked = await tx.$queryRaw<Array<{ id: string }>>(
@@ -83,6 +90,12 @@ export class VoucherClaimsService {
       });
       if (!discount) {
         throw new NotFoundException('Invalid or inactive voucher code.');
+      }
+
+      if (discount.autoApply) {
+        throw new BadRequestException(
+          'This offer applies automatically when your cart qualifies. There is nothing to claim.',
+        );
       }
 
       const now = new Date();
@@ -157,8 +170,17 @@ export class VoucherClaimsService {
         },
       });
 
-      return this.toView(discount, claim.claimedAt, claim.expiresAt);
+      return { discount, claim };
     });
+    const [appliesTo] = await describeDiscountTargets(this.prisma, [
+      result.discount,
+    ]);
+    return this.toView(
+      result.discount,
+      result.claim.claimedAt,
+      result.claim.expiresAt,
+      appliesTo,
+    );
   }
 
   async list(userId: string): Promise<VoucherClaimView[]> {
@@ -173,8 +195,12 @@ export class VoucherClaimsService {
       orderBy: { claimedAt: 'desc' },
       take: 50,
     });
-    return claims.map((c) =>
-      this.toView(c.discountCode, c.claimedAt, c.expiresAt),
+    const targets = await describeDiscountTargets(
+      this.prisma,
+      claims.map((c) => c.discountCode),
+    );
+    return claims.map((c, i) =>
+      this.toView(c.discountCode, c.claimedAt, c.expiresAt, targets[i]),
     );
   }
 
@@ -228,6 +254,7 @@ export class VoucherClaimsService {
     },
     claimedAt: Date,
     expiresAt: Date,
+    appliesTo: DiscountTargets,
   ): VoucherClaimView {
     return {
       code: d.code,
@@ -243,6 +270,7 @@ export class VoucherClaimsService {
       startsAt: d.startsAt,
       expiresAt,
       claimedAt,
+      appliesTo,
     };
   }
 }

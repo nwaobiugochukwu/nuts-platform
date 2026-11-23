@@ -1,8 +1,8 @@
 "use client";
 
-import { authService } from "@/api/auth";
+import { authService } from "@/api/services/auth";
 import { getApiErrorMessage } from "@/api/core/error";
-import { PublicOnlyLayout } from "@/components/auth/PublicOnlyLayout";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
 import { FormInput } from "@/components/form/FormInput";
 import { Button } from "@/components/ui/button";
 import { zodResolver } from "@/lib/zod-resolver";

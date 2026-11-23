@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { Inter } from "next/font/google";
-import { PaystackScript } from "@/components/paystack-script";
+import { PaystackScript } from "@/components/domain/payments/PaystackScript";
 import { RouteProgressBar } from "@/components/feedback/RouteProgressBar";
 import { Provider } from "@/provider";
 import type { Metadata, Viewport } from "next";
@@ -8,7 +8,7 @@ import { Suspense } from "react";
 import "./globals.css";
 
 const inter = Inter({
-  variable: "--font-sans",
+  variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
 });
@@ -101,7 +101,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={initialThemeClass}
+      className={`${inter.variable} ${initialThemeClass}`.trim()}
       style={initialColorScheme ? { colorScheme: initialColorScheme } : undefined}
       suppressHydrationWarning
     >
@@ -124,7 +124,7 @@ export default async function RootLayout({
        * does NOT affect child component hydration checks.
        */}
       <body
-        className={`${inter.variable} font-sans antialiased text-foreground bg-background`}
+        className="font-sans antialiased text-foreground bg-background"
         suppressHydrationWarning
       >
         <script

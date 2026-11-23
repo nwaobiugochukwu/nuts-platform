@@ -3,8 +3,8 @@
 import { userService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { UserResponseDto } from "@/api/dto/user";
-import { referralService } from "@/api/referral";
-import { PageHeader } from "@/components/common/PageHeader";
+import { referralService } from "@/api/services/referral";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { FormInput } from "@/components/form/FormInput";
 import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import { OtpPromptDialog } from "@/components/modal/OtpPromptDialog";

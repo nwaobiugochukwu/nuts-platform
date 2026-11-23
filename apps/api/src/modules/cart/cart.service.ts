@@ -163,12 +163,16 @@ export class CartService {
    * with the reason and whether it can ever work (`permanent`), so the UI can
    * tell the shopper which voucher was dropped without losing the others.
    */
-  async previewDiscount(userId: string, codeOrCodes: string | string[]) {
+  async previewDiscount(
+    userId: string,
+    codeOrCodes: string | string[],
+    { automatic = false }: { automatic?: boolean } = {},
+  ) {
     await this.usersService.assertActiveAccount(userId);
     const codes = (Array.isArray(codeOrCodes) ? codeOrCodes : [codeOrCodes])
       .map((c) => c.trim())
       .filter(Boolean);
-    if (codes.length === 0) {
+    if (codes.length === 0 && !automatic) {
       throw new BadRequestException('A discount code is required');
     }
 
@@ -199,13 +203,16 @@ export class CartService {
           : []),
       ],
       lineTotal: new Prisma.Decimal(item.unitPrice).mul(item.quantity),
+      quantity: item.quantity,
     }));
 
+    // `automatic`: the cart's own sync (never throws for a single bad voucher,
+    // and includes no-code offers). Without it: validating one typed code.
     const resolved = await this.discountCodeService.resolveVoucherStack(
       codes,
       userId,
       lines,
-      { strict: codes.length === 1 },
+      { strict: !automatic && codes.length === 1, includeAutomatic: automatic },
     );
 
     const discountAmount = Number(resolved.totalDiscount);
@@ -214,6 +221,12 @@ export class CartService {
     const totalAmount = Math.max(
       0,
       response.cart.subtotal - discountAmount + deliveryCharge + serviceCharge,
+    );
+
+    // Say WHAT a rejected voucher covers, so the cart can point the shopper at
+    // the eligible items instead of leaving a claimed code that does nothing.
+    const targets = await this.discountCodeService.describeTargetsByCode(
+      resolved.rejected.map(({ code }) => code),
     );
 
     const isPermanent = (error: Error) =>
@@ -235,12 +248,15 @@ export class CartService {
           amount: Number(amount),
           scope: discount.scope,
           stackable: discount.stackable,
+          automatic: discount.autoApply,
+          label: discount.description?.trim() || discount.code,
         }),
       ),
       rejected: resolved.rejected.map(({ code, error }) => ({
         code,
         reason: error.message,
         permanent: isPermanent(error),
+        appliesTo: targets.get(code.trim().toUpperCase()) ?? null,
       })),
     };
   }

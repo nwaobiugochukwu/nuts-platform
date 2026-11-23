@@ -3,12 +3,12 @@
 import { publicApi } from "@/api/core/client";
 import { vendorAuthService } from "@/api";
 import type { RegisterResponseDto, VerifyOtpResponseDto } from "@/api/dto/auth";
-import { PublicOnlyLayout } from "@/components/auth/PublicOnlyLayout";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
 import { FormInput } from "@/components/form/FormInput";
 import { FormTextarea } from "@/components/form/FormTextarea";
 import { Button } from "@/components/ui/button";
 import { SegmentedOtpInput } from "@/components/ui/SegmentedOtpInput";
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { GoogleSignInButton } from "@/components/domain/auth/GoogleSignInButton";
 import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { zodResolver } from "@/lib/zod-resolver";

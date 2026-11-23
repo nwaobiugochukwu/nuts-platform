@@ -1,23 +1,26 @@
 "use client";
 
-import type { AppNotification,NotificationType } from "@/api/notifications";
+import type { AppNotification,NotificationType } from "@/api/services/notifications";
 import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/hooks/use-notifications";
 import {
-  notificationDetailPath,
-  resolveNotificationTargetUrl,
-} from "@/lib/notification-path";
+  formatRelativeTime,
+  notificationDayGroup,
+  resolveNotificationDestination,
+  type NotificationDayGroup,
+} from "@/lib/notification-open";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
+import { useNotificationsStore } from "@/zustand/notifications";
 import {
 AlertTriangle,
-ArrowLeft,
 Bell,
 Check,
 CheckCheck,
+ChevronRight,
 CreditCard,
 DollarSign,
-ExternalLink,
 Info,
+MoreHorizontal,
 Package,
 Search,
 SlidersHorizontal,
@@ -25,9 +28,9 @@ Trash2,
 Users,
 X,
 } from "lucide-react";
-import Link from "@/components/navigation/AppLink";
+import { BackLink } from "@/components/navigation/BackLink";
 import { useRouter } from "next/navigation";
-import { useEffect,useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NotificationPreferencesDialog } from "@/components/domain/notification/NotificationPreferencesView";
 
 interface NotificationsManagerProps {
@@ -44,38 +47,23 @@ function getNotificationIcon(type: NotificationType) {
     case "ORDER_SHIPPED":
     case "ORDER_DELIVERED":
     case "ORDER_CANCELLED":
-      return <Package className="h-5 w-5 text-blue-500" />;
+      return <Package className="h-[18px] w-[18px] text-blue-500" />;
     case "VENDOR_FOLLOWED":
-      return <Users className="h-5 w-5 text-indigo-500" />;
+      return <Users className="h-[18px] w-[18px] text-indigo-500" />;
     case "PAYMENT_RECEIVED":
-      return <CreditCard className="h-5 w-5 text-emerald-500" />;
+      return <CreditCard className="h-[18px] w-[18px] text-emerald-500" />;
     case "PAYMENT_REFUNDED":
-      return <CreditCard className="h-5 w-5 text-emerald-500" />;
+      return <CreditCard className="h-[18px] w-[18px] text-emerald-500" />;
     case "PAYMENT_FAILED":
-      return <CreditCard className="h-5 w-5 text-rose-500" />;
+      return <CreditCard className="h-[18px] w-[18px] text-rose-500" />;
     case "PAYOUT_PROCESSED":
-      return <DollarSign className="h-5 w-5 text-amber-500" />;
+      return <DollarSign className="h-[18px] w-[18px] text-amber-500" />;
     case "LOW_STOCK_ALERT":
-      return <AlertTriangle className="h-5 w-5 text-orange-500" />;
+      return <AlertTriangle className="h-[18px] w-[18px] text-orange-500" />;
     default:
-      return <Info className="h-5 w-5 text-muted-foreground" />;
+      return <Info className="h-[18px] w-[18px] text-muted-foreground" />;
   }
 }
-
-const notificationTypeLabels: Record<NotificationType, string> = {
-  ORDER_PLACED: "Order placed",
-  ORDER_CONFIRMED: "Order confirmed",
-  ORDER_SHIPPED: "Order shipped",
-  ORDER_DELIVERED: "Order delivered",
-  ORDER_CANCELLED: "Order cancelled",
-  PAYMENT_RECEIVED: "Payment received",
-  PAYMENT_FAILED: "Payment failed",
-  PAYMENT_REFUNDED: "Refund processed",
-  PAYOUT_PROCESSED: "Payout processed",
-  LOW_STOCK_ALERT: "Low stock",
-  VENDOR_FOLLOWED: "New follower",
-  SYSTEM_ANNOUNCEMENT: "System announcement",
-};
 
 const categoryNotificationTypes = {
   orders: new Set<NotificationType>([
@@ -154,17 +142,17 @@ export function getNotificationCategory(
   return "general";
 }
 
-function formatFullDate(dateString: string): string {
-  const d = new Date(dateString);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
-}
+type InboxFilter = "all" | "unread" | "orders" | "payments" | "system";
+
+const GROUP_ORDER: NotificationDayGroup[] = ["Today", "Yesterday", "This week", "Earlier"];
+
+const FILTERS: Array<{ value: InboxFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+  { value: "orders", label: "Orders" },
+  { value: "payments", label: "Payments" },
+  { value: "system", label: "System" },
+];
 
 export function NotificationsManager({
   title = "Notifications",
@@ -175,9 +163,12 @@ export function NotificationsManager({
   const router = useRouter();
   const rawRole = useAuthStore((state) => state.role ?? state.user?.role);
   const role = normalizeRole(rawRole) ?? "user";
-  const [filter, setFilter] = useState<"all" | "unread" | "orders" | "payments" | "system">("all");
+  const [filter, setFilter] = useState<InboxFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const {
     notifications,
     isLoading,
@@ -192,253 +183,243 @@ export function NotificationsManager({
     retryStream,
   } = useNotifications();
 
-  // Load notifications initially
+  // Coming back from an order or a message must not reset the list (and scroll
+  // position): the live stream keeps the store current, so only load when empty.
   useEffect(() => {
-    void fetchNotifications(undefined, 50, false);
+    if (useNotificationsStore.getState().notifications.length === 0) {
+      void fetchNotifications(undefined, 30, false);
+    }
   }, [fetchNotifications]);
 
-  // Compute accurate counts across the loaded dataset without destroying other tab counters
-  const allCount = notifications.length;
-  const unreadItemsCount = notifications.filter((n) => !n.isRead).length;
-  const ordersCount = notifications.filter(
-    (n) => getNotificationCategory(n) === "orders",
-  ).length;
-  const paymentsCount = notifications.filter(
-    (n) => getNotificationCategory(n) === "payments",
-  ).length;
-  const systemCount = notifications.filter(
-    (n) => getNotificationCategory(n) === "system",
-  ).length;
+  // Close the row menu on outside tap / Escape.
+  useEffect(() => {
+    if (!menuFor) return;
+    const close = () => setMenuFor(null);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && close();
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuFor]);
 
-  const categoryFiltered = notifications.filter((n) => {
-    switch (filter) {
-      case "unread":
-        return !n.isRead;
-      case "orders":
-        return getNotificationCategory(n) === "orders";
-      case "payments":
-        return getNotificationCategory(n) === "payments";
-      case "system":
-        return getNotificationCategory(n) === "system";
-      case "all":
-      default:
-        return true;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const availableFilters = FILTERS.filter(
+    ({ value }) =>
+      value === "all" ||
+      value === "unread" ||
+      notifications.some((n) => getNotificationCategory(n) === value),
+  );
+
+  const visible = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return notifications.filter((n) => {
+      if (filter === "unread" && n.isRead) return false;
+      if (
+        (filter === "orders" || filter === "payments" || filter === "system") &&
+        getNotificationCategory(n) !== filter
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return [n.title, n.message, n.type, n.metadata?.orderId, n.metadata?.paymentId]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q));
+    });
+  }, [notifications, filter, searchQuery]);
+
+  const groups = useMemo(() => {
+    const map = new Map<NotificationDayGroup, AppNotification[]>();
+    for (const item of visible) {
+      const key = notificationDayGroup(item.createdAt);
+      map.set(key, [...(map.get(key) ?? []), item]);
     }
-  });
+    return GROUP_ORDER.filter((key) => map.has(key)).map((key) => ({
+      key,
+      items: map.get(key)!,
+    }));
+  }, [visible]);
 
-  const filteredNotifications = searchQuery.trim()
-    ? categoryFiltered.filter((n) => {
-        const q = searchQuery.toLowerCase().trim();
-        return (
-          (n.title && n.title.toLowerCase().includes(q)) ||
-          (n.message && n.message.toLowerCase().includes(q)) ||
-          (n.type && n.type.toLowerCase().includes(q)) ||
-          (n.metadata?.orderId && String(n.metadata.orderId).toLowerCase().includes(q)) ||
-          (n.metadata?.paymentId && String(n.metadata.paymentId).toLowerCase().includes(q))
-        );
-      })
-    : categoryFiltered;
+  const loadMore = () => {
+    if (!hasNextPage || !nextCursor || isLoading) return;
+    void fetchNotifications(nextCursor, 20, true, {
+      ...(filter === "unread" ? { unreadOnly: true } : {}),
+      ...(filter === "orders" || filter === "payments" ? { category: filter } : {}),
+    });
+  };
 
-  const handleAction = async (notif: AppNotification) => {
-    if (!notif.isRead) {
-      await markAsRead(notif.id);
-    }
-    router.push(notificationDetailPath(role, notif.id));
+  // Infinite scroll: fetch the next page as the end of the list nears.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasNextPage || !nextCursor) return;
+    const observer = new IntersectionObserver(
+      (entries) => entries[0]?.isIntersecting && loadMore(),
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasNextPage, nextCursor, isLoading, filter]);
+
+  // One tap: mark read and open what the notification is about.
+  const open = (notif: AppNotification) => {
+    if (!notif.isRead) void markAsRead(notif.id);
+    router.push(resolveNotificationDestination(notif, role).href);
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto py-2 sm:py-6 px-1 min-[360px]:px-2 sm:px-4">
-      {/* Top Bar with back link & actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="min-w-0 flex-1">
+    <div className="mx-auto w-full max-w-3xl px-1 py-2 sm:px-4 sm:py-6">
+      {/* Header */}
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           {backHref && (
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-1.5"
-            >
-              <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
-              <span>Back to {backLabel || "Home"}</span>
-            </Link>
+            <BackLink
+              fallbackHref={backHref}
+              fallbackLabel={backLabel || "Home"}
+              className="mb-1 -ml-1 px-1 text-xs"
+            />
           )}
-          <h1 className="text-lg min-[360px]:text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground break-words">
-            {title}
-          </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1 leading-relaxed">
-            {subtitle}
-          </p>
+          <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{title}</h1>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground sm:text-sm">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
+        <div className="flex shrink-0 items-center gap-1">
+          <button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsPreferencesOpen(true)}
-            className="w-full sm:w-auto gap-2 text-xs h-9 rounded-xl font-medium border-border hover:bg-secondary transition-colors cursor-pointer"
+            onClick={() => setSearchOpen((v) => !v)}
+            aria-label="Search notifications"
+            aria-pressed={searchOpen}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-            <span>Notification Preferences</span>
-          </Button>
+            <Search className="h-[18px] w-[18px]" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsPreferencesOpen(true)}
+            aria-label="Notification preferences"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <SlidersHorizontal className="h-[18px] w-[18px]" />
+          </button>
         </div>
       </div>
 
-      {sseRetryExhausted && (
-        <div
-          role="status"
-          className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            Live notification updates are paused. Your notification history is still accessible.
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={retryStream}
-            className="text-xs"
-          >
-            Reconnect Stream
-          </Button>
-        </div>
-      )}
-
-      {/* Filter and Search Bar */}
-      <div className="space-y-3.5 pb-4 border-b border-border">
-        {/* Search Input */}
-        <div className="relative flex items-center">
-          <Search className="pointer-events-none absolute left-3.5 h-4 w-4 text-muted-foreground/70" />
+      {searchOpen && (
+        <div className="relative mb-3">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
           <input
-            type="text"
+            autoFocus
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search notifications by keyword, title, order ID..."
-            className="w-full rounded-xl border border-border bg-card py-2.5 pl-10 pr-10 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all shadow-2xs"
+            placeholder="Search notifications or order IDs"
+            className="h-11 w-full rounded-xl border border-border bg-card pl-10 pr-10 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:text-sm"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-3 flex h-6 w-6 items-center justify-center rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors cursor-pointer"
-              title="Clear search"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-4 w-4" />
             </button>
           )}
         </div>
+      )}
 
-        {/* Filter Pills & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:none]">
-            <button
-              type="button"
-              onClick={() => setFilter("all")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                filter === "all"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              }`}
-            >
-              All ({allCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("unread")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                filter === "unread"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              }`}
-            >
-              Unread ({unreadItemsCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("orders")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                filter === "orders"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              }`}
-            >
-              Orders ({ordersCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilter("payments")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                filter === "payments"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
-              }`}
-            >
-              Payments ({paymentsCount})
-            </button>
-            {systemCount > 0 && (
+      {sseRetryExhausted && (
+        <div
+          role="status"
+          className="mb-3 flex flex-col gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p>Live updates are paused. Your history is still available.</p>
+          <Button type="button" variant="outline" size="sm" onClick={retryStream} className="h-9 text-xs">
+            Reconnect
+          </Button>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+        <div
+          role="tablist"
+          aria-label="Filter notifications"
+          className="-mx-1 flex min-w-0 items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none]"
+        >
+          {availableFilters.map(({ value, label }) => {
+            const active = filter === value;
+            return (
               <button
+                key={value}
                 type="button"
-                onClick={() => setFilter("system")}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  filter === "system"
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setFilter(value)}
+                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors ${
+                  active
+                    ? "bg-foreground text-background"
+                    : "bg-secondary text-secondary-foreground hover:bg-secondary/70"
                 }`}
               >
-                System ({systemCount})
+                {label}
+                {value === "unread" && unreadCount > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 text-[10px] font-bold ${
+                      active ? "bg-background/20" : "bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
               </button>
-            )}
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            {unreadItemsCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => markAllAsRead()}
-                className="gap-1.5 text-xs h-8 cursor-pointer rounded-lg"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                <span>Mark all as read</span>
-              </Button>
-            )}
-            {notifications.some((n) => n.isRead) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => clearAll()}
-                className="gap-1.5 text-xs h-8 text-muted-foreground hover:text-destructive cursor-pointer rounded-lg"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Clear read</span>
-              </Button>
-            )}
-          </div>
+            );
+          })}
         </div>
+        {unreadCount > 0 && (
+          <button
+            type="button"
+            onClick={() => void markAllAsRead()}
+            className="flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+          >
+            <CheckCheck className="h-4 w-4" />
+            <span className="hidden min-[400px]:inline">Mark all read</span>
+          </button>
+        )}
       </div>
 
-      {/* Notifications List */}
-      <div className="mt-5 sm:mt-6 space-y-3">
+      {/* List */}
+      <div className="mt-2">
         {isLoading && notifications.length === 0 ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-20 sm:h-24 rounded-2xl bg-secondary/50 animate-pulse"
-              />
+          <div className="space-y-1 pt-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex animate-pulse items-start gap-3 p-3">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-secondary" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="h-3.5 w-2/3 rounded bg-secondary" />
+                  <div className="h-3 w-full rounded bg-secondary/70" />
+                </div>
+              </div>
             ))}
           </div>
-        ) : filteredNotifications.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border py-12 sm:py-16 px-4 text-center">
-            <Bell className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground/30 mb-3" />
-            <h3 className="text-sm sm:text-base font-semibold text-foreground">
-              {searchQuery ? "No matching notifications" : "No notifications found"}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+        ) : visible.length === 0 ? (
+          <div className="px-4 py-16 text-center">
+            <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground/60">
+              <Bell className="h-6 w-6" />
+            </span>
+            <h2 className="text-base font-semibold text-foreground">
               {searchQuery
-                ? `No notifications found matching "${searchQuery}". Try a different keyword.`
+                ? "No matches"
                 : filter === "unread"
-                ? "You're all caught up! No unread messages."
-                : `You don't have any ${filter === "all" ? "" : filter + " "}notifications yet.`}
+                  ? "You're all caught up"
+                  : "Nothing here yet"}
+            </h2>
+            <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+              {searchQuery
+                ? `Nothing matches "${searchQuery}".`
+                : filter === "unread"
+                  ? "No unread notifications."
+                  : "Order updates, payments and account alerts will show up here."}
             </p>
             {(filter !== "all" || searchQuery) && (
               <Button
@@ -449,155 +430,157 @@ export function NotificationsManager({
                   setFilter("all");
                   setSearchQuery("");
                 }}
-                className="mt-4 text-xs cursor-pointer"
+                className="mt-4 h-10 rounded-full px-5 text-xs"
               >
-                Show all notifications
+                Show everything
               </Button>
             )}
           </div>
         ) : (
-          filteredNotifications.map((notif) => (
-            <div
-              key={notif.id}
-              role="link"
-              tabIndex={0}
-              onClick={() => handleAction(notif)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  void handleAction(notif);
-                }
-              }}
-              className={`group relative flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 p-3.5 sm:p-5 rounded-xl sm:rounded-2xl border transition-all cursor-pointer ${
-                !notif.isRead
-                  ? "bg-card border-primary/25 shadow-xs hover:border-primary/50"
-                  : "bg-card/40 border-border/70 hover:border-border hover:bg-card/70"
-              }`}
-            >
-              <div className="flex items-start gap-2.5 sm:gap-4 flex-1 min-w-0">
-                <div className="flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl bg-secondary/80 mt-0.5">
-                  {getNotificationIcon(notif.type)}
-                </div>
+          groups.map(({ key, items }) => (
+            <section key={key} aria-label={key}>
+              <h2 className="px-3 pb-1 pt-4 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                {key}
+              </h2>
+              <ul className="divide-y divide-border/50">
+                {items.map((notif) => {
+                  const destination = resolveNotificationDestination(notif, role);
+                  const menuOpen = menuFor === notif.id;
+                  return (
+                    <li key={notif.id} className="relative">
+                      <div
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => open(notif)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            open(notif);
+                          }
+                        }}
+                        className={`flex cursor-pointer items-start gap-3 rounded-xl px-3 py-3.5 pr-12 transition-colors active:bg-secondary/80 hover:bg-secondary/50 ${
+                          notif.isRead ? "" : "bg-primary/[0.04]"
+                        }`}
+                      >
+                        <span className="relative mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
+                          {getNotificationIcon(notif.type)}
+                          {!notif.isRead && (
+                            <span
+                              className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-background bg-primary"
+                              aria-label="Unread"
+                            />
+                          )}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p
+                              className={`truncate text-sm ${
+                                notif.isRead
+                                  ? "font-medium text-muted-foreground"
+                                  : "font-semibold text-foreground"
+                              }`}
+                            >
+                              {notif.title}
+                            </p>
+                            <time
+                              dateTime={notif.createdAt}
+                              className="shrink-0 text-[11px] text-muted-foreground"
+                            >
+                              {formatRelativeTime(notif.createdAt)}
+                            </time>
+                          </div>
+                          <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">
+                            {notif.message}
+                          </p>
+                          {destination.kind === "target" && (
+                            <p className="mt-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-primary">
+                              {getNotificationCategory(notif) === "orders" ? "View order" : "Open"}
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </p>
+                          )}
+                        </div>
+                      </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-                    <span
-                      className={`text-xs min-[360px]:text-sm sm:text-base font-semibold tracking-tight break-words ${
-                        !notif.isRead ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {notif.title}
-                    </span>
-                    {!notif.isRead && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] min-[360px]:text-[10px] font-bold bg-primary text-primary-foreground">
-                        NEW
-                      </span>
-                    )}
-                    {getNotificationCategory(notif) === "payments" ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] min-[360px]:text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                        <CreditCard className="h-2.5 w-2.5" /> Payment
-                      </span>
-                    ) : getNotificationCategory(notif) === "orders" ? (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] min-[360px]:text-[10px] font-semibold bg-blue-500/10 text-blue-600 border border-blue-500/20">
-                        <Package className="h-2.5 w-2.5" /> Order
-                      </span>
-                    ) : null}
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] min-[360px]:text-[10px] font-medium bg-secondary text-secondary-foreground">
-                      {notificationTypeLabels[notif.type]}
-                    </span>
-                  </div>
-
-                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed break-words">
-                    {notif.message}
-                  </p>
-
-                  <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[11px] sm:text-xs text-muted-foreground">
-                      {formatFullDate(notif.createdAt)}
-                    </span>
-
-                    {(() => {
-                      const targetUrl = resolveNotificationTargetUrl(notif, role);
-                      if (!targetUrl) return null;
-                      const isOrder = getNotificationCategory(notif) === "orders";
-                      return (
-                        <Link
-                          href={targetUrl}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (!notif.isRead) {
-                              void markAsRead(notif.id);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      <button
+                        type="button"
+                        aria-label="More actions"
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setMenuFor(menuOpen ? null : notif.id);
+                        }}
+                        className="absolute right-1 top-2.5 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      >
+                        <MoreHorizontal className="h-[18px] w-[18px]" />
+                      </button>
+                      {menuOpen && (
+                        <div
+                          role="menu"
+                          onClick={(event) => event.stopPropagation()}
+                          className="absolute right-2 top-12 z-20 w-48 rounded-xl border border-border bg-popover p-1 text-sm shadow-xl"
                         >
-                          {isOrder ? "View Order" : "Open Page"}
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-1 self-end sm:self-start shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                {!notif.isRead && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void markAsRead(notif.id);
-                    }}
-                    title="Mark as read"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg"
-                  >
-                    <Check className="h-4 w-4" />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void deleteNotification(notif.id);
-                  }}
-                  title="Delete notification"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-lg"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+                          {!notif.isRead && (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                void markAsRead(notif.id);
+                                setMenuFor(null);
+                              }}
+                              className="flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left font-medium text-foreground hover:bg-secondary"
+                            >
+                              <Check className="h-4 w-4" /> Mark as read
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              void deleteNotification(notif.id);
+                              setMenuFor(null);
+                            }}
+                            className="flex h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left font-medium text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           ))
         )}
       </div>
 
       {hasNextPage && nextCursor && (
-        <div className="mt-8 flex justify-center pb-8">
+        <div ref={sentinelRef} className="flex justify-center py-6">
           <Button
             variant="outline"
             disabled={isLoading}
-            onClick={() =>
-              fetchNotifications(nextCursor, 20, true, {
-                ...(filter === "unread" ? { unreadOnly: true } : {}),
-                ...(filter === "orders" || filter === "payments"
-                  ? { category: filter }
-                  : {}),
-              })
-            }
-            className="rounded-full px-6 py-2 text-xs font-semibold"
+            onClick={loadMore}
+            className="h-10 rounded-full px-6 text-xs font-semibold"
           >
-            {isLoading ? "Loading..." : "Load More Notifications"}
+            {isLoading ? "Loading..." : "Load older"}
           </Button>
         </div>
       )}
 
-      <NotificationPreferencesDialog
-        open={isPreferencesOpen}
-        onOpenChange={setIsPreferencesOpen}
-      />
+      {notifications.some((n) => n.isRead) && (
+        <div className="flex justify-center pb-8 pt-2">
+          <button
+            type="button"
+            onClick={() => void clearAll()}
+            className="flex h-10 items-center gap-1.5 rounded-full px-4 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Clear read notifications
+          </button>
+        </div>
+      )}
+
+      <NotificationPreferencesDialog open={isPreferencesOpen} onOpenChange={setIsPreferencesOpen} />
     </div>
   );
 }

@@ -639,6 +639,20 @@ model DiscountCode {
    */
   stackable Boolean @default(false)
 
+  /**
+   * true = applied automatically when the cart qualifies; no code is typed and
+   * no claim is needed. `code` still exists as the record's stable identifier
+   * (generated as AUTO-XXXXXX when the creator does not supply one) and is never
+   * shown to shoppers; `description` is the offer name they see.
+   */
+  autoApply Boolean @default(false)
+
+  /**
+   * Minimum number of eligible items in the cart ("buy 3, save 10%").
+   * NULL = no quantity target.
+   */
+  minQuantity Int?
+
   scope DiscountCodeScope
 
   createdAt DateTime @default(now())
@@ -659,6 +673,7 @@ model DiscountCode {
   @@index([code, isActive, expiresAt])
   @@index([vendorId, isActive, scope])
   @@index([scope, isActive])
+  @@index([autoApply, isActive])
   @@index([expiresAt, isActive])
   @@map("discount_codes")
 }

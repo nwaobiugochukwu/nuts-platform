@@ -135,7 +135,7 @@ export function DataTable<T extends object>({
                       <dd className="min-w-0 break-words text-right text-foreground">{cell(col)}</dd>
                     </div>
                   ) : (
-                    <div key={col.key} className="flex flex-wrap justify-end gap-2 pt-1 text-foreground">
+                    <div key={col.key} className="flex flex-wrap justify-end gap-2 border-t border-border/50 pt-3 text-foreground [&_button]:min-h-10 [&_button]:min-w-10 [&_a]:min-h-10">
                       {cell(col)}
                     </div>
                   );

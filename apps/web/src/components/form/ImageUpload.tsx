@@ -257,14 +257,14 @@ export function ImageUpload({
                   )}
 
                   {/* Dark overlay on hover with actions */}
-                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5 z-20">
+                  <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-1.5 z-20 [@media(hover:none)]:bg-transparent [@media(hover:none)]:opacity-100">
                     {/* Top row: Set Cover button (if not first and multi-mode) & Delete */}
                     <div className="flex items-center justify-between w-full">
                       {!isFirst && !single ? (
                         <button
                           type="button"
                           onClick={() => setAsCover(index)}
-                          className="h-6 w-6 rounded-lg bg-black/70 text-amber-300 hover:bg-black/90 hover:scale-110 flex items-center justify-center transition-all"
+                          className="h-6 w-6 [@media(hover:none)]:h-8 [@media(hover:none)]:w-8 rounded-lg bg-black/70 text-amber-300 hover:bg-black/90 hover:scale-110 flex items-center justify-center transition-all"
                           title="Set as cover image"
                         >
                           <Star className="h-3 w-3" />
@@ -275,7 +275,7 @@ export function ImageUpload({
                       <button
                         type="button"
                         onClick={() => removeUploaded(url)}
-                        className="h-6 w-6 rounded-lg bg-black/70 text-white hover:bg-destructive hover:scale-110 flex items-center justify-center transition-all"
+                        className="h-6 w-6 [@media(hover:none)]:h-8 [@media(hover:none)]:w-8 rounded-lg bg-black/70 text-white hover:bg-destructive hover:scale-110 flex items-center justify-center transition-all"
                         aria-label="Remove image"
                         title="Remove image"
                       >
@@ -290,7 +290,7 @@ export function ImageUpload({
                           type="button"
                           disabled={isFirst}
                           onClick={() => moveImage(index, index - 1)}
-                          className="h-5 w-5 rounded-md bg-black/80 text-white disabled:opacity-20 hover:bg-primary flex items-center justify-center transition-all"
+                          className="h-5 w-5 [@media(hover:none)]:h-7 [@media(hover:none)]:w-7 rounded-md bg-black/80 text-white disabled:opacity-20 hover:bg-primary flex items-center justify-center transition-all"
                           title="Move left"
                         >
                           <ChevronLeft className="h-3 w-3" />
@@ -299,7 +299,7 @@ export function ImageUpload({
                           type="button"
                           disabled={isLast}
                           onClick={() => moveImage(index, index + 1)}
-                          className="h-5 w-5 rounded-md bg-black/80 text-white disabled:opacity-20 hover:bg-primary flex items-center justify-center transition-all"
+                          className="h-5 w-5 [@media(hover:none)]:h-7 [@media(hover:none)]:w-7 rounded-md bg-black/80 text-white disabled:opacity-20 hover:bg-primary flex items-center justify-center transition-all"
                           title="Move right"
                         >
                           <ChevronRight className="h-3 w-3" />

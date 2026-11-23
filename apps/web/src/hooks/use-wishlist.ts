@@ -1,5 +1,5 @@
 import type { WishlistResponseDto } from "@/api/dto/wishlist";
-import { wishlistService } from "@/api/wishlist";
+import { wishlistService } from "@/api/services/wishlist";
 import { queryKey } from "@/lib/query-key";
 import { useAuthStore } from "@/zustand/auth";
 import { useWishlistStore } from "@/zustand/wishlist";

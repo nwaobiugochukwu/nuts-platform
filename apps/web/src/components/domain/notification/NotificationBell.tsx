@@ -1,8 +1,9 @@
 "use client";
 
-import type { AppNotification,NotificationType } from "@/api/notifications";
+import type { AppNotification,NotificationType } from "@/api/services/notifications";
 import { useNotifications } from "@/hooks/use-notifications";
-import { notificationDetailPath, notificationListPath } from "@/lib/notification-path";
+import { notificationListPath } from "@/lib/notification-path";
+import { formatRelativeTime, resolveNotificationDestination } from "@/lib/notification-open";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import {
 AlertTriangle,
@@ -17,8 +18,10 @@ Users,
 X,
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
-import { useRouter } from "next/navigation";
-import { useEffect,useRef,useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { NotificationPreferencesDialog } from "@/components/domain/notification/NotificationPreferencesView";
 
 function getNotificationIcon(type: NotificationType) {
@@ -43,18 +46,18 @@ function getNotificationIcon(type: NotificationType) {
   }
 }
 
-function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSeconds < 60) return "just now";
-  const minutes = Math.floor(diffInSeconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+const MOBILE_QUERY = "(max-width: 639px)";
+function subscribeMobile(onChange: () => void) {
+  const mql = window.matchMedia(MOBILE_QUERY);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+function useIsMobile() {
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
 }
 
 export function NotificationBell({
@@ -62,10 +65,32 @@ export function NotificationBell({
 }: {
   placement?: "header" | "bottom";
 }) {
-  const [open, setOpen] = useState(false);
+  // Open state is tied to the path it was opened on, so any navigation closes it.
+  const [openFor, setOpenFor] = useState<string | null>(null);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const open = openFor === pathname;
+  const setOpen = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setOpenFor((current) => {
+        const wasOpen = current === pathname;
+        const value = typeof next === "function" ? next(wasOpen) : next;
+        return value ? pathname : null;
+      });
+    },
+    [pathname],
+  );
+  const hydrated = useHydrated();
+  // The bottom-nav bell lives inside a `backdrop-blur` element, which becomes
+  // the containing block for `position: fixed` descendants and traps the
+  // full-screen panel inside the nav. Portal it to <body> instead.
+  const isMobile = useIsMobile();
+  // Sticky/blurred headers trap fixed children too, so on phones the header's
+  // popup is portaled as well.
+  const usePortal = placement === "bottom" || isMobile;
   const { user, role, isAuthenticated } = useAuthStore();
   const {
     notifications,
@@ -87,17 +112,37 @@ export function NotificationBell({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        !dropdownRef.current.contains(target) &&
+        !panelRef.current?.contains(target)
       ) {
         setOpen(false);
       }
     };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [setOpen]);
+
+  // Lock page scroll while the full-screen mobile panel is open.
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 639px)").matches) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
 
   if (!isAuthenticated) return null;
 
@@ -106,55 +151,28 @@ export function NotificationBell({
 
   const recentNotifications = notifications.slice(0, 5);
 
-  const handleNotificationClick = async (notif: AppNotification) => {
-    if (!notif.isRead) {
-      await markAsRead(notif.id);
-    }
+  const handleNotificationClick = (notif: AppNotification) => {
+    // Optimistic in the store: never make the tap wait on the network.
+    if (!notif.isRead) void markAsRead(notif.id);
     setOpen(false);
-    router.push(notificationDetailPath(activeRole, notif.id));
+    router.push(resolveNotificationDestination(notif, activeRole).href);
   };
 
-  return (
-    <div
-      className={placement === "bottom" ? "relative flex min-w-0 justify-center" : "relative"}
-      ref={dropdownRef}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        aria-label="Notifications"
-        aria-expanded={open}
-        className={`relative flex items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-secondary hover:text-foreground focus:outline-hidden ${
-          placement === "bottom"
-            ? "min-h-11 w-full flex-col py-1"
-            : "h-9 w-9"
-        }`}
-      >
-        <Bell className="h-5 w-5" />
-        {placement === "bottom" && (
-          <span className="mt-1 text-[10px] tracking-tight">Alerts</span>
-        )}
-        {unreadCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs animate-pulse">
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <>
-          {placement !== "bottom" && (
-            <div
-              className="fixed inset-0 z-40 bg-black/20 backdrop-blur-2xs sm:hidden"
-              onClick={() => setOpen(false)}
-            />
-          )}
+  const panel = open ? (
+    <>
           <div
+            className="fixed inset-0 z-[55] bg-black/20 sm:hidden"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Notifications"
             className={`${
               placement === "bottom"
-                ? "fixed inset-0 flex flex-col sm:inset-auto sm:bottom-[calc(4.75rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-4 sm:mx-auto sm:w-auto sm:max-w-sm"
-                : "fixed inset-0 flex flex-col sm:inset-auto sm:block sm:max-w-md sm:w-96 sm:absolute sm:right-0 sm:top-full sm:mt-2"
-            } z-50 overflow-hidden rounded-none border-0 pt-[env(safe-area-inset-top)] sm:rounded-2xl sm:border sm:pt-0 bg-popover p-0 text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
+                ? "fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] flex max-h-[70dvh] flex-col sm:inset-x-auto sm:right-4 sm:w-96 sm:max-w-sm"
+                : "fixed inset-x-3 top-20 flex max-h-[70dvh] flex-col sm:inset-x-auto sm:block sm:max-w-md sm:w-96 sm:absolute sm:right-0 sm:top-full sm:mt-2"
+            } z-[60] overflow-hidden rounded-2xl border bg-popover p-0 text-popover-foreground shadow-2xl animate-in fade-in zoom-in-95 duration-150`}
           >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-secondary/30">
@@ -218,11 +236,11 @@ export function NotificationBell({
                   key={notif.id}
                   role="link"
                   tabIndex={0}
-                  onClick={() => void handleNotificationClick(notif)}
+                  onClick={() => handleNotificationClick(notif)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      void handleNotificationClick(notif);
+                      handleNotificationClick(notif);
                     }
                   }}
                   className={`flex items-start gap-3 p-3.5 transition-colors cursor-pointer hover:bg-secondary/60 ${
@@ -279,8 +297,37 @@ export function NotificationBell({
             </button>
           </div>
         </div>
-        </>
-      )}
+    </>
+  ) : null;
+
+  return (
+    <div
+      className={placement === "bottom" ? "relative flex min-w-0 justify-center" : "relative"}
+      ref={dropdownRef}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-label="Notifications"
+        aria-expanded={open}
+        className={`relative flex items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-secondary hover:text-foreground focus:outline-hidden ${
+          placement === "bottom"
+            ? "min-h-11 w-full flex-col py-1"
+            : "h-9 w-9"
+        }`}
+      >
+        <Bell className="h-5 w-5" />
+        {placement === "bottom" && (
+          <span className="mt-1 text-[10px] tracking-tight">Alerts</span>
+        )}
+        {unreadCount > 0 && (
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow-xs animate-pulse">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (usePortal ? (hydrated ? createPortal(panel, document.body) : null) : panel)}
 
       <NotificationPreferencesDialog
         open={isPreferencesOpen}

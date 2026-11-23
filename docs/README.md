@@ -17,6 +17,7 @@ This index separates product behavior, code navigation, shared engineering conce
 ## Architecture and engineering reference
 
 - [Architecture diagram gallery](architecture/README.md) — visual views of current boundaries and explicitly proposed paths.
+- [Code organization and dependency rules](architecture/code-organization.md) — folder layout, layering, naming, and the CI guardrails for the API and web app.
 - [Architecture decision records](architecture/adr/README.md) — decision log and template.
 - [NUTS Engineering & Distributed Systems Field Manual](engineering/field-manual/README.md) — engineering concepts, concise definitions, NUTS implementation, failure behavior, and trade-offs.
 - [Field Manual glossary](engineering/field-manual/glossary.md) — quick definitions with current/proposed NUTS status.

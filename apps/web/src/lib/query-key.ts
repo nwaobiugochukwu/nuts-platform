@@ -104,4 +104,7 @@ export const queryKey = {
     batch: (idsKey: string) =>
       ["discounts", "batch", idsKey] as const,
   },
+  vouchers: {
+    mine: ["vouchers", "mine"] as const,
+  },
 };

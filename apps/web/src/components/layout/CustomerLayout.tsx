@@ -2,7 +2,7 @@ import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PublicPlatformPromoDto } from "@/api/dto/discount";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Footer } from "@/components/layout/Footer";
-import { Navbar } from "@/components/navbar/Navbar";
+import { Navbar } from "@/components/layout/Navbar";
 import { type ReactNode } from "react";
 
 export function CustomerLayout({

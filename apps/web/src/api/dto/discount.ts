@@ -40,6 +40,8 @@ export interface PublicPlatformPromoDto {
   startsAt?: string | Date | null;
   expiresAt?: string | Date | null;
   isFirstOrderOnly?: boolean;
+  /** Applies automatically: no code to claim. */
+  autoApply?: boolean;
 }
 
 export interface ProductVoucherSummaryDto {
@@ -57,6 +59,10 @@ export interface ProductVoucherSummaryDto {
   minOrderShortfall?: number;
   expiresAt?: string | Date | null;
   isFirstOrderOnly?: boolean;
+  /** Applies automatically at checkout: nothing to enter or claim. */
+  autoApply?: boolean;
+  /** Minimum eligible items required ("buy 3+"). */
+  minQuantity?: number | null;
 }
 
 export interface PublicProductDealDto {
@@ -71,4 +77,13 @@ export interface PublicProductDealDto {
 
 export interface BatchProductDiscountsDto {
   productIds: string[];
+}
+
+/** What a voucher covers; lets the UI say "Applies to: ..." and link to it. */
+export interface DiscountTargetsDto {
+  kind: "ALL" | "STORE" | "PRODUCTS" | "CATEGORIES";
+  store: { name: string; slug: string } | null;
+  products: { id: string; name: string; slug: string }[];
+  productCount: number;
+  categories: { id: string; name: string; slug: string }[];
 }

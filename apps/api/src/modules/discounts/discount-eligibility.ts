@@ -12,6 +12,8 @@ export interface DiscountLineItem {
   vendorId: string;
   categoryIds: string[];
   lineTotal: Prisma.Decimal;
+  /** Units on the line; used by quantity targets ("buy 3"). Defaults to 1. */
+  quantity?: number;
 }
 
 export type DiscountEligibilityCode = Pick<

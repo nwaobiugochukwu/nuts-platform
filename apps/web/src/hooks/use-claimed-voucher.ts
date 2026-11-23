@@ -1,7 +1,7 @@
 "use client";
 
-import { cartService } from "@/api/cart";
-import { voucherService } from "@/api/vouchers";
+import { cartService } from "@/api/services/cart";
+import { voucherService } from "@/api/services/vouchers";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";
@@ -11,6 +11,12 @@ import { toast } from "sonner";
 interface CartLine {
   productId: string;
   quantity: number;
+}
+
+/** A claimed voucher that is held but not (yet) taking anything off the cart. */
+export interface PendingVoucher {
+  code: string;
+  reason: string;
 }
 
 /** Wait for rapid +/- clicks to settle before asking the server. */
@@ -64,6 +70,7 @@ export function useClaimedVoucherSync({
   const removeClaim = useDiscountStore((state) => state.removeClaim);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pending, setPending] = useState<PendingVoucher[]>([]);
   const lastEvaluated = useRef("");
   const notified = useRef(new Set<string>());
 
@@ -79,9 +86,10 @@ export function useClaimedVoucherSync({
   const hasItems = items.length > 0;
 
   useEffect(() => {
-    if (!enabled || !isCustomer || !codesKey || !hasItems) return;
+    // No claimed codes is fine: automatic offers still apply to a qualifying cart.
+    if (!enabled || !isCustomer || !hasItems) return;
 
-    const codes = codesKey.split("+");
+    const codes = codesKey ? codesKey.split("+") : [];
     const runKey = `${codesKey}|${signature}`;
     let cancelled = false;
 
@@ -105,7 +113,7 @@ export function useClaimedVoucherSync({
 
       setIsSyncing(true);
       try {
-        const res = await cartService.previewDiscount(codes);
+        const res = await cartService.previewDiscount(codes, { automatic: true });
         if (cancelled) return;
         const result = res.data;
 
@@ -117,14 +125,23 @@ export function useClaimedVoucherSync({
             code: d.code,
             amount: d.amount,
             scope: d.scope,
+            automatic: d.automatic,
+            label: d.label,
           })),
         );
         for (const d of result.discounts) {
           if (!previouslyApplied.has(d.code)) {
-            toast.success(`Voucher "${d.code}" applied!`);
+            toast.success(
+              d.automatic ? `${d.label ?? "Offer"} applied automatically` : `Voucher "${d.code}" applied!`,
+            );
           }
         }
 
+        setPending(
+          (result.rejected ?? [])
+            .filter((r) => !r.permanent)
+            .map((r) => ({ code: r.code, reason: r.reason })),
+        );
         for (const r of result.rejected ?? []) {
           if (r.permanent) {
             dropClaim(r.code);
@@ -152,8 +169,12 @@ export function useClaimedVoucherSync({
         if (isPermanentFailure(error, message)) {
           dropClaim(code);
           if (message) tell(`${code}|${message}`, () => toast.error(message));
-        } else if (wasApplied && message) {
-          tell(`${code}|${message}`, () => toast.info(message));
+        } else {
+          // Kept, but not applicable to this cart: show it, with the reason.
+          if (message) setPending([{ code, reason: message }]);
+          if (wasApplied && message) {
+            tell(`${code}|${message}`, () => toast.info(message));
+          }
         }
       } finally {
         if (!cancelled) setIsSyncing(false);
@@ -166,5 +187,8 @@ export function useClaimedVoucherSync({
     };
   }, [enabled, isCustomer, codesKey, hasItems, signature, setAppliedDiscounts, removeClaim]);
 
-  return { isSyncing };
+  // Nothing claimed or nothing in the cart means nothing can be pending.
+  const visiblePending = codesKey && hasItems ? pending.filter((p) => claimedCodes.includes(p.code)) : [];
+
+  return { isSyncing, pending: visiblePending };
 }

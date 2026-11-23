@@ -2,8 +2,8 @@
 
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AddedFromType } from "@/api/dto/cart";
-import type { RecommendationAttribution } from "@/api/modules/analytics";
-import { analyticsEventService } from "@/api/modules/analytics";
+import type { RecommendationAttribution } from "@/api/services/analytics";
+import { analyticsEventService } from "@/api/services/analytics";
 import type { ProductCardDto,PublicProductResponseDto } from "@/api/dto/product";
 import type { ProductVoucherSummaryDto } from "@/api/dto/discount";
 import { useCart } from "@/hooks/use-cart";

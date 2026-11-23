@@ -6,6 +6,10 @@ export interface AppliedDiscount {
   /** What this voucher takes off the current cart. */
   amount: number;
   scope?: "VENDOR" | "PLATFORM";
+  /** Applied by the system when the cart qualifies; no code, cannot be removed. */
+  automatic?: boolean;
+  /** Offer name shown instead of the internal code for automatic discounts. */
+  label?: string;
 }
 
 interface StoredClaims {

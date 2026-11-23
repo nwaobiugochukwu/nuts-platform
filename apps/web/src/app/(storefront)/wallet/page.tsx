@@ -1,7 +1,7 @@
 "use client";
 
 import { walletService } from "@/api";
-import { PageHeader } from "@/components/common/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";

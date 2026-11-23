@@ -96,6 +96,19 @@ export class DiscountCodeResponseDto {
   })
   stackable!: boolean;
 
+  @ApiProperty({
+    description:
+      'Whether the discount applies automatically when the cart qualifies (no code, no claim).',
+    example: false,
+  })
+  autoApply!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Minimum number of eligible items required.',
+    nullable: true,
+  })
+  minQuantity?: number | null;
+
   @ApiPropertyOptional({
     description: 'Timestamp when the discount code becomes valid.',
     example: '2025-06-01T00:00:00.000Z',

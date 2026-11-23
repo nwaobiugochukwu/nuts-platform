@@ -1,5 +1,5 @@
-import { cartService } from "@/api/cart";
-import type { RecommendationAttribution } from "@/api/modules/analytics";
+import { cartService } from "@/api/services/cart";
+import type { RecommendationAttribution } from "@/api/services/analytics";
 import type {
 CartItemResponseDto,
 CartResponseDto,

@@ -2,7 +2,7 @@
 
 import { userService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import { PublicOnlyLayout } from "@/components/auth/PublicOnlyLayout";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
 import { FormInput } from "@/components/form/FormInput";
 import { Button } from "@/components/ui/button";
 import { zodResolver } from "@/lib/zod-resolver";

@@ -1,7 +1,7 @@
 "use client";
 
 import { RemoteImage } from "@/components/ui/RemoteImage";
-import { cartService } from "@/api/cart";
+import { cartService } from "@/api/services/cart";
 import type { CartResponseDto } from "@/api/dto/cart";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useCart } from "@/hooks/use-cart";
 import { useClaimVoucher } from "@/hooks/use-claim-voucher";
 import { useClaimedVoucherSync } from "@/hooks/use-claimed-voucher";
+import { PendingVouchers } from "@/components/domain/cart/PendingVouchers";
 import { formatPrice } from "@/lib/util";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { MAX_CLAIMED_VOUCHERS, useDiscountStore } from "@/zustand/discount";
@@ -43,7 +44,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
 
   // Applies the claimed vouchers and keeps every applied amount in step with
   // the cart (shared with the drawer and checkout; cannot loop on failure).
-  useClaimedVoucherSync({ items });
+  const { pending: pendingVouchers } = useClaimedVoucherSync({ items });
 
   const handleApplyDiscount = async () => {
     const code = discountCode.trim().toUpperCase();
@@ -299,7 +300,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                     key={d.code}
                     className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium"
                   >
-                    <span>Discount ({d.code})</span>
+                    <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
                     <span>-{formatPrice(d.amount)}</span>
                   </div>
                 ))}
@@ -332,6 +333,7 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                 >
                   Discount Code
                 </label>
+                <PendingVouchers pending={pendingVouchers} />
                 {appliedDiscounts.length > 0 && (
                   <div className="mb-2 space-y-2">
                     {appliedDiscounts.map((d) => (
@@ -342,17 +344,26 @@ export function CartPageView({ initialCart, categories }: CartPageViewProps) {
                         <div className="flex items-center gap-2">
                           <Tag className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <div>
-                            <span className="font-semibold text-foreground uppercase">{d.code}</span>
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
                             <span className="ml-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
                           </div>
                         </div>
-                        <button
+                        {!d.automatic && (
+                          <button
                           type="button"
                           onClick={() => handleRemoveDiscount(d.code)}
                           className="text-xs text-muted-foreground hover:text-destructive transition-colors font-semibold"
                         >
                           Remove
                         </button>
+                        )}
                       </div>
                     ))}
                   </div>

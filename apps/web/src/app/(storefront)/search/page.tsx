@@ -1,5 +1,5 @@
 import { serverGetCategories, serverGetProducts, serverGetVendors } from "@/api/server";
-import { ProductCatalogView } from "@/components/product/ProductCatalogView";
+import { ProductCatalogView } from "@/components/domain/product/ProductCatalogView";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { Search, Sparkles } from "lucide-react";
 import type { Metadata } from "next";

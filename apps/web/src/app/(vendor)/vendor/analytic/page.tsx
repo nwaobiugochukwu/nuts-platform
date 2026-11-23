@@ -1,7 +1,7 @@
 "use client";
 
 import { vendorAnalyticsService } from "@/api";
-import { StatCard } from "@/components/common/PageHeader";
+import { StatCard } from "@/components/layout/PageHeader";
 import { queryKey } from "@/lib/query-key";
 import { formatPrice } from "@/lib/util";
 import {
@@ -138,7 +138,7 @@ export default function VendorAnalyticPage() {
         </div>
       </section>
 
-      <section aria-label="Store followers" className="space-y-3">
+      <section id="followers" aria-label="Store followers" className="scroll-mt-24 space-y-3">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">Store followers</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard

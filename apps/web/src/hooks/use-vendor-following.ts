@@ -1,6 +1,6 @@
 "use client";
 
-import { vendorFollowingService } from "@/api/modules/vendor";
+import { vendorFollowingService } from "@/api/services/vendor";
 import { queryKey } from "@/lib/query-key";
 import type { FeaturedVendorDto, FollowedVendorDto, FollowedVendorsPageDto } from "@/api/dto/vendor";
 import { useAuthStore } from "@/zustand/auth";

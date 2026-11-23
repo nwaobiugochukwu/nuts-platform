@@ -74,7 +74,7 @@ export class VendorFollowConsumer implements OnModuleInit {
             title: 'New store follower',
             message: 'Your store has a new follower.',
             priority: NotificationPriority.LOW,
-            link: '/vendor/analytic',
+            link: '/vendor/analytic#followers',
             metadata: { eventId: event.eventId },
             dedupeKey: `vendor-follow:${event.eventId}`,
           });

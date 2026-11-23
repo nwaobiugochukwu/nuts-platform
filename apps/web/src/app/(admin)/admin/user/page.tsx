@@ -3,7 +3,7 @@
 import { adminUserService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import type { AdminUserResponseDto } from "@/api/dto/user";
-import { ManagementToolbar } from "@/components/common/ManagementToolbar";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
 import { DataTable,type Column } from "@/components/data/DataTable";
 import { OtpPromptDialog } from "@/components/modal/OtpPromptDialog";
 import { Badge } from "@/components/ui/badge";

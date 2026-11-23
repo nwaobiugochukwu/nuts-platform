@@ -2,9 +2,9 @@
 
 import { orderService } from "@/api";
 import type { OrderResponseDto } from "@/api/dto/order";
-import { PageHeader } from "@/components/common/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { WriteReviewDialog } from "@/components/review/WriteReviewDialog";
+import { WriteReviewDialog } from "@/components/domain/review/WriteReviewDialog";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";

@@ -8,7 +8,7 @@ CartItemResponseDto,
 } from "@/api/dto/cart";
 import type { CheckoutResponseDto } from "@/api/dto/order";
 import type { PaymentResponseDto } from "@/api/dto/payment";
-import type { CheckoutPayload } from "@/api/order";
+import type { CheckoutPayload } from "@/api/services/order";
 import { Button } from "@/components/ui/button";
 import { Dialog,DialogContent,DialogDescription,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -476,7 +476,7 @@ export function ShoppingDrawer() {
           </button>
         </div>
         {isCheckout ? (
-          <CheckoutPanel total={cart?.totalAmount ?? 0} discountCodes={appliedDiscounts.map((d) => d.code)} discountPreview={discountPreview} />
+          <CheckoutPanel total={cart?.totalAmount ?? 0} discountCodes={appliedDiscounts.filter((d) => !d.automatic).map((d) => d.code)} discountPreview={discountPreview} />
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto px-5">
@@ -558,20 +558,27 @@ export function ShoppingDrawer() {
                         key={d.code}
                         className="flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs"
                       >
-                        <span className="font-semibold uppercase">
-                          {d.code}
+                        <span className={`font-semibold ${d.automatic ? "" : "uppercase"}`}>
+                          {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                          {d.automatic && (
+                            <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                              Auto
+                            </span>
+                          )}
                           <span className="ml-1.5 text-emerald-600">(-{formatPrice(d.amount)})</span>
                         </span>
-                        <button
-                          type="button"
-                          className="font-semibold text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            void release(d.code);
-                            toast.info(`Voucher ${d.code} removed`);
-                          }}
-                        >
-                          Remove
-                        </button>
+                        {!d.automatic && (
+                          <button
+                            type="button"
+                            className="font-semibold text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              void release(d.code);
+                              toast.info(`Voucher ${d.code} removed`);
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -611,7 +618,7 @@ export function ShoppingDrawer() {
                   </div>
                   {appliedDiscounts.map((d) => (
                     <div key={d.code} className="flex justify-between text-emerald-600">
-                      <span>Discount ({d.code})</span>
+                      <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
                       <span>-{formatPrice(d.amount)}</span>
                     </div>
                   ))}

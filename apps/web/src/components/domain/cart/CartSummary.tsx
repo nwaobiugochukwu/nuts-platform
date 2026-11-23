@@ -2,7 +2,7 @@
 
 import type { CartMetadataDto } from "@/api/dto/cart";
 import type { UserResponseDto } from "@/api/dto/user";
-import { CheckoutFlow } from "@/components/cart/CheckoutFlow";
+import { CheckoutFlow } from "@/components/domain/cart/CheckoutFlow";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardFooter } from "@/components/ui/card";
 import { formatPrice } from "@/lib/util";

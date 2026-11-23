@@ -1,3 +1,4 @@
+import type { DiscountTargetsDto } from "@/api/dto/discount";
 import type {
 VariantOption
 } from "../core/types";
@@ -26,6 +27,10 @@ export interface AppliedVoucherDto {
   amount: number;
   scope: "VENDOR" | "PLATFORM";
   stackable: boolean;
+  /** Applied automatically (no code). */
+  automatic?: boolean;
+  /** Offer name for automatic discounts. */
+  label?: string;
 }
 
 export interface RejectedVoucherDto {
@@ -33,6 +38,7 @@ export interface RejectedVoucherDto {
   reason: string;
   /** true = can never work for this shopper (expired, exhausted...); drop the claim. */
   permanent: boolean;
+  appliesTo?: DiscountTargetsDto | null;
 }
 
 export interface DiscountPreviewDto {

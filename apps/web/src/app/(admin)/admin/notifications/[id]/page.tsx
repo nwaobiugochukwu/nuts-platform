@@ -1,4 +1,4 @@
-import { NotificationDetail } from "@/components/notification/NotificationDetail";
+import { NotificationDetail } from "@/components/domain/notification/NotificationDetail";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

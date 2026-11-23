@@ -5,7 +5,7 @@
 
 /* Modern Dynamic Theme Tokens - Facebook & Instagram (Meta) Aesthetic */
 :root {
-  --sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --serif: var(--sans);
   --heading: var(--sans);
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -463,11 +463,18 @@ body::-webkit-scrollbar,
 /* Mobile: dialogs are full-screen sheets rather than floating pop-ups. */
 @media (max-width: 639px) {
   .nuts-dialog {
+    /* A bare `grid` sizes its single column to the widest child's min-content,
+       so one long label or date field would stretch the whole sheet off-screen. */
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow-x: hidden !important;
     left: 0 !important;
     top: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    transform: none !important;
+    /* Tailwind v4 centres dialogs with the individual `translate` property. The
+       CSS minifier rewrites `translate: none` into a `transform` shorthand that does
+       NOT cancel it, so the sheet's position is built without a translate in
+       components/ui/dialog.tsx (inset-0 on phones) instead of undone here. */
     width: 100% !important;
     max-width: none !important;
     height: 100vh !important;
@@ -479,7 +486,96 @@ body::-webkit-scrollbar,
     overscroll-behavior: contain;
     align-content: start;
     padding-top: max(1.25rem, env(safe-area-inset-top)) !important;
-    padding-bottom: max(1.25rem, env(safe-area-inset-bottom)) !important;
-    padding-right: 3.5rem;
+    /* The pinned footer owns the bottom edge; no side squeeze for the close button. */
+    padding-bottom: 0 !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
   }
+  /* Content without a pinned footer still clears the home indicator. */
+  .nuts-dialog > :last-child:not(form):not([class*="sticky"]) {
+    margin-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Phones: 16px form text stops iOS Safari zooming the page on focus, and panel
+   forms/tables never push the page sideways. */
+@media (max-width: 639px) {
+  .nuts-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .nuts-dialog select,
+  .nuts-dialog textarea,
+  .panel-main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .panel-main select,
+  .panel-main textarea {
+    font-size: 16px !important;
+  }
+  .nuts-dialog input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .nuts-dialog select,
+  .panel-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .panel-main select {
+    min-height: 2.75rem;
+  }
+}
+
+/* Form controls must never be wider than the sheet (iOS date/time inputs ignore
+   width otherwise), and long words wrap instead of widening the layout. */
+@media (max-width: 639px) {
+  .nuts-dialog input,
+  .nuts-dialog select,
+  .nuts-dialog textarea,
+  .panel-main input,
+  .panel-main select,
+  .panel-main textarea {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .nuts-dialog input[type="date"],
+  .nuts-dialog input[type="datetime-local"],
+  .nuts-dialog input[type="time"],
+  .panel-main input[type="date"],
+  .panel-main input[type="datetime-local"],
+  .panel-main input[type="time"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+  }
+  .nuts-dialog form,
+  .nuts-dialog form > * {
+    min-width: 0;
+  }
+  .nuts-dialog h2,
+  .nuts-dialog p,
+  .nuts-dialog label,
+  .nuts-dialog span {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── Touch devices (phones and tablets) ─────────────────────────────────────── */
+
+/* Never let iOS zoom the page when a field is focused: form text is at least 16px
+   on every touch screen, in the storefront as well as the panels. */
+@media (pointer: coarse) and (max-width: 1023px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* No double-tap zoom or 300ms tap delay on interactive controls. */
+a,
+button,
+[role="button"],
+[role="link"],
+[role="tab"],
+input,
+select,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }

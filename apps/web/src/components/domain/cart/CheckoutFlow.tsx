@@ -3,8 +3,8 @@
 import { getApiErrorMessage } from "@/api/core/error";
 import type { InitializePaymentResponseDto } from "@/api/dto/payment";
 import type { UserResponseDto } from "@/api/dto/user";
-import { orderService, type CheckoutPayload } from "@/api/order";
-import { paymentService } from "@/api/payment";
+import { orderService, type CheckoutPayload } from "@/api/services/order";
+import { paymentService } from "@/api/services/payment";
 import { Button } from "@/components/ui/button";
 import { clearClientCart } from "@/lib/cart-cleanup";
 import { queryKey } from "@/lib/query-key";

@@ -1,6 +1,6 @@
 "use client";
 
-import { voucherService } from "@/api/vouchers";
+import { voucherService } from "@/api/services/vouchers";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";
 import { useEffect, useRef } from "react";

@@ -1,6 +1,6 @@
 "use client";
 
-import { vendorWalletService } from "@/api/modules/vendor";
+import { vendorWalletService } from "@/api/services/vendor";
 import type { PaginationMeta } from "@/api/core/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

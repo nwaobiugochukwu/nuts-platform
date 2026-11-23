@@ -1,6 +1,7 @@
 "use client";
 
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences";
+import { BRAVE_PUSH_SETTINGS_URL } from "@/lib/push-support";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { useAuthStore, normalizeRole } from "@/zustand/auth";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ export function NotificationPreferencesContent() {
     useNotificationPreferences();
   const {
     isSupported: isPushSupported,
+    support: pushSupport,
     permission: pushPermission,
     isLoading: isPushLoading,
     isSubscribed,
@@ -178,9 +180,9 @@ export function NotificationPreferencesContent() {
                   >
                     Push Notifications
                   </label>
-                  {!isPushSupported ? (
+                  {pushSupport === null ? null : !isPushSupported ? (
                     <span className="text-[10px] font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                      Unsupported
+                      {pushSupport.status === "unsupported" ? pushSupport.label : "Unsupported"}
                     </span>
                   ) : pushPermission === "denied" ? (
                     <span className="text-[10px] font-semibold text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
@@ -218,7 +220,7 @@ export function NotificationPreferencesContent() {
 
               {!isPushSupported ? (
                 <span className="text-[11px] text-muted-foreground font-medium">
-                  Unsupported
+                  {pushSupport === null ? "Checking…" : "Unavailable"}
                 </span>
               ) : (
                 <SwitchToggle
@@ -247,6 +249,41 @@ export function NotificationPreferencesContent() {
             </div>
           </div>
         </div>
+
+        {pushSupport?.status === "unsupported" && (
+          <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+            <div className="flex items-start gap-2.5">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <p>{pushSupport.message}</p>
+            </div>
+            {pushSupport.steps.length > 0 && (
+              <ol className="ml-9 list-decimal space-y-1 pl-1">
+                {pushSupport.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+            {pushSupport.reason === "brave-push-disabled" && (
+              <div className="ml-9">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      ?.writeText(BRAVE_PUSH_SETTINGS_URL)
+                      .then(() => toast.success("Copied. Paste it into a new tab."))
+                      .catch(() => toast.error("Could not copy the address."));
+                  }}
+                  className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 font-mono text-[11px] font-semibold text-foreground hover:bg-secondary"
+                >
+                  Copy {BRAVE_PUSH_SETTINGS_URL}
+                </button>
+              </div>
+            )}
+            <p className="ml-9">
+              Email and in-app notifications keep working in the meantime.
+            </p>
+          </div>
+        )}
 
         {pushPermission === "denied" && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-3 flex items-start gap-2.5 text-xs text-muted-foreground">
@@ -438,7 +475,7 @@ export function NotificationPreferencesDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-2xl max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 overscroll-contain">
+      <DialogContent className="w-[calc(100vw-1rem)] sm:w-full max-w-2xl max-h-[90dvh] sm:max-h-[85dvh] overflow-y-auto rounded-2xl sm:rounded-3xl p-3.5 sm:p-6 md:p-8 overscroll-contain">
         <DialogHeader className="space-y-1 pb-2 sm:pb-3 text-left border-b border-border/50">
           <DialogTitle className="text-base sm:text-xl font-bold flex items-center gap-2">
             <Bell className="h-5 w-5 text-primary shrink-0" />

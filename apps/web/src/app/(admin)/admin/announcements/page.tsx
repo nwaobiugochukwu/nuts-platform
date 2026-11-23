@@ -550,7 +550,7 @@ export default function AdminAnnouncementsPage() {
             </div>
           </div>
 
-          <div className="max-h-[min(75vh,58rem)] space-y-3 overflow-y-auto p-3 sm:p-5">
+          <div className="max-h-[min(75dvh,58rem)] space-y-3 overflow-y-auto p-3 sm:p-5">
             {announcementsQuery.isLoading ? (
               <p className="p-4 text-sm text-muted-foreground">Loading campaigns…</p>
             ) : announcementsQuery.isError ? (

@@ -2,7 +2,7 @@
 
 import { RemoteImage } from "@/components/ui/RemoteImage";
 import { analyticsEventService, productService, recommendationService } from "@/api";
-import type { RecommendationAttribution } from "@/api/modules/analytics";
+import type { RecommendationAttribution } from "@/api/services/analytics";
 import type { AddedFromType } from "@/api/dto/cart";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type {
@@ -11,8 +11,8 @@ import type {
 } from "@/api/dto/product";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { RecommendationProductCard } from "@/components/product/RecommendationProductCard";
-import { ProductReviews } from "@/components/review/ProductReviews";
+import { RecommendationProductCard } from "@/components/domain/product/RecommendationProductCard";
+import { ProductReviews } from "@/components/domain/review/ProductReviews";
 import { ProductVoucherDock } from "@/components/domain/product/ProductVoucherDock";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/hooks/use-cart";

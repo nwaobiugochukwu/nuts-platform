@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "@/components/navigation/AppLink";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { ProductCard } from "@/components/product/ProductCard";
-import { ProductDetailView } from "@/components/product/ProductDetailView";
-import { ProductGridSkeleton } from "@/components/product/ProductGridSkeleton";
-import { CategoryFilterDrawer } from "@/components/category/CategoryFilterDrawer";
+import { ProductCard } from "@/components/domain/product/ProductCard";
+import { ProductDetailView } from "@/components/domain/product/ProductDetailView";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
+import { CategoryFilterDrawer } from "@/components/domain/category/CategoryFilterDrawer";
 import { useQuery } from "@tanstack/react-query";
 import { productService } from "@/api";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { ProductCardDto, PublicProductResponseDto } from "@/api/dto/product";
-import type { CategoryProductPreview } from "@/api/modules/product";
+import type { CategoryProductPreview } from "@/api/services/product";
 import type { ProductReviewsMetaDto, ReviewResponseDto } from "@/api/dto/review";
 import {
   ChevronRight,
@@ -22,7 +22,7 @@ import {
 import { getNodeChildren, resolveCategoryPath } from "@/lib/category-tree";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
-import { analyticsEventService } from "@/api/modules/analytics";
+import { analyticsEventService } from "@/api/services/analytics";
 import { createRecommendationRequestId, getRecommendationSessionId } from "@/lib/recommendation-session";
 import { useAuthStore } from "@/zustand/auth";
 

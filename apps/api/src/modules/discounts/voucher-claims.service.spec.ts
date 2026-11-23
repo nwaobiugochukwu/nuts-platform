@@ -28,6 +28,10 @@ const baseCode = (over: Record<string, unknown> = {}) => ({
   perUserUsageLimit: null as number | null,
   isActive: true,
   deletedAt: null,
+  vendorId: null as string | null,
+  platformwide: true,
+  applicableProductIds: [] as string[],
+  applicableCategoryIds: [] as string[],
   ...over,
 });
 
@@ -62,6 +66,9 @@ function make(
   };
   const prisma = {
     $transaction: jest.fn((cb: (t: unknown) => unknown) => cb(tx)),
+    vendor: { findMany: jest.fn().mockResolvedValue([]) },
+    product: { findMany: jest.fn().mockResolvedValue([]) },
+    category: { findMany: jest.fn().mockResolvedValue([]) },
     discountCodeClaim: {
       findMany: jest.fn().mockResolvedValue([]),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),

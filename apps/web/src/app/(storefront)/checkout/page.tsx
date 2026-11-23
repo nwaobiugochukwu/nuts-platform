@@ -3,7 +3,7 @@
 import { RemoteImage } from "@/components/ui/RemoteImage";
 import { cartService,orderService,paymentService,userService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
-import type { CheckoutPayload } from "@/api/order";
+import type { CheckoutPayload } from "@/api/services/order";
 import { FormInput } from "@/components/form/FormInput";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { Button } from "@/components/ui/button";
@@ -212,21 +212,29 @@ export default function CheckoutPage() {
     // Re-validate the vouchers against the live cart right before ordering so
     // the shopper is never charged a different discount than the one displayed
     // (a code may have expired, been exhausted, or the cart may have changed).
-    const codesToConfirm = appliedDiscounts.map((d) => d.code);
+    const appliedCodes = appliedDiscounts.map((d) => d.code);
+    // Automatic offers are never sent as codes: the server applies them itself.
+    const codesToConfirm = appliedDiscounts.filter((d) => !d.automatic).map((d) => d.code);
     const confirmedTotal = appliedDiscounts.reduce((sum, d) => sum + d.amount, 0);
     setIsApplyingDiscount(true);
     void (async () => {
       try {
-        const fresh = (await cartService.previewDiscount(codesToConfirm)).data;
+        const fresh = (await cartService.previewDiscount(codesToConfirm, { automatic: true })).data;
         const freshCodes = fresh.discounts.map((d) => d.code);
         const unchanged =
-          freshCodes.length === codesToConfirm.length &&
-          freshCodes.every((code) => codesToConfirm.includes(code)) &&
+          freshCodes.length === appliedCodes.length &&
+          freshCodes.every((code) => appliedCodes.includes(code)) &&
           fresh.discountAmount === confirmedTotal &&
           (fresh.rejected ?? []).length === 0;
         if (!unchanged) {
           setAppliedDiscounts(
-            fresh.discounts.map((d) => ({ code: d.code, amount: d.amount, scope: d.scope })),
+            fresh.discounts.map((d) => ({
+              code: d.code,
+              amount: d.amount,
+              scope: d.scope,
+              automatic: d.automatic,
+              label: d.label,
+            })),
           );
           for (const rejected of fresh.rejected ?? []) {
             if (rejected.permanent) void release(rejected.code);
@@ -443,7 +451,7 @@ export default function CheckoutPage() {
                     key={d.code}
                     className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
                   >
-                    <span>Discount ({d.code})</span>
+                    <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
                     <span>-{formatPrice(d.amount)}</span>
                   </div>
                 ))}
@@ -467,11 +475,19 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <div className="min-w-0 truncate">
-                            <span className="font-semibold text-foreground uppercase">{d.code}</span>
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
                             <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
                           </div>
                         </div>
-                        <button
+                        {!d.automatic && (
+                          <button
                           type="button"
                           onClick={() => handleRemoveDiscount(d.code)}
                           disabled={checkoutMutation.isPending}
@@ -479,6 +495,7 @@ export default function CheckoutPage() {
                         >
                           Remove
                         </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -829,11 +846,19 @@ export default function CheckoutPage() {
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Tag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                           <div className="min-w-0 truncate">
-                            <span className="font-semibold text-foreground uppercase">{d.code}</span>
+                            <span className={`font-semibold text-foreground ${d.automatic ? "" : "uppercase"}`}>
+                              {d.automatic ? (d.label ?? "Automatic offer") : d.code}
+                            </span>
+                            {d.automatic && (
+                              <span className="ml-1.5 rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                                Auto
+                              </span>
+                            )}
                             <span className="ml-1 text-emerald-600 dark:text-emerald-400 font-semibold">(-{formatPrice(d.amount)})</span>
                           </div>
                         </div>
-                        <button
+                        {!d.automatic && (
+                          <button
                           type="button"
                           onClick={() => handleRemoveDiscount(d.code)}
                           disabled={checkoutMutation.isPending}
@@ -841,6 +866,7 @@ export default function CheckoutPage() {
                         >
                           Remove
                         </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -902,7 +928,7 @@ export default function CheckoutPage() {
                   key={d.code}
                   className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold"
                 >
-                  <span>Discount ({d.code})</span>
+                  <span>{d.automatic ? (d.label ?? "Automatic offer") : `Discount (${d.code})`}</span>
                   <span>-{formatPrice(d.amount)}</span>
                 </div>
               ))}

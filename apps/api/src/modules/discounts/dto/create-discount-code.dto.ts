@@ -14,6 +14,7 @@ import {
   IsString,
   IsUUID,
   Matches,
+  ValidateIf,
   MaxLength,
   Min,
   MinLength,
@@ -28,11 +29,12 @@ import {
  * Contains all shared fields, normalization transforms, and validation rules.
  */
 export class CreateDiscountCodeDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description:
-      'Unique discount code string. Automatically trimmed and converted to uppercase.',
+      'Unique discount code string. Automatically trimmed and converted to uppercase. Required unless `autoApply` is true (an automatic discount needs no code; one is generated internally).',
     example: 'SAVE20',
   })
+  @ValidateIf((dto: CreateDiscountCodeDto) => !dto.autoApply || !!dto.code)
   @IsString()
   @MinLength(3)
   @MaxLength(50)
@@ -43,7 +45,7 @@ export class CreateDiscountCodeDto {
     message:
       'code may only contain letters, numbers, hyphens and underscores (3-50 characters).',
   })
-  code!: string;
+  code?: string;
 
   @ApiPropertyOptional({
     description: 'Human-readable description of the discount code terms.',
@@ -190,6 +192,26 @@ export class CreateDiscountCodeDto {
   @IsOptional()
   @IsBoolean()
   stackable?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Apply automatically when the cart qualifies: no code to type and nothing to claim. The offer is named by `description`.',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoApply?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Minimum number of eligible items in the cart for the discount to apply (for example "buy 3, save 10%").',
+    example: 3,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  minQuantity?: number | null;
 }
 
 /** Admin codes may be platform-wide. */

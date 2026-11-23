@@ -1,6 +1,6 @@
 "use client";
 
-import { recommendationService } from "@/api/modules/recommendations";
+import { recommendationService } from "@/api/services/recommendations";
 import { queryKey } from "@/lib/query-key";
 import { useRecommendationVisitorId } from "@/hooks/use-recommendation-session";
 import { useAuthStore } from "@/zustand/auth";

@@ -1,5 +1,5 @@
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { ProductGridSkeleton } from "@/components/product/ProductGridSkeleton";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function SearchLoading() {

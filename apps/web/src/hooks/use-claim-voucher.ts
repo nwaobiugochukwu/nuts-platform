@@ -1,6 +1,6 @@
 "use client";
 
-import { voucherService } from "@/api/vouchers";
+import { voucherService } from "@/api/services/vouchers";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { useAuthStore } from "@/zustand/auth";
 import { useDiscountStore } from "@/zustand/discount";

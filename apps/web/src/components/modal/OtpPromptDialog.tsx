@@ -146,7 +146,7 @@ export function OtpPromptDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md rounded-2xl p-6 sm:p-7">
+      <DialogContent mobile="center" className="max-w-md rounded-2xl p-6 sm:p-7">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">

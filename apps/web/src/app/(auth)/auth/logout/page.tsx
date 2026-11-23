@@ -29,7 +29,7 @@ export default function LogoutPage() {
   }, [logout]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex min-h-dvh items-center justify-center">
       {logoutFailed ? (
         <div className="space-y-4 text-center">
           <p className="text-muted-foreground">

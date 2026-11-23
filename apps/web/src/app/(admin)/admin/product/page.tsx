@@ -5,7 +5,7 @@ import { adminCategoryService } from "@/api";
 import { adminApi } from "@/api/core/client";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { AdminVariantResponseDto } from "@/api/dto/variant";
-import { ManagementToolbar } from "@/components/common/ManagementToolbar";
+import { ManagementToolbar } from "@/components/data/ManagementToolbar";
 import { DataTable,type Column } from "@/components/data/DataTable";
 import { CategoryPicker } from "@/components/form/CategoryPicker";
 import { FormInput } from "@/components/form/FormInput";
@@ -16,7 +16,7 @@ import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
 import {
 ProductVariantBuilder,
 type ProductVariantItem,
-} from "@/components/product/ProductVariantBuilder";
+} from "@/components/domain/product/ProductVariantBuilder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -649,7 +649,7 @@ export default function AdminProductPage() {
           if (!next) setEditingProduct(null);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl p-6 sm:p-8">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">
               {isEditing ? `Edit: ${editingProduct?.name}` : "Create New Product"}
@@ -794,7 +794,7 @@ export default function AdminProductPage() {
 
       {/* ADJUST STOCK MODAL */}
       <Dialog open={stockOpen} onOpenChange={setStockOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6">
+        <DialogContent mobile="center" className="max-w-md rounded-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <PackagePlus className="h-5 w-5 text-indigo-500" />

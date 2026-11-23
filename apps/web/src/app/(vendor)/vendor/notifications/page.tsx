@@ -1,6 +1,6 @@
 "use client";
 
-import { NotificationsManager } from "@/components/notification/NotificationsManager";
+import { NotificationsManager } from "@/components/domain/notification/NotificationsManager";
 
 export default function VendorDashboardNotificationsPage() {
   return (

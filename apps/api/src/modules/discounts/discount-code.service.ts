@@ -17,6 +17,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { randomBytes } from 'node:crypto';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import {
@@ -32,6 +33,11 @@ import {
   evaluateEligibleLines,
   isProductEligible,
 } from './discount-eligibility';
+import {
+  describeDiscountTargets,
+  isRestrictedDiscount,
+  type DiscountTargets,
+} from './discount-targets';
 import { releaseDiscountUsage } from './discount-funding';
 import { VoucherClaimsService } from './voucher-claims.service';
 
@@ -270,11 +276,37 @@ export class DiscountCodeService {
     );
   }
 
+  /** Internal identifier for an automatic discount (never typed by shoppers). */
+  private async generateAutoCode(): Promise<string> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const code = `AUTO-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
+      const taken = await this.prisma.discountCode.findUnique({
+        where: { code },
+        select: { id: true },
+      });
+      if (!taken) return code;
+    }
+    throw new ConflictException('Could not generate a unique offer id; retry.');
+  }
+
+  /** What each code covers, keyed by code, for cart/wallet messaging. */
+  async describeTargetsByCode(
+    rawCodes: string[],
+  ): Promise<Map<string, DiscountTargets>> {
+    const codes = [...new Set(rawCodes.map((c) => this.normalizeCode(c)))];
+    if (codes.length === 0) return new Map();
+    const rows = await this.prisma.discountCode.findMany({
+      where: { code: { in: codes } },
+    });
+    const targets = await describeDiscountTargets(this.prisma, rows);
+    return new Map(rows.map((row, i) => [row.code, targets[i]]));
+  }
+
   private async purgeDiscountCache(): Promise<void> {
     if (!this.cacheService) return;
     try {
       await Promise.all([
-        this.cacheService.del('discounts:platform-promos:v2'),
+        this.cacheService.del('discounts:platform-promos:v3'),
         this.cacheService.delByPattern('discounts:*'),
       ]);
     } catch (err) {
@@ -292,7 +324,22 @@ export class DiscountCodeService {
     dto: CreateDiscountCodeDto,
     vendorId?: string,
   ): Promise<DiscountCode> {
-    const code = this.normalizeCode(dto.code);
+    const isAuto = dto.autoApply === true;
+    if (isAuto && (dto.description ?? '').trim().length < 3) {
+      throw new BadRequestException(
+        'Name your automatic offer (for example "10% off 3 or more items"); shoppers see this name.',
+      );
+    }
+    const code = dto.code
+      ? this.normalizeCode(dto.code)
+      : isAuto
+        ? await this.generateAutoCode()
+        : '';
+    if (!code) {
+      throw new BadRequestException(
+        'A discount code is required unless the discount applies automatically.',
+      );
+    }
     this.assertValidCodeFormat(code);
 
     this.validateUsageLimits(dto.usageLimit, dto.perUserUsageLimit);
@@ -418,6 +465,9 @@ export class DiscountCodeService {
           firstOrderOnly: dto.firstOrderOnly ?? false,
 
           stackable: dto.stackable ?? false,
+
+          autoApply: isAuto,
+          minQuantity: dto.minQuantity ?? null,
 
           scope,
         },
@@ -596,6 +646,10 @@ export class DiscountCodeService {
             firstOrderOnly: dto.firstOrderOnly,
           }),
           ...(dto.stackable !== undefined && { stackable: dto.stackable }),
+          ...(dto.autoApply !== undefined && { autoApply: dto.autoApply }),
+          ...(dto.minQuantity !== undefined && {
+            minQuantity: dto.minQuantity,
+          }),
         },
       });
     } catch (error) {
@@ -655,7 +709,10 @@ export class DiscountCodeService {
     rawCodes: string[],
     userId: string,
     lines: DiscountLineItem[],
-    { strict }: { strict: boolean },
+    {
+      strict,
+      includeAutomatic = false,
+    }: { strict: boolean; includeAutomatic?: boolean },
   ): Promise<{
     applied: Array<{
       discount: DiscountCode;
@@ -689,12 +746,51 @@ export class DiscountCodeService {
     const usable: DiscountCode[] = [];
     for (const code of codes) {
       try {
-        usable.push(await this.validate(code, userId));
+        const discount = await this.validate(code, userId);
+        if (discount.autoApply) {
+          // Automatic offers are never entered or claimed; the engine applies
+          // them itself when the cart qualifies.
+          fail(
+            code,
+            new BadRequestException(
+              'This offer applies automatically when your cart qualifies. No code is needed.',
+            ),
+          );
+          continue;
+        }
+        usable.push(discount);
       } catch (error) {
         fail(code, error as Error);
       }
     }
 
+    const userStack = this.evaluateStack(usable, lines, fail);
+    if (!includeAutomatic) return { ...userStack, rejected };
+    return this.preferBestWithAutomatic(
+      usable,
+      userStack,
+      userId,
+      lines,
+      rejected,
+    );
+  }
+
+  /**
+   * Combination rules + amounts for an already-validated list of discounts.
+   * Pure with respect to the database; problems are reported through `fail`.
+   */
+  private evaluateStack(
+    usable: DiscountCode[],
+    lines: DiscountLineItem[],
+    fail: (code: string, error: Error) => void,
+  ): {
+    applied: Array<{
+      discount: DiscountCode;
+      evaluation: DiscountEvaluation;
+      discountAmount: Prisma.Decimal;
+    }>;
+    totalDiscount: Prisma.Decimal;
+  } {
     // 2. Combination rules (the first usable code is the anchor).
     const combined: DiscountCode[] = [];
     for (const candidate of usable) {
@@ -745,9 +841,11 @@ export class DiscountCodeService {
         fail(
           discount.code,
           new BadRequestException(
-            discount.scope === DiscountCodeScope.VENDOR
-              ? 'This discount code only applies to products from the store that issued it, and none are in your cart.'
-              : 'This discount code does not apply to any items in your cart.',
+            isRestrictedDiscount(discount)
+              ? 'This voucher only applies to specific items, and none of them are in your cart.'
+              : discount.scope === DiscountCodeScope.VENDOR
+                ? 'This voucher only applies to products from the store that issued it, and none are in your cart.'
+                : 'This voucher does not apply to any items in your cart.',
           ),
         );
         continue;
@@ -761,6 +859,25 @@ export class DiscountCodeService {
           discount.code,
           new BadRequestException(
             `Add ${shortfall} more of eligible items to use this discount (minimum ${discount.minOrderAmount.toFixed(2)}).`,
+          ),
+        );
+        continue;
+      }
+
+      const eligibleQuantity = eligibleLineIndexes(discount, lines).reduce(
+        (sum, i) => sum + (lines[i].quantity ?? 1),
+        0,
+      );
+      if (
+        discount.minQuantity !== null &&
+        discount.minQuantity !== undefined &&
+        eligibleQuantity < discount.minQuantity
+      ) {
+        const missing = discount.minQuantity - eligibleQuantity;
+        fail(
+          discount.code,
+          new BadRequestException(
+            `Add ${missing} more eligible ${missing === 1 ? 'item' : 'items'} to get this offer (minimum ${discount.minQuantity}).`,
           ),
         );
         continue;
@@ -792,11 +909,135 @@ export class DiscountCodeService {
       applied.push({ discount, evaluation, discountAmount });
     }
 
-    return {
-      applied,
-      rejected,
-      totalDiscount: totalDiscount.toDecimalPlaces(2),
-    };
+    return { applied, totalDiscount: totalDiscount.toDecimalPlaces(2) };
+  }
+
+  /**
+   * Automatic discounts: applied when the cart qualifies, with no code and no
+   * claim. They compete with the shopper's own vouchers and the shopper always
+   * gets the better outcome:
+   *
+   *   A  the shopper's vouchers alone
+   *   B  the best automatic offer(s) alone
+   *   C  vouchers + automatic offers (only if every one is combinable)
+   *
+   * Ties keep the shopper's explicit choice. A voucher that loses to a better
+   * automatic offer is reported (not an error) so the cart can say so.
+   */
+  private async preferBestWithAutomatic(
+    usable: DiscountCode[],
+    userStack: ReturnType<DiscountCodeService['evaluateStack']>,
+    userId: string,
+    lines: DiscountLineItem[],
+    rejected: Array<{ code: string; error: Error }>,
+  ): Promise<{
+    applied: ReturnType<DiscountCodeService['evaluateStack']>['applied'];
+    rejected: Array<{ code: string; error: Error }>;
+    totalDiscount: Prisma.Decimal;
+  }> {
+    const silent = () => undefined;
+    const autos = await this.findApplicableAutomatic(userId, lines);
+    if (autos.length === 0) return { ...userStack, rejected };
+
+    const autoOnly = this.evaluateStack(autos, lines, silent);
+    const combined =
+      usable.length > 0
+        ? this.evaluateStack([...usable, ...autos], lines, silent)
+        : autoOnly;
+
+    let best = userStack;
+    for (const candidate of [combined, autoOnly]) {
+      if (candidate.totalDiscount.greaterThan(best.totalDiscount)) {
+        best = candidate;
+      }
+    }
+
+    if (best !== userStack) {
+      const kept = new Set(best.applied.map(({ discount }) => discount.code));
+      for (const discount of usable) {
+        if (kept.has(discount.code)) continue;
+        if (rejected.some(({ code }) => code === discount.code)) continue;
+        rejected.push({
+          code: discount.code,
+          error: new BadRequestException(
+            `A better automatic offer is already applied, so ${discount.code} was not used.`,
+          ),
+        });
+      }
+    }
+    return { ...best, rejected };
+  }
+
+  /**
+   * Automatic discounts this shopper could get on this cart right now, best
+   * saving first. Eligibility (first-order, per-user limits, usage limits,
+   * dates) uses the same `validate` as codes; amounts use the shared engine.
+   */
+  private async findApplicableAutomatic(
+    userId: string,
+    lines: DiscountLineItem[],
+  ): Promise<DiscountCode[]> {
+    if (lines.length === 0) return [];
+
+    // Most carts are previewed when no automatic discount exists at all: answer
+    // that from a 60s cache (purged on any discount change) instead of querying
+    // and validating on every cart edit.
+    if (this.cacheService) {
+      const anyAutomatic = await this.cacheService.wrap(
+        'discounts:auto:any',
+        60,
+        async () =>
+          (await this.prisma.discountCode.count({
+            where: { autoApply: true, isActive: true, deletedAt: null },
+          })) > 0,
+      );
+      if (!anyAutomatic) return [];
+    }
+
+    const now = new Date();
+    const vendorIds = [...new Set(lines.map((line) => line.vendorId))];
+    const rows = await this.prisma.discountCode.findMany({
+      where: {
+        autoApply: true,
+        isActive: true,
+        deletedAt: null,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        ],
+        OR: [
+          { scope: DiscountCodeScope.PLATFORM },
+          { vendorId: { in: vendorIds } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+    });
+
+    const checked = await Promise.all(
+      rows
+        .filter(
+          (row) => row.usageLimit === null || row.usageCount < row.usageLimit,
+        )
+        .map(async (row) => {
+          try {
+            return await this.validate(row.code, userId);
+          } catch {
+            return null;
+          }
+        }),
+    );
+
+    return checked
+      .filter((discount): discount is DiscountCode => discount !== null)
+      .map((discount) => ({
+        discount,
+        amount: this.evaluateStack([discount], lines, () => undefined)
+          .totalDiscount,
+      }))
+      .filter(({ amount }) => amount.greaterThan(0))
+      .sort((a, b) => b.amount.comparedTo(a.amount))
+      .map(({ discount }) => discount);
   }
 
   /**
@@ -1523,6 +1764,8 @@ export class DiscountCodeService {
       platformwide: code.platformwide,
       firstOrderOnly: code.firstOrderOnly,
       stackable: code.stackable,
+      autoApply: code.autoApply,
+      minQuantity: code.minQuantity,
       startsAt: code.startsAt,
       expiresAt: code.expiresAt,
       scope: code.scope,
@@ -1579,6 +1822,10 @@ export class DiscountCodeService {
         .sort(
           (a, b) =>
             started(a) - started(b) ||
+            // A welcome offer for first-time shoppers never outranks the
+            // campaigns everyone can use.
+            Number(this.isFirstOrderOnlyDiscount(a)) -
+              Number(this.isFirstOrderOnlyDiscount(b)) ||
             rankValue(b) - rankValue(a) ||
             b.createdAt.getTime() - a.createdAt.getTime(),
         )
@@ -1596,12 +1843,13 @@ export class DiscountCodeService {
           startsAt: c.startsAt,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+          autoApply: c.autoApply,
         }));
     };
 
     const promos = this.cacheService
       ? await this.cacheService.wrap(
-          'discounts:platform-promos:v2',
+          'discounts:platform-promos:v3',
           120,
           fetcher,
         )
@@ -1683,10 +1931,10 @@ export class DiscountCodeService {
       const allVouchers: ProductVoucherSummaryDto[] = validCodes.map((c) => {
         const val = Number(c.value);
         const minOrder = Number(c.minOrderAmount);
-        const meetsMinSpend = productPrice >= minOrder || minOrder <= 0;
-        const shortfall = meetsMinSpend
-          ? 0
-          : Math.max(0, minOrder - productPrice);
+        const spendMet = productPrice >= minOrder || minOrder <= 0;
+        // "Buy 3+" offers cannot apply to one item, so they are shown as conditional.
+        const meetsMinSpend = spendMet && (c.minQuantity ?? 1) <= 1;
+        const shortfall = spendMet ? 0 : Math.max(0, minOrder - productPrice);
 
         let estimatedSavings = 0;
         if (c.type === DiscountCodeType.PERCENTAGE) {
@@ -1723,6 +1971,8 @@ export class DiscountCodeService {
           minOrderShortfall: Math.round(shortfall * 100) / 100,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+          autoApply: c.autoApply,
+          minQuantity: c.minQuantity,
         };
       });
 
@@ -1973,8 +2223,9 @@ export class DiscountCodeService {
       for (const c of matchingCodes) {
         const val = Number(c.value);
         const minOrder = Number(c.minOrderAmount);
-        const meetsMinSpend = prodPrice >= minOrder || minOrder <= 0;
-        const shortfall = meetsMinSpend ? 0 : Math.max(0, minOrder - prodPrice);
+        const spendMet = prodPrice >= minOrder || minOrder <= 0;
+        const meetsMinSpend = spendMet && (c.minQuantity ?? 1) <= 1;
+        const shortfall = spendMet ? 0 : Math.max(0, minOrder - prodPrice);
 
         let savings = 0;
         if (c.type === DiscountCodeType.PERCENTAGE) {
@@ -2005,6 +2256,8 @@ export class DiscountCodeService {
           minOrderShortfall: Math.round(shortfall * 100) / 100,
           expiresAt: c.expiresAt,
           isFirstOrderOnly: this.isFirstOrderOnlyDiscount(c),
+          autoApply: c.autoApply,
+          minQuantity: c.minQuantity,
         };
 
         if (meetsMinSpend) {

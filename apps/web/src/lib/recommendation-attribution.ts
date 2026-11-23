@@ -1,4 +1,4 @@
-import type { RecommendationAttribution } from "@/api/modules/analytics";
+import type { RecommendationAttribution } from "@/api/services/analytics";
 
 const STORAGE_PREFIX = "nuts.recommendation-attribution.v1:";
 const ATTRIBUTION_MAX_AGE_MS = 30 * 60 * 1000;

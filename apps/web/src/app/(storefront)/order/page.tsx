@@ -3,9 +3,9 @@
 import { orderService } from "@/api";
 import type { PaginationMeta } from "@/api/core/types";
 import type { OrderSummaryDto } from "@/api/dto/order";
-import { PageHeader } from "@/components/common/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { OrderStatusBadge } from "@/components/order/OrderItemSnapshot";
+import { OrderStatusBadge } from "@/components/domain/order/OrderItemSnapshot";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";

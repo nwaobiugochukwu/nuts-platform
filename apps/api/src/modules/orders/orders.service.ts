@@ -33,7 +33,10 @@ import { WalletService } from '@api/modules/wallet/wallet.service';
 import { AdminOrderResponseDto } from './dto/admin-order-response.dto';
 import { CheckoutResponseDto } from './dto/checkout-response.dto';
 import { CheckoutDto } from './dto/checkout.dto';
-import { OrderResponseDto } from './dto/order-response.dto';
+import {
+  OrderAppliedVoucherDto,
+  OrderResponseDto,
+} from './dto/order-response.dto';
 import { QueryOrderDto } from './dto/query-order.dto';
 import { VendorOrderResponseDto } from './dto/vendor-order-response.dto';
 
@@ -117,6 +120,25 @@ const orderInclude = {
       status: true,
       paymentLink: true,
       transactionReference: true,
+    },
+  },
+
+  // Snapshot of what each voucher took off this order (breakdown on the
+  // order page).
+  discountCodeUsages: {
+    orderBy: { createdAt: 'asc' as const },
+    select: {
+      discountAmount: true,
+      discountCode: {
+        select: {
+          code: true,
+          description: true,
+          scope: true,
+          type: true,
+          value: true,
+          autoApply: true,
+        },
+      },
     },
   },
 } satisfies Prisma.OrderInclude;
@@ -1712,39 +1734,43 @@ export class OrdersService {
           .map((code) => code.trim())
           .filter(Boolean);
 
-        if (requestedCodes.length > 0) {
-          // One engine for eligibility, minimum spend, stacking and amounts,
-          // shared with the cart preview: each voucher is measured on the lines
-          // it covers (a store voucher only ever covers that store's items),
-          // never on the whole cart. strict: any rejected voucher fails the
-          // checkout rather than silently charging a different price.
-          const resolved = await this.discountCodeService.resolveVoucherStack(
-            requestedCodes,
-            userId,
-            cart.cartItems.map((item) => ({
-              productId: item.productId,
-              vendorId: item.product.vendorId,
-              categoryIds: [
-                item.product.categoryId,
-                ...(item.product.category?.parentId
-                  ? [item.product.category.parentId]
-                  : []),
-              ],
-              lineTotal: item.unitPrice.mul(item.quantity),
-            })),
-            { strict: true },
-          );
+        // One engine for eligibility, minimum spend, stacking and amounts,
+        // shared with the cart preview: each voucher is measured on the lines
+        // it covers (a store voucher only ever covers that store's items),
+        // never on the whole cart. strict: any rejected voucher fails the
+        // checkout rather than silently charging a different price. Automatic
+        // discounts (no code) are resolved here too, by the same engine the cart
+        // previewed with, so the charged price is the price the shopper saw.
+        const resolved = await this.discountCodeService.resolveVoucherStack(
+          requestedCodes,
+          userId,
+          cart.cartItems.map((item) => ({
+            productId: item.productId,
+            vendorId: item.product.vendorId,
+            categoryIds: [
+              item.product.categoryId,
+              ...(item.product.category?.parentId
+                ? [item.product.category.parentId]
+                : []),
+            ],
+            lineTotal: item.unitPrice.mul(item.quantity),
+            quantity: item.quantity,
+          })),
+          { strict: true, includeAutomatic: true },
+        );
 
-          appliedVouchers = resolved.applied.map(
-            ({ discount, discountAmount: amount }) => ({
-              id: discount.id,
-              code: discount.code,
-              amount: amount.toDecimalPlaces(2),
-            }),
-          );
-          discountAmount = resolved.totalDiscount;
-          discountCode = appliedVouchers.map((v) => v.code).join(', ');
-        }
+        appliedVouchers = resolved.applied.map(
+          ({ discount, discountAmount: amount }) => ({
+            id: discount.id,
+            code: discount.code,
+            amount: amount.toDecimalPlaces(2),
+          }),
+        );
+        discountAmount = resolved.totalDiscount;
+        discountCode =
+          appliedVouchers.length > 0
+            ? appliedVouchers.map((v) => v.code).join(', ')
+            : null;
 
         // The cart page shows delivery and service charges in its total, so
         // the charged amount must include them or the shopper would be shown
@@ -2463,6 +2489,38 @@ export class OrdersService {
   // RESPONSE MAPPERS
   // ---------------------------------------------------------------------------
 
+  private toAppliedVouchers(
+    order: OrderWithItems | OrderWithItemsList,
+  ): OrderAppliedVoucherDto[] {
+    const usages =
+      'discountCodeUsages' in order ? order.discountCodeUsages : [];
+    if (usages.length > 0) {
+      return usages.map((usage) => ({
+        code: usage.discountCode.code,
+        description: usage.discountCode.description ?? null,
+        scope: usage.discountCode.scope,
+        type: usage.discountCode.type,
+        value: Number(usage.discountCode.value),
+        amount: Number(usage.discountAmount),
+        automatic: usage.discountCode.autoApply,
+      }));
+    }
+    // Legacy orders: only the joined code string was kept ("STORE20, PLAT10").
+    return (order.discountCode ?? '')
+      .split(',')
+      .map((code) => code.trim())
+      .filter(Boolean)
+      .map((code) => ({
+        code,
+        description: null,
+        scope: 'PLATFORM' as const,
+        type: 'FIXED' as const,
+        value: 0,
+        amount: null,
+        automatic: false,
+      }));
+  }
+
   private toResponse(
     order: OrderWithItems | OrderWithItemsList,
   ): OrderResponseDto {
@@ -2477,6 +2535,8 @@ export class OrdersService {
       finalAmount: Number(order.finalAmount),
 
       discountCode: order.discountCode ?? null,
+
+      appliedVouchers: this.toAppliedVouchers(order),
 
       referralCode: order.referralCode ?? null,
 

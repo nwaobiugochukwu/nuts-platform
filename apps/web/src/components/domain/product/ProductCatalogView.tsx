@@ -1,8 +1,8 @@
 "use client";
 
 import { productService } from "@/api";
-import { categoryService } from "@/api/modules/category";
-import { analyticsEventService } from "@/api/modules/analytics";
+import { categoryService } from "@/api/services/category";
+import { analyticsEventService } from "@/api/services/analytics";
 import type { CategoryResponseDto } from "@/api/dto/category";
 import type { PaginationMeta, CursorPaginationMeta } from "@/api/core/types";
 import type { ApiResult } from "@/api/core/client";
@@ -10,14 +10,14 @@ import type { ProductCardDto } from "@/api/dto/product";
 import type { VendorResponseDto } from "@/api/dto/vendor";
 import { DiscoverPersonalizedShelf } from "@/components/domain/product/DiscoverPersonalizedShelf";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
-import { ProductCard } from "@/components/product/ProductCard";
-import { ProductGridSkeleton } from "@/components/product/ProductGridSkeleton";
+import { ProductCard } from "@/components/domain/product/ProductCard";
+import { ProductGridSkeleton } from "@/components/domain/product/ProductGridSkeleton";
 import { RemoteImage } from "@/components/ui/RemoteImage";
 import { Button } from "@/components/ui/button";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useBatchProductDeals } from "@/hooks/use-product-deals";
-import { CategoryFilterDrawer } from "@/components/category/CategoryFilterDrawer";
+import { CategoryFilterDrawer } from "@/components/domain/category/CategoryFilterDrawer";
 import { Loader2, Search, SlidersHorizontal, Store, X } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
 import { useEffect, useMemo, useRef, useState } from "react";

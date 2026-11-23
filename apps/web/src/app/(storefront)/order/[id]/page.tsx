@@ -5,8 +5,8 @@ import { orderService,paymentService } from "@/api";
 import { getApiErrorMessage } from "@/api/core/error";
 import { CustomerLayout } from "@/components/layout/CustomerLayout";
 import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
-import { OrderStatusBadge } from "@/components/order/OrderItemSnapshot";
-import { WriteReviewDialog } from "@/components/review/WriteReviewDialog";
+import { OrderStatusBadge } from "@/components/domain/order/OrderItemSnapshot";
+import { WriteReviewDialog } from "@/components/domain/review/WriteReviewDialog";
 import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";
@@ -14,7 +14,6 @@ import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
 import { formatDate,formatPrice } from "@/lib/util";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
-ArrowLeft,
 Clock,
 CreditCard,
 Edit2,
@@ -22,9 +21,11 @@ Loader2,
 MapPin,
 Package,
 Receipt,
-Star
+Star,
+Tag
 } from "lucide-react";
 import Link from "@/components/navigation/AppLink";
+import { BackLink } from "@/components/navigation/BackLink";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -264,13 +265,7 @@ export default function OrderDetailPage() {
       <div className={`mx-auto max-w-5xl px-3 sm:px-6 lg:px-8 py-5 sm:py-10 space-y-5 sm:space-y-8 ${isPending ? "pb-24 sm:pb-10" : ""}`}>
         {/* Top Navigation & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <Link
-            href="/order"
-            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to My Orders</span>
-          </Link>
+          <BackLink fallbackHref="/order" fallbackLabel="Back to My Orders" />
 
           {isPending && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -530,9 +525,41 @@ export default function OrderDetailPage() {
                 </div>
 
                 {order.discountAmount > 0 && (
-                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span>Discount Code</span>
-                    <span>-{formatPrice(order.discountAmount)}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-medium">
+                      <span>{(order.appliedVouchers?.length ?? 0) > 1 ? "Vouchers" : "Voucher"}</span>
+                      <span>-{formatPrice(order.discountAmount)}</span>
+                    </div>
+                    {/* One line per voucher, with what it took off. Legacy orders
+                        (no per-voucher amount) just list the codes. */}
+                    {(order.appliedVouchers ?? []).map((voucher) => (
+                      <div
+                        key={voucher.code}
+                        className="flex items-center justify-between gap-3 pl-3 text-muted-foreground"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Tag className="h-3 w-3 shrink-0" />
+                          <span className={`truncate font-semibold text-foreground ${voucher.automatic ? "" : "font-mono"}`}>
+                            {voucher.automatic ? (voucher.description || "Automatic offer") : voucher.code}
+                          </span>
+                          {voucher.automatic && (
+                            <span className="shrink-0 rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                              Auto
+                            </span>
+                          )}
+                          {voucher.amount !== null && (
+                            <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                              {voucher.scope === "VENDOR" ? "Store" : "Platform"}
+                            </span>
+                          )}
+                        </span>
+                        {voucher.amount !== null && (
+                          <span className="shrink-0 font-medium text-emerald-600 dark:text-emerald-400">
+                            -{formatPrice(voucher.amount)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 

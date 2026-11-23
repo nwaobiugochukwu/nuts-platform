@@ -1,13 +1,13 @@
 "use client";
 
-import { PublicOnlyLayout } from "@/components/auth/PublicOnlyLayout";
+import { PublicOnlyLayout } from "@/components/domain/auth/PublicOnlyLayout";
 import { FormInput } from "@/components/form/FormInput";
 import { Button } from "@/components/ui/button";
 import { safeInternalPath } from "@/lib/safe-internal-path";
 import { useAuthStore } from "@/zustand/auth";
 import { zodResolver } from "@/lib/zod-resolver";
 import { Store } from "lucide-react";
-import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { GoogleSignInButton } from "@/components/domain/auth/GoogleSignInButton";
 import { parseGoogleAuthError } from "@/lib/google-auth-error";
 import Link from "@/components/navigation/AppLink";
 import { useRouter, useSearchParams } from "next/navigation";

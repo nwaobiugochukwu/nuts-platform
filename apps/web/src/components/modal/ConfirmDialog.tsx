@@ -58,7 +58,7 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !isLoading && onOpenChange(v)}>
-      <DialogContent className="max-w-md rounded-2xl p-6 sm:p-7">
+      <DialogContent mobile="center" className="max-w-md rounded-2xl p-6 sm:p-7">
         <div className="flex items-start gap-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-100 dark:bg-neutral-800">
             {getIcon()}

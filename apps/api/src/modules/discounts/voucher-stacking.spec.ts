@@ -11,6 +11,7 @@ const D = (n: number | string) => new Prisma.Decimal(n);
 
 const code = (over: Record<string, unknown>) => ({
   id: String(over.code),
+  code: String(over.code),
   description: null,
   type: DiscountCodeType.PERCENTAGE,
   value: D(10),
@@ -45,7 +46,7 @@ const line = (
 });
 
 function makeService(codes: Array<ReturnType<typeof code>>) {
-  const byCode = new Map(codes.map((c) => [c.code as string, c]));
+  const byCode = new Map(codes.map((c) => [c.code, c]));
   const prisma = {
     discountCode: {
       findFirst: jest

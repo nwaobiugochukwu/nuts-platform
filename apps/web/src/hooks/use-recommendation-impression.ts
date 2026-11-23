@@ -3,7 +3,7 @@
 import {
   analyticsEventService,
   type RecommendationAttribution,
-} from "@/api/modules/analytics";
+} from "@/api/services/analytics";
 import { useEffect, useRef, type RefObject } from "react";
 
 type RecommendationItem = {
