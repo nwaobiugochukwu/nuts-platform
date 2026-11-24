@@ -135,5 +135,6 @@ The Redis/RabbitMQ path applies to product views; other event types can write di
 
 - [Domain guides](../domains/README.md)
 - [Platform Runtime and Data](../platform/runtime-and-data.md)
+- [Hub fulfillment and delivery plan](hub-fulfillment-and-delivery-plan.md) (proposed)
 - [Code organization and dependency rules](code-organization.md)
 - [Architecture decisions](adr/README.md)
