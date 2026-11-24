@@ -82,13 +82,16 @@ const THEME_INITIALIZER_SCRIPT = `
       d.classList.add('light');
       d.style.colorScheme = 'light';
     }
+    // Own tag only: never remove or edit the theme-color tags React renders.
     var bar = isDark ? '#09090b' : '#ffffff';
-    var metas = document.head.querySelectorAll('meta[name="theme-color"]');
-    for (var i = metas.length - 1; i > 0; i--) metas[i].remove();
-    var meta = metas[0];
-    if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
-    meta.removeAttribute('media');
-    meta.setAttribute('content', bar);
+    var meta = document.head.querySelector('meta[data-nuts-theme-color]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'theme-color');
+      meta.setAttribute('data-nuts-theme-color', '');
+      document.head.prepend(meta);
+    }
+    if (meta.getAttribute('content') !== bar) meta.setAttribute('content', bar);
     if (stored && document.cookie.indexOf('nuts_theme=' + encodeURIComponent(stored)) === -1) {
       document.cookie = 'nuts_theme=' + encodeURIComponent(stored) + '; path=/; max-age=31536000; SameSite=Lax';
     }
