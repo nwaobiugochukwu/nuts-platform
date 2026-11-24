@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   formatRelativeTime,
+  notificationActionLabel,
   notificationDayGroup,
   resolveNotificationDestination,
 } from "./notification-open.ts";
@@ -21,7 +22,8 @@ const base = {
 
 test("opens the related order directly, not the notification page", () => {
   const dest = resolveNotificationDestination({ ...base, metadata: { orderId: "o1" } }, "user");
-  assert.deepEqual(dest, { href: "/order/o1", kind: "target" });
+  // A shipped order opens at its tracking section.
+  assert.deepEqual(dest, { href: "/order/o1#tracking", kind: "target" });
 });
 
 test("vendors land on their own order page", () => {
@@ -64,4 +66,47 @@ test("an announcement opens the message first, even when it has a link", () => {
     "user",
   );
   assert.deepEqual(dest, { href: "/notifications/n1", kind: "detail" });
+});
+
+test("payment and order-confirmed notifications open different sections of the order", () => {
+  const payment = resolveNotificationDestination(
+    { ...base, type: "PAYMENT_RECEIVED", actionUrl: "/order/o1", metadata: { orderId: "o1" } },
+    "user",
+  );
+  const confirmed = resolveNotificationDestination(
+    { ...base, type: "ORDER_CONFIRMED", actionUrl: "/order/o1", metadata: { orderId: "o1" } },
+    "user",
+  );
+  assert.equal(payment.href, "/order/o1#payment");
+  assert.equal(confirmed.href, "/order/o1#tracking");
+  assert.notEqual(payment.href, confirmed.href);
+});
+
+test("older stored links without a section still get one, and a stored section is kept", () => {
+  assert.equal(
+    resolveNotificationDestination({ ...base, type: "ORDER_SHIPPED", actionUrl: "/order/o9" }, "user").href,
+    "/order/o9#tracking",
+  );
+  assert.equal(
+    resolveNotificationDestination({ ...base, type: "PAYMENT_RECEIVED", actionUrl: "/order/o9#payment" }, "user").href,
+    "/order/o9#payment",
+  );
+});
+
+test("vendors and cancelled orders keep their plain targets", () => {
+  assert.equal(
+    resolveNotificationDestination({ ...base, type: "ORDER_CONFIRMED", metadata: { orderId: "o1" } }, "vendor").href,
+    "/vendor/order/o1",
+  );
+  assert.equal(
+    resolveNotificationDestination({ ...base, type: "ORDER_CANCELLED", actionUrl: "/order/o1" }, "user").href,
+    "/order/o1",
+  );
+});
+
+test("each notification says what the tap will show", () => {
+  assert.equal(notificationActionLabel("PAYMENT_RECEIVED"), "View receipt");
+  assert.equal(notificationActionLabel("ORDER_CONFIRMED"), "Track order");
+  assert.equal(notificationActionLabel("PAYMENT_FAILED"), "Retry payment");
+  assert.equal(notificationActionLabel("SYSTEM_ANNOUNCEMENT"), "Open");
 });

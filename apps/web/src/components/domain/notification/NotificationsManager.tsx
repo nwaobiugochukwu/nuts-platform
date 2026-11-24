@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useNotifications } from "@/hooks/use-notifications";
 import {
   formatRelativeTime,
+  notificationActionLabel,
   notificationDayGroup,
   resolveNotificationDestination,
   type NotificationDayGroup,
@@ -494,7 +495,7 @@ export function NotificationsManager({
                           </p>
                           {destination.kind === "target" && (
                             <p className="mt-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-primary">
-                              {getNotificationCategory(notif) === "orders" ? "View order" : "Open"}
+                              {notificationActionLabel(notif.type)}
                               <ChevronRight className="h-3.5 w-3.5" />
                             </p>
                           )}

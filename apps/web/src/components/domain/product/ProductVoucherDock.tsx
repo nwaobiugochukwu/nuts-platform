@@ -84,7 +84,8 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
           const isClaimed =
             isVoucherClaimed(voucher.code) || justClaimedCode === voucher.code;
 
-          const isBest = voucher.code === bestVoucherCode;
+          const isUsed = voucher.usedByYou === true;
+          const isBest = !isUsed && voucher.code === bestVoucherCode;
           const liveSavings = calculateSavings(voucher, currentPrice);
           const effectivePrice = Math.max(0, currentPrice - liveSavings);
           const needsQuantity = (voucher.minQuantity ?? 1) > 1;
@@ -95,7 +96,9 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
             <div
               key={voucher.id}
               className={`relative overflow-hidden rounded-xl border p-3 transition-all ${
-                isClaimed
+                isUsed
+                  ? "border-border/60 bg-muted/30 opacity-70"
+                  : isClaimed
                   ? "border-emerald-500 bg-emerald-50/60 dark:border-emerald-500 dark:bg-emerald-950/25 shadow-xs"
                   : isBest
                     ? "border-emerald-500/40 bg-card hover:border-emerald-500/60 shadow-2xs"
@@ -125,7 +128,11 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
                         Automatic
                       </span>
                     )}
-                    {needsQuantity ? (
+                    {isUsed ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        You have used this
+                      </span>
+                    ) : needsQuantity ? (
                       <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
                         Buy {voucher.minQuantity}+ to unlock
                       </span>
@@ -192,7 +199,12 @@ export function ProductVoucherDock({ productId, currentPrice }: ProductVoucherDo
 
                 {/* Right: Claim Action Button */}
                 <div className="shrink-0 flex items-center sm:self-center">
-                  {voucher.autoApply ? (
+                  {isUsed ? (
+                    <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-secondary px-3.5 py-1.5 text-xs font-semibold text-muted-foreground sm:w-auto">
+                      <Check className="h-3.5 w-3.5" />
+                      Used
+                    </span>
+                  ) : voucher.autoApply ? (
                     <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-500/10 px-3.5 py-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300 sm:w-auto">
                       <Check className="h-3.5 w-3.5" />
                       No code needed

@@ -12,6 +12,11 @@ on:
       - staging
       - main
 
+# Re-running on every edit/sync of the same PR only needs the latest result.
+concurrency:
+  group: enforce-source-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   assert-development-source:
     name: Assert PR source is not staging or main

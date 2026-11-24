@@ -13,16 +13,31 @@ const inter = Inter({
   display: "swap",
 });
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
-  ],
-};
+// The browser bar colour follows the theme the user CHOSE (saved in a cookie), not just the
+// phone's OS setting. With no saved choice ("system") the OS-based pair is kept.
+export async function generateViewport(): Promise<Viewport> {
+  let saved: string | undefined;
+  try {
+    saved = (await cookies()).get("nuts_theme")?.value;
+  } catch {
+    // Static prerender: fall back to the OS-based pair.
+  }
+  return {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    viewportFit: "cover",
+    themeColor:
+      saved === "dark"
+        ? "#09090b"
+        : saved === "light"
+          ? "#ffffff"
+          : [
+              { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+              { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+            ],
+  };
+}
 
 export const metadata: Metadata = {
   title: "NUTS",
@@ -67,6 +82,13 @@ const THEME_INITIALIZER_SCRIPT = `
       d.classList.add('light');
       d.style.colorScheme = 'light';
     }
+    var bar = isDark ? '#09090b' : '#ffffff';
+    var metas = document.head.querySelectorAll('meta[name="theme-color"]');
+    for (var i = metas.length - 1; i > 0; i--) metas[i].remove();
+    var meta = metas[0];
+    if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
+    meta.removeAttribute('media');
+    meta.setAttribute('content', bar);
     if (stored && document.cookie.indexOf('nuts_theme=' + encodeURIComponent(stored)) === -1) {
       document.cookie = 'nuts_theme=' + encodeURIComponent(stored) + '; path=/; max-age=31536000; SameSite=Lax';
     }

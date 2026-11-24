@@ -4,6 +4,7 @@ import type { AppNotification, NotificationType } from "@/api/services/notificat
 import { notificationsApiForRole } from "@/api/services/notifications";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/modal/ConfirmDialog";
+import { notificationActionLabel } from "@/lib/notification-open";
 import { queryKey } from "@/lib/query-key";
 import {
   notificationListPath,
@@ -230,15 +231,18 @@ export function NotificationDetail({ id }: { id: string }) {
   const referenceId = orderId ?? paymentId;
   const referenceLabel = orderId ? "Order reference" : paymentId ? "Payment reference" : "Related item";
   const isAnnouncement = item.type === "SYSTEM_ANNOUNCEMENT";
-  const actionLabel = isAnnouncement
-    ? "Open"
-    : item.type === "VENDOR_FOLLOWED"
-      ? "View followers"
+  // Same wording as the inbox row, so the button says what the tap in the list would have.
+  const typedLabel = notificationActionLabel(item.type);
+  const actionLabel =
+    typedLabel !== "Open"
+      ? typedLabel
       : orderId
-    ? "View order"
-    : paymentId
-      ? "View payment"
-      : "Open related page";
+        ? "View order"
+        : paymentId
+          ? "View payment"
+          : isAnnouncement
+            ? "Open"
+            : "Open related page";
   const isUrgent = item.priority === "HIGH" || item.priority === "URGENT";
 
   return (

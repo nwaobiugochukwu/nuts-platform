@@ -42,6 +42,62 @@ describe('discounts a customer has used up', () => {
     expect(prisma.discountCode.findMany).not.toHaveBeenCalled();
   });
 
+  it('keeps a used-up campaign in the banner list, flagged and last, instead of dropping it', async () => {
+    const row = (
+      id: string,
+      code: string,
+      value: number,
+      limit: number | null,
+    ) => ({
+      id,
+      code,
+      description: `${code} offer`,
+      type: 'PERCENTAGE',
+      value,
+      maxDiscountAmount: null,
+      minOrderAmount: 0,
+      startsAt: null,
+      expiresAt: null,
+      usageLimit: null,
+      usageCount: 0,
+      perUserUsageLimit: limit,
+      firstOrderOnly: false,
+      autoApply: false,
+      createdAt: new Date('2026-11-01'),
+    });
+    const campaigns = [
+      row('used', 'BIGGEST', 50, 1),
+      row('open', 'OPEN10', 10, null),
+    ];
+    const prisma = {
+      order: { count: jest.fn().mockResolvedValue(0) },
+      discountCode: {
+        findMany: jest
+          .fn()
+          .mockImplementation(({ where }: { where: { id?: unknown } }) =>
+            Promise.resolve(
+              where.id ? [{ id: 'used', perUserUsageLimit: 1 }] : campaigns,
+            ),
+          ),
+      },
+      discountCodeUserUsage: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ discountCodeId: 'used', usageCount: 1 }]),
+      },
+    };
+    const service = new DiscountCodeService(prisma as never);
+
+    const promos = await service.getPublicPlatformPromos('u1');
+
+    // Both are still listed (nothing disappears), the used one is flagged and sorted last
+    // even though it is the bigger offer.
+    expect(promos.map((p) => [p.code, !!p.usedByYou])).toEqual([
+      ['OPEN10', false],
+      ['BIGGEST', true],
+    ]);
+  });
+
   it('lists a used-up voucher as USED in the wallet and keeps usable ones ACTIVE', async () => {
     const code = (id: string, limit: number | null) => ({
       id,

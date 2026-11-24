@@ -253,8 +253,11 @@ export function PlatformPromoTicker({
       ? computeCountdown(activePromo, now)
       : null;
   const isAutomatic = activePromo.autoApply === true;
+  // The customer has used this offer up: still shown (so the bar never "loses" a campaign),
+  // but tagged Used and with nothing to claim.
+  const isUsed = activePromo.usedByYou === true;
   const isCurrentlyClaimed =
-    !isAutomatic && isVoucherClaimed(activePromo.code);
+    !isAutomatic && !isUsed && isVoucherClaimed(activePromo.code);
 
   const handleClaim = (e: React.MouseEvent) => {
     if (hasDragged.current) return;
@@ -366,6 +369,7 @@ export function PlatformPromoTicker({
   };
 
   if (isCollapsed) {
+    const availableCount = validPromos.filter((promo) => !promo.usedByYou).length;
     const headline =
       activePromo.type === "PERCENTAGE"
         ? `${activePromo.value}% OFF`
@@ -384,7 +388,9 @@ export function PlatformPromoTicker({
         >
           <Tag className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
           <span className="shrink-0">
-            {validPromos.length} {validPromos.length === 1 ? "offer" : "offers"} available
+            {availableCount > 0
+              ? `${availableCount} ${availableCount === 1 ? "offer" : "offers"} available`
+              : "Offers you have used"}
           </span>
           <span className="hidden truncate text-emerald-700 dark:text-emerald-400 sm:inline">· {headline}</span>
           <span className="inline-flex shrink-0 items-center gap-0.5 text-neutral-500 dark:text-neutral-400">
@@ -448,7 +454,7 @@ export function PlatformPromoTicker({
             className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1.5 sm:gap-x-3 animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
           >
             {/* Promo Discount Pill */}
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-100/90 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold sm:text-[13px]">
+            <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-100/90 ${isUsed ? "opacity-50 line-through" : ""} text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-400 px-2.5 py-1 text-xs font-bold sm:text-[13px]`}>
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
               <span>
                 {activePromo.type === "PERCENTAGE"
@@ -488,7 +494,12 @@ export function PlatformPromoTicker({
             )}
 
             {/* Automatic offers need no code or claim; others get the one-click claim button */}
-            {isAutomatic ? (
+            {isUsed ? (
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-400/40 bg-neutral-200/80 px-2.5 py-1 text-[11px] font-bold text-neutral-600 dark:border-neutral-600/40 dark:bg-neutral-800 dark:text-neutral-300 sm:px-3 sm:text-[13px]">
+                <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                Used
+              </span>
+            ) : isAutomatic ? (
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-sky-600/30 bg-sky-100/90 px-2.5 py-1 text-[11px] font-bold text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/20 dark:text-sky-300 sm:px-3 sm:text-[13px]">
                 <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                 Applied automatically
