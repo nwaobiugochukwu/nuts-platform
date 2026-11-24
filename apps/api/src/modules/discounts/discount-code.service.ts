@@ -1890,9 +1890,12 @@ export class DiscountCodeService {
       userId,
       visible.map((promo) => promo.id),
     );
-    return exhausted.size > 0
-      ? visible.filter((promo) => !exhausted.has(promo.id))
-      : visible;
+    if (exhausted.size === 0) return visible;
+    // Keep them (a vanishing banner looks like a bug) but flag them so the storefront can
+    // tag the offer as used instead of offering it; used offers go last.
+    return visible
+      .map((promo) => ({ ...promo, usedByYou: exhausted.has(promo.id) }))
+      .sort((a, b) => Number(a.usedByYou) - Number(b.usedByYou));
   }
 
   async getPublicProductDeals(
@@ -2075,16 +2078,19 @@ export class DiscountCodeService {
       cachedDeal.allVouchers.map((voucher) => voucher.id),
     );
     if (hasPriorOrders || exhausted.size > 0) {
-      const allVouchers = cachedDeal.allVouchers.filter(
-        (voucher) =>
-          (!hasPriorOrders || !voucher.isFirstOrderOnly) &&
-          !exhausted.has(voucher.id),
-      );
+      // Used-up vouchers stay in the list (flagged) so the product page can say "Used",
+      // but never count towards the best or unlockable deal.
+      const allVouchers = cachedDeal.allVouchers
+        .filter((voucher) => !hasPriorOrders || !voucher.isFirstOrderOnly)
+        .map((voucher) =>
+          exhausted.has(voucher.id) ? { ...voucher, usedByYou: true } : voucher,
+        )
+        .sort((a, b) => Number(!!a.usedByYou) - Number(!!b.usedByYou));
       const topApplicable = allVouchers.find(
-        (v) => v.isApplicable && v.estimatedSavings > 0,
+        (v) => !v.usedByYou && v.isApplicable && v.estimatedSavings > 0,
       );
       const topConditional = allVouchers.find(
-        (v) => !v.isApplicable && v.estimatedSavings > 0,
+        (v) => !v.usedByYou && !v.isApplicable && v.estimatedSavings > 0,
       );
       return {
         productId,

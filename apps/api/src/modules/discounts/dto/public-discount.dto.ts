@@ -56,6 +56,12 @@ export class PublicPlatformPromoDto {
       'True when the offer applies automatically (no code to enter or claim).',
   })
   autoApply?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when the signed-in customer has already used this offer the maximum number of times allowed per customer. It is still listed, but cannot be claimed or used again.',
+  })
+  usedByYou?: boolean;
 }
 
 export class ProductVoucherSummaryDto {
@@ -123,6 +129,12 @@ export class ProductVoucherSummaryDto {
       'True when the offer applies automatically at checkout (no code to enter or claim).',
   })
   autoApply?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'True when the signed-in customer has already used this voucher the maximum number of times allowed per customer.',
+  })
+  usedByYou?: boolean;
 
   @ApiPropertyOptional({
     description: 'Minimum number of eligible items required ("buy 3+").',

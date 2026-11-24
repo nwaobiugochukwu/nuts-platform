@@ -107,7 +107,7 @@ export function OrderDetailsModal({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2.5">
-                <span className="font-mono text-xl font-bold text-neutral-900 dark:text-white">
+                <span className="break-all font-mono text-lg font-bold text-neutral-900 dark:text-white sm:text-xl">
                   #{order.orderNumber}
                 </span>
                 <OrderStatusBadge status={order.status} />
@@ -118,9 +118,9 @@ export function OrderDetailsModal({
               </p>
             </div>
 
-            {/* Quick Fulfilment Action */}
+            {/* Quick Fulfilment Action (full width on phones) */}
             {onUpdateStatus && allowedNextStatuses.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex w-full items-center gap-2 sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">
                 {allowedNextStatuses.map((st) => (
                   <Button
                     key={st}
@@ -138,7 +138,7 @@ export function OrderDetailsModal({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 pt-4">
+        <div className="space-y-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
           {/* Customer & Delivery Information */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/60 dark:bg-neutral-900/50 p-4">
@@ -188,8 +188,8 @@ export function OrderDetailsModal({
               {order.items.map((item, idx) => {
                 const img = item.productSnapshot?.images?.[0];
                 return (
-                  <div key={idx} className="flex items-center justify-between p-3.5 sm:p-4 bg-white dark:bg-[#121214]">
-                    <div className="flex items-center gap-3.5">
+                  <div key={idx} className="flex items-center justify-between gap-3 p-3.5 sm:p-4 bg-white dark:bg-[#121214]">
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
                       <div className="relative h-12 w-12 rounded-xl bg-neutral-100 dark:bg-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
                         {img ? (
                           <RemoteImage
@@ -201,8 +201,8 @@ export function OrderDetailsModal({
                           <Package className="h-5 w-5 text-neutral-400" />
                         )}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-neutral-900 dark:text-white">
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-medium text-neutral-900 dark:text-white">
                           {item.productSnapshot?.name ?? "Purchased Item"}
                         </p>
                         {item.variantSnapshot?.options && item.variantSnapshot.options.length > 0 && (
@@ -222,7 +222,7 @@ export function OrderDetailsModal({
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-right">
                       <span className="text-sm font-semibold text-neutral-900 dark:text-white">
                         {formatPrice(item.totalPrice ?? item.unitPrice * item.quantity)}
                       </span>
@@ -270,7 +270,7 @@ export function OrderDetailsModal({
               </div>
             )}
             <div className="border-t border-neutral-200 dark:border-neutral-800 pt-2 flex justify-between font-semibold text-sm text-neutral-900 dark:text-white">
-              <span>Settled Total</span>
+              <span>{order.status === "CANCELLED" ? "Order Total (not paid)" : "Settled Total"}</span>
               <span>{formatPrice(order.finalAmount)}</span>
             </div>
           </div>

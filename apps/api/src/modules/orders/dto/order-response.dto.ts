@@ -1,5 +1,5 @@
 ﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { VariantOptionDto } from '@api/common/dto/variant-option.dto';
 
 class OrderProductSnapshotDto {
@@ -105,6 +105,13 @@ export class OrderResponseDto {
 
   @ApiProperty({ description: 'Final amount after all discounts' })
   finalAmount!: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Payment state of the order. Absent on list responses. An order cancelled before payment has PENDING or FAILED: the customer was not charged.',
+    enum: PaymentStatus,
+  })
+  paymentStatus?: PaymentStatus;
 
   @ApiPropertyOptional({ description: 'Discount code used', nullable: true })
   discountCode?: string | null;

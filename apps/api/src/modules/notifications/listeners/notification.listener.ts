@@ -161,10 +161,11 @@ export class NotificationListener {
       userId: payload.userId,
       role: ROLE.USER,
       type: NotificationType.ORDER_CONFIRMED,
-      title: 'Order Confirmed',
-      message: `Your order #${payload.orderNumber} is now processing.`,
+      title: 'Order confirmed',
+      message: `Order #${payload.orderNumber} is confirmed and the seller is preparing it. We'll let you know when it ships.`,
       priority: NotificationPriority.HIGH,
-      link: `/order/${payload.orderId}`,
+      // Opens the order at its tracking section: this message is about progress.
+      link: `/order/${payload.orderId}#tracking`,
       metadata: { orderId: payload.orderId },
       dedupeKey: `ORDER_CONFIRMED:${payload.orderId}:USER:${payload.userId}`,
     });
@@ -342,10 +343,10 @@ export class NotificationListener {
       userId: payload.userId,
       role: ROLE.USER,
       type: NotificationType.ORDER_SHIPPED,
-      title: 'Order Shipped',
+      title: 'Order shipped',
       message: `Your order #${payload.orderNumber} is on the way.`,
       priority: NotificationPriority.HIGH,
-      link: `/order/${payload.orderId}`,
+      link: `/order/${payload.orderId}#tracking`,
       metadata: { orderId: payload.orderId },
       dedupeKey: `ORDER_SHIPPED:${payload.orderId}:USER:${payload.userId}`,
     });
@@ -409,10 +410,10 @@ export class NotificationListener {
       userId: payload.userId,
       role: ROLE.USER,
       type: NotificationType.ORDER_DELIVERED,
-      title: 'Order Delivered',
+      title: 'Order delivered',
       message: `Your order #${payload.orderNumber} has been delivered.`,
       priority: NotificationPriority.HIGH,
-      link: `/order/${payload.orderId}`,
+      link: `/order/${payload.orderId}#tracking`,
       metadata: { orderId: payload.orderId },
       dedupeKey: `ORDER_DELIVERED:${payload.orderId}:USER:${payload.userId}`,
     });
@@ -500,10 +501,11 @@ export class NotificationListener {
       userId: payload.userId,
       role: ROLE.USER,
       type: NotificationType.PAYMENT_RECEIVED,
-      title: 'Payment Successful',
-      message: `Payment of ${payload.currency} ${payload.amount} confirmed for order #${payload.orderNumber}.`,
+      title: 'Payment received',
+      message: `We received ${payload.currency} ${payload.amount} for order #${payload.orderNumber}. Your receipt is ready.`,
       priority: NotificationPriority.HIGH,
-      link: `/order/${payload.orderId}`,
+      // Opens the order at its payment section: this message is about the money.
+      link: `/order/${payload.orderId}#payment`,
       metadata: { paymentId: payload.paymentId, orderId: payload.orderId },
       dedupeKey: `PAYMENT_RECEIVED:${payload.paymentId}:USER:${payload.userId}`,
     });
@@ -570,7 +572,8 @@ export class NotificationListener {
       title: 'Payment Failed',
       message: `Payment failed for order #${payload.orderNumber}: ${payload.reason || 'Check details and try again.'}`,
       priority: NotificationPriority.HIGH,
-      link: `/checkout`,
+      // The order page is where a failed payment is retried.
+      link: `/order/${payload.orderId}#payment`,
       metadata: { paymentId: payload.paymentId, orderId: payload.orderId },
       dedupeKey: `PAYMENT_FAILED:${payload.paymentId}:USER:${payload.userId}`,
     });

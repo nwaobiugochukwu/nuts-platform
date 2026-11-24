@@ -43,6 +43,16 @@ interface DataTableProps<T> {
   className?: string;
 }
 
+/**
+ * Pressing a button, link or field inside a row (an action like "Mark delivered") must
+ * not also trigger the row's own click, which opened the details sheet behind the action.
+ */
+function isInteractiveTarget(event: { target: EventTarget | null; currentTarget: EventTarget | null }) {
+  const target = event.target as HTMLElement | null;
+  const interactive = target?.closest?.("button, a, input, select, textarea, label, [role='menuitem']");
+  return Boolean(interactive && interactive !== event.currentTarget);
+}
+
 export function DataTable<T extends object>({
   columns,
   data,
@@ -116,7 +126,9 @@ export function DataTable<T extends object>({
           return (
             <li
               key={rowKey}
-              onClick={() => onRowClick?.(row)}
+              onClick={(event) => {
+                if (!isInteractiveTarget(event)) onRowClick?.(row);
+              }}
               className={cn(
                 "space-y-3 p-4 transition-colors",
                 isFetching && "opacity-50 pointer-events-none",
@@ -167,7 +179,9 @@ export function DataTable<T extends object>({
               return (
                 <tr
                   key={rowKey}
-                  onClick={() => onRowClick?.(row)}
+                  onClick={(event) => {
+                if (!isInteractiveTarget(event)) onRowClick?.(row);
+              }}
                   className={cn(
                     "group transition-colors duration-150 hover:bg-muted/30",
                     onRowClick && "cursor-pointer"

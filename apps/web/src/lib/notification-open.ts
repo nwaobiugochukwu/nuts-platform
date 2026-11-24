@@ -28,6 +28,33 @@ export function resolveNotificationDestination(
     : { href: notificationDetailPath(role, notification.id), kind: "detail" };
 }
 
+/** The call to action for a notification that opens something: says what the user will see. */
+export function notificationActionLabel(type?: string): string {
+  switch (type) {
+    case "PAYMENT_RECEIVED":
+      return "View receipt";
+    case "PAYMENT_REFUNDED":
+      return "View refund";
+    case "PAYMENT_FAILED":
+      return "Retry payment";
+    case "ORDER_PLACED":
+    case "ORDER_CONFIRMED":
+    case "ORDER_SHIPPED":
+      return "Track order";
+    case "ORDER_DELIVERED":
+    case "ORDER_CANCELLED":
+      return "View order";
+    case "VENDOR_FOLLOWED":
+      return "View followers";
+    case "PAYOUT_PROCESSED":
+      return "View payout";
+    case "LOW_STOCK_ALERT":
+      return "Restock";
+    default:
+      return "Open";
+  }
+}
+
 export type NotificationDayGroup = "Today" | "Yesterday" | "This week" | "Earlier";
 
 export function notificationDayGroup(createdAt: string, now = new Date()): NotificationDayGroup {
