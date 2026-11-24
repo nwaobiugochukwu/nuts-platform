@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same ref supersedes an older run.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   local-links:
     name: Check local documentation links

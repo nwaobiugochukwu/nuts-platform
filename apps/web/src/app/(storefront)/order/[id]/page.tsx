@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { queryKey } from "@/lib/query-key";
 import { safePaystackCheckoutUrl } from "@/lib/safe-paystack-url";
+import { describeOrderPayment } from "@/lib/order-payment";
 import { formatDate,formatPrice } from "@/lib/util";
 import { useMutation,useQuery,useQueryClient } from "@tanstack/react-query";
 import {
@@ -64,6 +65,23 @@ export default function OrderDetailPage() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 15,
   });
+
+  // Notifications open this page at a section ("#payment" for a receipt, "#tracking" for
+  // progress). The sections only exist once the order has loaded, so scroll afterwards.
+  const orderLoadedId = order?.id;
+  useEffect(() => {
+    if (!orderLoadedId) return;
+    const target = window.location.hash.slice(1);
+    if (!target) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(target);
+      if (!element) return;
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      element.classList.add("ring-2", "ring-primary/40");
+      window.setTimeout(() => element.classList.remove("ring-2", "ring-primary/40"), 2200);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [orderLoadedId]);
 
   // Background self-healing check: automatically verify payment if order is PENDING
   useEffect(() => {
@@ -231,6 +249,7 @@ export default function OrderDetailPage() {
   const isPending = order.status === "PENDING";
   const isDelivered = order.status === "DELIVERED";
   const isCancelled = order.status === "CANCELLED";
+  const payment = describeOrderPayment(order);
 
   // Format shipping address display
   const renderShippingAddress = () => {
@@ -354,13 +373,28 @@ export default function OrderDetailPage() {
             </div>
 
             <div className="text-left sm:text-right pt-2 sm:pt-0 border-t border-border/50 sm:border-0">
-              <p className="text-[11px] sm:text-xs text-muted-foreground">{isPending ? "Amount Due" : "Total Paid"}</p>
-              <p className="text-xl sm:text-2xl font-bold text-foreground">{formatPrice(order.finalAmount)}</p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                {payment.state === "AWAITING"
+                  ? "Amount Due"
+                  : payment.state === "NOT_CHARGED"
+                    ? "Amount Paid"
+                    : payment.state === "REFUNDED"
+                      ? "Refunded"
+                      : "Total Paid"}
+              </p>
+              <p className="text-xl sm:text-2xl font-bold text-foreground">
+                {formatPrice(payment.state === "AWAITING" ? payment.orderTotal : payment.amountPaid)}
+              </p>
+              {payment.state === "NOT_CHARGED" && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Order total {formatPrice(payment.orderTotal)} · not charged
+                </p>
+              )}
             </div>
           </div>
 
           {/* Fulfillment Status Progress Bar */}
-          <div className="pt-4 sm:pt-6">
+          <div id="tracking" className="scroll-mt-24 rounded-xl pt-4 transition-shadow sm:pt-6">
             <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2.5 sm:mb-3">
               Fulfillment Status
             </p>
@@ -511,7 +545,7 @@ export default function OrderDetailPage() {
             </Card>
 
             {/* Price Breakdown */}
-            <Card className="rounded-2xl border-border bg-card shadow-2xs">
+            <Card id="payment" className="scroll-mt-24 rounded-2xl border-border bg-card shadow-2xs transition-shadow">
               <CardHeader className="p-4 sm:p-5 pb-2.5 sm:pb-3">
                 <CardTitle className="text-xs sm:text-base font-semibold flex items-center gap-2">
                   <Receipt className="h-4 w-4 text-muted-foreground" />
@@ -570,10 +604,40 @@ export default function OrderDetailPage() {
                   </div>
                 )}
 
+                {/* The order total is what the cart came to; what was actually charged is
+                    shown separately, so a cancelled, unpaid order reads as nothing paid. */}
                 <div className="border-t border-border pt-3 flex justify-between text-xs sm:text-sm font-bold">
-                  <span>{isPending ? "Total Due" : "Total Paid"}</span>
-                  <span className="text-foreground">{formatPrice(order.finalAmount)}</span>
+                  <span>
+                    {payment.state === "AWAITING"
+                      ? "Total Due"
+                      : payment.state === "NOT_CHARGED"
+                        ? "Order Total"
+                        : "Total Paid"}
+                  </span>
+                  <span className="text-foreground">{formatPrice(payment.orderTotal)}</span>
                 </div>
+                {payment.state === "NOT_CHARGED" && (
+                  <>
+                    <div className="flex justify-between text-xs sm:text-sm font-semibold">
+                      <span>Amount Paid</span>
+                      <span className="text-foreground">{formatPrice(0)}</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {isCancelled
+                        ? "This order was cancelled before payment, so you were not charged."
+                        : "No payment was taken for this order."}
+                    </p>
+                  </>
+                )}
+                {payment.state === "REFUND_PENDING" && (
+                  <p className="text-[11px] text-muted-foreground">Your refund is being processed.</p>
+                )}
+                {payment.state === "REFUNDED" && (
+                  <div className="flex justify-between text-xs sm:text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    <span>Refunded</span>
+                    <span>{formatPrice(payment.amountPaid)}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

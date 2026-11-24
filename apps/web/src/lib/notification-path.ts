@@ -26,6 +26,33 @@ export interface NotificationLinkSource {
 }
 
 /**
+ * Which section of the order page a notification is about. A payment message opens the
+ * payment/receipt section and a progress message opens the tracking section, so "Payment
+ * received" and "Order confirmed" no longer open the same view.
+ */
+export function orderSectionFor(type?: string): "payment" | "tracking" | null {
+  switch (type) {
+    case "PAYMENT_RECEIVED":
+    case "PAYMENT_FAILED":
+    case "PAYMENT_REFUNDED":
+      return "payment";
+    case "ORDER_PLACED":
+    case "ORDER_CONFIRMED":
+    case "ORDER_SHIPPED":
+    case "ORDER_DELIVERED":
+      return "tracking";
+    default:
+      return null;
+  }
+}
+
+function withOrderSection(path: string, type?: string): string {
+  const section = orderSectionFor(type);
+  if (!section || !/^\/order\/[^/#?]+$/.test(path)) return path;
+  return `${path}#${section}`;
+}
+
+/**
  * Resolves the true destination URL of a related resource (e.g. order, product, payment)
  * for the user's active role, preventing 404s, malformed paths, or bare table redirects.
  */
@@ -82,7 +109,7 @@ export function resolveNotificationTargetUrl(
     }
 
     const safe = safeInternalPath(path, "");
-    if (safe) return safe;
+    if (safe) return normRole === "vendor" || normRole === "admin" ? safe : withOrderSection(safe, notification.type);
   }
 
   // 2. Synthesize from metadata if explicit link was absent or rejected
@@ -95,7 +122,7 @@ export function resolveNotificationTargetUrl(
     const id = encodeURIComponent(orderId.trim());
     if (normRole === "vendor") return `/vendor/order/${id}`;
     if (normRole === "admin") return `/admin/order/${id}`;
-    return `/order/${id}`;
+    return withOrderSection(`/order/${id}`, notification.type);
   }
 
   const paymentId =

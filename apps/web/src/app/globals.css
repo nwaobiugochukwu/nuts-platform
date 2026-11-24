@@ -576,6 +576,8 @@ summary {
 }
 
 html {
+  /* The rubber-band area above/below the page, and the area behind the status bar. */
+  background-color: var(--background);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

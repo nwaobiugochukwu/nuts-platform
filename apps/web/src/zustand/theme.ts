@@ -1,3 +1,4 @@
+import { applyThemeColorMeta } from "@/lib/theme-color";
 import { create } from "zustand";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -26,6 +27,8 @@ function applyThemeToDOM(resolved: "light" | "dark") {
     root.classList.add("light");
     root.style.colorScheme = "light";
   }
+  // Keep the phone's status/address bar in step with the page.
+  applyThemeColorMeta(resolved);
 }
 
 function syncCookie(mode: ThemeMode) {

@@ -152,7 +152,7 @@ export default function AdminOrderDetailPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="font-mono text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+              <h1 className="break-all font-mono text-xl font-extrabold tracking-tight text-foreground sm:text-3xl">
                 #{order.orderNumber}
               </h1>
               <OrderStatusBadge status={order.status} />
@@ -168,7 +168,7 @@ export default function AdminOrderDetailPage() {
               <button
                 type="button"
                 onClick={handleCopyId}
-                className="flex items-center gap-1 font-mono hover:text-foreground transition-colors"
+                className="flex min-w-0 max-w-full items-center gap-1 break-all text-left font-mono hover:text-foreground transition-colors"
                 title="Copy reference"
               >
                 {copied ? (

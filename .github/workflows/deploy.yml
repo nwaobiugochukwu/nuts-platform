@@ -1,5 +1,8 @@
 name: NUTS - CD
 
+# Deploys only after CI succeeds on a PUSH to staging/main (i.e. after a merge). CI also runs
+# for pull requests, and a PR such as `staging -> main` has head branch `staging`; without
+# the `event == 'push'` condition below its CI run would trigger a second, duplicate deploy.
 on:
   workflow_run:
     workflows: ["NUTS - CI"]
@@ -28,7 +31,7 @@ jobs:
     name: Determine Target Environment
     runs-on: ubuntu-latest
     if: >-
-      ${{ (github.event_name == 'workflow_dispatch' && (inputs.target_env != 'production' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+      ${{ (github.event_name == 'workflow_dispatch' && (inputs.target_env != 'production' || github.ref == 'refs/heads/main')) || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     outputs:
       env_name: ${{ steps.set-env.outputs.env_name }}
       docker_tag: ${{ steps.set-env.outputs.docker_tag }}

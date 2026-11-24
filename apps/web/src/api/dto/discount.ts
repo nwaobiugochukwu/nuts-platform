@@ -42,6 +42,8 @@ export interface PublicPlatformPromoDto {
   isFirstOrderOnly?: boolean;
   /** Applies automatically: no code to claim. */
   autoApply?: boolean;
+  /** The signed-in customer has used this offer the maximum number of times allowed. */
+  usedByYou?: boolean;
 }
 
 export interface ProductVoucherSummaryDto {
@@ -63,6 +65,8 @@ export interface ProductVoucherSummaryDto {
   autoApply?: boolean;
   /** Minimum eligible items required ("buy 3+"). */
   minQuantity?: number | null;
+  /** The signed-in customer has used this voucher the maximum number of times allowed. */
+  usedByYou?: boolean;
 }
 
 export interface PublicProductDealDto {

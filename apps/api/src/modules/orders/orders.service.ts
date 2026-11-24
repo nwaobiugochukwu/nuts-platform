@@ -2534,6 +2534,11 @@ export class OrdersService {
       referralDiscountAmount: Number(order.referralDiscountAmount),
       finalAmount: Number(order.finalAmount),
 
+      // Detail responses carry the payment; list responses do not.
+      ...('payment' in order
+        ? { paymentStatus: order.payment?.status ?? PaymentStatus.PENDING }
+        : {}),
+
       discountCode: order.discountCode ?? null,
 
       appliedVouchers: this.toAppliedVouchers(order),

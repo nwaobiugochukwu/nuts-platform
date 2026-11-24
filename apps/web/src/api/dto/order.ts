@@ -76,6 +76,8 @@ export interface OrderResponseDto {
   discountAmount: number;
   referralDiscountAmount: number;
   finalAmount: number;
+  /** Absent on list responses. PENDING/FAILED on a cancelled order = never charged. */
+  paymentStatus?: PaymentStatus;
   discountCode?: string | null;
   appliedVouchers?: OrderAppliedVoucherDto[];
   referralCode?: string | null;

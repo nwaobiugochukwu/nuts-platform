@@ -126,7 +126,7 @@ Google Identity Services (GIS) sign-in is available across customer and vendor p
 
 Swagger is enabled with `SWAGGER_ENABLED=true` in development or when staging is explicitly selected with `NODE_ENV=staging` or `APP_ENV=staging`. A staging hostname by itself does not enable it. Production disables Swagger even when the flag is true. The UI is at `/api/docs`; the JSON document is at `/api/docs-json` when enabled. The API documentation arranges all tags and operations in alphabetical order (`tagsSorter: 'alpha'`, `operationsSorter: 'alpha'`) across domain tags (`ADMIN - *`, `AUTH`, `CART`, `CATEGORIES`, `NOTIFICATIONS`, `ORDERS`, `PRODUCTS`, `VENDOR - *`, etc.) for intuitive scanning and consistent contract generation.
 
-GitHub Actions runs lockfile validation, lint, typecheck, API and web authentication tests, and production builds. The workflow named `deploy` publishes API and web images to GitHub Container Registry (GHCR); host rollout and post-deployment health verification remain separate operational release steps.
+GitHub Actions runs lockfile validation, lint, typecheck, API and web authentication tests, and production builds. The workflow named `deploy` publishes API and web images to GitHub Container Registry (GHCR) once per merge (it reacts only to CI runs triggered by a push to `staging`/`main`, not to pull-request runs, which previously caused duplicate publishes); host rollout and post-deployment health verification remain separate operational release steps.
 
 ---
 
