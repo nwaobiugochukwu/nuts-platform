@@ -23,6 +23,7 @@ export class OutboxService {
     aggregateId: string,
     eventType: string,
     payload: Record<string, unknown>,
+    options: { wakeRelay?: boolean } = {},
   ): Promise<void> {
     const eventId = randomUUID();
     await tx.outboxEvent.create({
@@ -38,6 +39,13 @@ export class OutboxService {
       },
     });
 
+    // Callers inside TransactionRunner pass wakeRelay: false and wake the relay
+    // after COMMIT; waking it here would race the commit.
+    if (options.wakeRelay !== false) this.outboxRelay?.notifyNewEvent();
+  }
+
+  /** Wakes the relay now; call after the transaction that appended events committed. */
+  wakeRelay(): void {
     this.outboxRelay?.notifyNewEvent();
   }
 }

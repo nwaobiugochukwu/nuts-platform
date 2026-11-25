@@ -22,6 +22,7 @@ import { CacheModule } from './infrastructure/cache/cache.module';
 import { RedisThrottlerStorage } from './infrastructure/cache/redis-throttler.storage';
 import { RabbitMQModule } from './infrastructure/rabbitmq/rabbitmq.module';
 import { OutboxModule } from './infrastructure/outbox/outbox.module';
+import { TransactionModule } from './infrastructure/transaction/transaction.module';
 import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
@@ -99,6 +100,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     CacheModule,
     RabbitMQModule,
     OutboxModule,
+    TransactionModule,
     ResiliencyModule,
     MailModule,
     CloudinaryModule,
