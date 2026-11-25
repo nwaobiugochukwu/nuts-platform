@@ -178,6 +178,43 @@ describe('TransactionRunner', () => {
     expect(order).toEqual(['work', 'commit', 'wake']);
   });
 
+  it('records critical audit events in the transaction via the outbox', async () => {
+    const order: string[] = [];
+    outbox.wakeRelay.mockImplementation(() => order.push('wake'));
+    prisma.$transaction.mockImplementation(async (fn) => {
+      const value = await fn(tx);
+      order.push('commit');
+      return value;
+    });
+    await runner.run(
+      async (ctx) => {
+        await ctx.audit({
+          action: 'VENDOR_SETTLED',
+          entity: 'Order',
+          entityId: 'o1',
+          adminId: 'a1',
+          payload: { amount: 10, token: 'secret' },
+        });
+        order.push('work');
+      },
+      { name: 't.audit' },
+    );
+    expect(outbox.appendEvent).toHaveBeenCalledWith(
+      tx,
+      'audit',
+      'o1',
+      'audit.event',
+      expect.objectContaining({
+        action: 'VENDOR_SETTLED',
+        entity: 'Order',
+        adminId: 'a1',
+        payload: { amount: 10, token: '[REDACTED]' },
+      }),
+      { wakeRelay: false },
+    );
+    expect(order).toEqual(['work', 'commit', 'wake']);
+  });
+
   it('retries a conflicting critical transaction and then succeeds', async () => {
     let calls = 0;
     prisma.$transaction.mockImplementation(async (fn) => {

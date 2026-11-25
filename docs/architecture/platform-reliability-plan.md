@@ -87,7 +87,7 @@ Isolation is two-layered: separate compose services (a container crash or OOM ki
 await this.tx.run(async (ctx) => {
   await this.wallet.settleVendorEarning(vendorId, amount, orderId, ctx.tx);
   await ctx.emit('order', orderId, 'order.settled', { orderId });     // outbox, same transaction
-  ctx.audit({ action: 'VENDOR_SETTLED', entity: 'Order', entityId: orderId }); // critical audit, same transaction
+  await ctx.audit({ action: 'VENDOR_SETTLED', entity: 'Order', entityId: orderId }); // critical audit, same transaction
   ctx.afterCommit(() => this.cache.invalidateVendor(vendorId));        // runs only after COMMIT
 }, { name: 'order.settle', preset: 'critical' });
 ```
@@ -135,7 +135,7 @@ A single `audit` consumer in `worker` batches inserts (for example every second 
 
 - One append-only `audit_events` table: event id, occurred-at, actor type and id, action, entity and id, outcome, request id, trace id, IP, user agent, redacted `before`/`after` diff, source role. The application database user is granted INSERT and SELECT only; retention is handled by a separate maintenance role.
 - Central redaction (passwords, tokens, card numbers, bank details, full addresses where not needed) before anything leaves the request.
-- Merge the two existing audit services into one; keep the old `log()` as a thin shim during migration so the 64 call sites move gradually, critical ones first.
+- Merge the two existing audit services into one (done: they were identical, and the unused copy under `modules/security/audit` is removed); keep the old `log()` as a thin shim during migration so the 64 call sites move gradually, critical ones first.
 - Admin audit viewer keeps working: reads the same table (the current table is the starting point, so no history is lost; the new columns are additive).
 - Later option: a hash chain over events for tamper evidence.
 
