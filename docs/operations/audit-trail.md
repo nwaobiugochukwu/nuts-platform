@@ -11,23 +11,45 @@ Every event has a unique `eventId`, so redelivery never creates duplicates (veri
 
 ## Using it
 
+Audit is declared, not hand-written. The **controller method** says what happened; the **service**, which knows the specifics (the id of the record it just created, the old and new values), attaches them with one line. A global interceptor merges both into one event after the response, so the request never waits.
+
 ```ts
-// Decorator: records after a 2xx response; the request never waits.
-@Audit({ action: 'PRODUCT_UPDATED', entity: 'Product', entityId: 'id' })
+// Controller: what happened. Recorded after a 2xx; the actor, IP, user agent and request id come from the request.
+@Audit({ action: 'CATEGORY_UPDATED', entity: 'Category' })
 @Patch(':id')
-update(...) { ... }
+update(@Param('id') id: string, @Body() dto: UpdateCategoryDto) { return this.categories.update(id, dto); }
 
-// Security-relevant endpoints can also record 4xx failures.
-@Audit({ action: 'ADMIN_LOGIN', entity: 'Session', onFailure: true })
+// Service: the details only it knows. No audit service, no await, nothing to inject.
+auditDetails({
+  entityId: updated.id,
+  payload: { old: { name: existing.name }, new: { name: updated.name } },
+});
+```
 
-// Critical: inside the transaction that changes the data.
+| Need | Use |
+|---|---|
+| Record a successful action | `@Audit({ action, entity })` on the controller method |
+| The id, old and new values, extra facts | `auditDetails({ entityId, payload, before, after })` in the service (several calls merge) |
+| One action name that depends on data (activate or deactivate, which Google sign-in outcome) | `auditDetails({ action })` overrides the controller's default |
+| Record a failure too (failed sign-in) | `onFailure: true`, plus `failureAction: 'USER_LOGIN_FAILED'`; `failureOnly: true` to record only failures |
+| A second event in the same request (automatic unsuspend during sign-in) | `auditAlso({ action, entity, entityId })` |
+| Money, permissions, anything that must never be lost | `ctx.audit(...)` inside the transaction (see below) |
+| Code that runs outside any request (the announcement scheduler, the deletion purge job) | `AuditLogService.log` / `record` directly; these are the only allowed direct calls |
+
+Outside a request `auditDetails` and `auditAlso` do nothing. A vendor performing an action is recorded in the event's payload as `actor: { role: 'VENDOR', id }`, because `audit_logs.userId` and `adminId` reference the user and admin tables.
+
+**Guard rails:** `npm run check:architecture` rejects any new direct audit-log call in a service (the four legitimate ones, listed in `scripts/check-architecture.mjs`, can only shrink); `audited-endpoints.spec.ts` pins all 60 audited endpoints to their action so a removed decorator fails the build; `audit-wiring.spec.ts` runs the real chain (context middleware, controller, service, interceptor) over HTTP.
+
+Critical events written inside a transaction:
+
+```ts
 await this.tx.run(async (ctx) => {
   await this.wallet.settleVendorEarning(vendorId, amount, orderId, ctx.tx);
   await ctx.audit({ action: 'VENDOR_SETTLED', entity: 'Order', entityId: orderId, adminId });
 }, { name: 'order.settle', preset: 'critical' });
 ```
 
-Use the transaction form for money movement, refunds, payouts, role or permission changes and sign-in/session events. Everything else can use the decorator or `log()`.
+Use the transaction form for money movement, refunds, payouts, role or permission changes and sign-in/session events; those are moved over in the next release together with the transaction conversions.
 
 ## What is stored
 
@@ -50,4 +72,5 @@ Watch `nuts_rabbitmq_queue_messages{queue="q.nuts.audit"}` and the consumer coun
 
 ## Not done yet
 
-The 64 existing `AuditLogService.log` call sites are unchanged but are now non-blocking and redacted automatically. Moving the critical ones (payments, wallets, admin and permission changes) to `ctx.audit`, and adding `@Audit` to controllers that do not audit yet, is incremental work. Retention, archiving and the read-access policy are described in the plan but not implemented.
+- The critical-tier events (money, permissions) still use the standard path; moving them into their transactions with `ctx.audit` is the next release, together with converting the remaining files to the transaction helper.
+- Retention, archiving and the read-access policy are described in the plan but not implemented.

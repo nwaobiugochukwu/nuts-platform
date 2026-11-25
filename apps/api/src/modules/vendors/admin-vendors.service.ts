@@ -6,16 +6,13 @@ import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import {
-  AuditLogService,
-  toAuditPayload,
-} from '@api/common/audit-log/audit-log.service';
-import {
   VENDOR_STORE,
   VENDOR_STORE_PRODUCTS,
 } from '@api/common/constants/cache.constant';
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
 import { QueryAdminVendorsDto } from './dto/query-admin-vendors.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const vendorSelect = {
   id: true,
@@ -79,7 +76,6 @@ export class AdminVendorsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService,
     private readonly cacheService: CacheService,
     private readonly emailService: EmailService,
   ) {}
@@ -156,92 +152,47 @@ export class AdminVendorsService {
     return this.toVendorProfile(vendor);
   }
 
-  approve(
-    adminId: string,
-    id: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
-    return this.transitionStatus(
-      adminId,
-      id,
-      {
-        action: 'APPROVE_VENDOR',
-        field: 'isApproved',
-        value: true,
-        extraData: { tokenVersion: { increment: 1 } },
+  approve(adminId: string, id: string): Promise<VendorStatusResponseDto> {
+    return this.transitionStatus(adminId, id, {
+      action: 'APPROVE_VENDOR',
+      field: 'isApproved',
+      value: true,
+      extraData: { tokenVersion: { increment: 1 } },
+    });
+  }
+
+  verify(adminId: string, id: string): Promise<VendorStatusResponseDto> {
+    return this.transitionStatus(adminId, id, {
+      action: 'VERIFY_VENDOR',
+      field: 'isVerified',
+      value: true,
+    });
+  }
+
+  deactivate(adminId: string, id: string): Promise<VendorStatusResponseDto> {
+    return this.transitionStatus(adminId, id, {
+      action: 'DEACTIVATE_VENDOR',
+      field: 'isActive',
+      value: false,
+      // Revoke every live session atomically with the flag flip.
+      extraData: {
+        refreshToken: null,
+        refreshTokenId: null,
+        tokenVersion: { increment: 1 },
       },
-      ipAddress,
-      userAgent,
-    );
+    });
   }
 
-  verify(
-    adminId: string,
-    id: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
-    return this.transitionStatus(
-      adminId,
-      id,
-      { action: 'VERIFY_VENDOR', field: 'isVerified', value: true },
-      ipAddress,
-      userAgent,
-    );
+  reactivate(adminId: string, id: string): Promise<VendorStatusResponseDto> {
+    return this.transitionStatus(adminId, id, {
+      action: 'REACTIVATE_VENDOR',
+      field: 'isActive',
+      value: true,
+      extraData: { tokenVersion: { increment: 1 } },
+    });
   }
 
-  deactivate(
-    adminId: string,
-    id: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
-    return this.transitionStatus(
-      adminId,
-      id,
-      {
-        action: 'DEACTIVATE_VENDOR',
-        field: 'isActive',
-        value: false,
-        // Revoke every live session atomically with the flag flip.
-        extraData: {
-          refreshToken: null,
-          refreshTokenId: null,
-          tokenVersion: { increment: 1 },
-        },
-      },
-      ipAddress,
-      userAgent,
-    );
-  }
-
-  reactivate(
-    adminId: string,
-    id: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
-    return this.transitionStatus(
-      adminId,
-      id,
-      {
-        action: 'REACTIVATE_VENDOR',
-        field: 'isActive',
-        value: true,
-        extraData: { tokenVersion: { increment: 1 } },
-      },
-      ipAddress,
-      userAgent,
-    );
-  }
-
-  async delete(
-    adminId: string,
-    id: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async delete(adminId: string, id: string): Promise<void> {
     let vendor: {
       id: string;
       email: string;
@@ -257,21 +208,14 @@ export class AdminVendorsService {
       this.rethrowNotFound(error);
     }
 
-    await Promise.all([
-      this.invalidateVendorCaches(vendor.storeSlug),
-      this.auditLog.log({
-        action: 'DELETE_VENDOR',
-        entity: 'Vendor',
-        entityId: id,
-        adminId,
-        payload: toAuditPayload({
-          email: vendor.email,
-          storeName: vendor.storeName,
-        }),
-        ipAddress,
-        userAgent,
-      }),
-    ]);
+    auditDetails({
+      entityId: id,
+      payload: {
+        email: vendor.email,
+        storeName: vendor.storeName,
+      },
+    });
+    await Promise.all([this.invalidateVendorCaches(vendor.storeSlug)]);
   }
 
   /**
@@ -286,8 +230,6 @@ export class AdminVendorsService {
     adminId: string,
     id: string,
     transition: StatusTransition,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<VendorStatusResponseDto> {
     const { action, field, value, extraData } = transition;
 
@@ -312,27 +254,21 @@ export class AdminVendorsService {
       this.rethrowNotFound(error);
     }
 
-    await Promise.all([
-      this.invalidateVendorCaches(vendor.storeSlug),
-      this.auditLog.log({
-        action,
-        entity: 'Vendor',
-        entityId: id,
-        adminId,
-        payload: toAuditPayload({
-          email: vendor.email,
-          storeName: vendor.storeName,
-          changes: {
-            [field]: {
-              old: (before as Record<StatusField, boolean>)[field],
-              new: value,
-            },
+    auditDetails({
+      action,
+      entityId: id,
+      payload: {
+        email: vendor.email,
+        storeName: vendor.storeName,
+        changes: {
+          [field]: {
+            old: (before as Record<StatusField, boolean>)[field],
+            new: value,
           },
-        }),
-        ipAddress,
-        userAgent,
-      }),
-    ]);
+        },
+      },
+    });
+    await Promise.all([this.invalidateVendorCaches(vendor.storeSlug)]);
 
     if (action === 'APPROVE_VENDOR' && value === true) {
       void this.emailService

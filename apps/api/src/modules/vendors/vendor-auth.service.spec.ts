@@ -6,13 +6,13 @@ import {
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { VendorAuthService } from './vendor-auth.service';
+import { captureAudit } from '@api/common/audit-log/audit-testing';
 
 describe('VendorAuthService', () => {
   let service: VendorAuthService;
   let mockPrisma: any;
   let mockOtp: any;
   let mockEmail: any;
-  let mockAudit: any;
   let mockAccountLock: any;
   let mockRefreshSession: any;
   let mockGoogleAuth: any;
@@ -63,10 +63,6 @@ describe('VendorAuthService', () => {
       sendPasswordResetSuccessEmail: jest.fn().mockResolvedValue(undefined),
     };
 
-    mockAudit = {
-      log: jest.fn().mockResolvedValue(undefined),
-    };
-
     mockAccountLock = {
       recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
       resetAttempts: jest.fn().mockResolvedValue(undefined),
@@ -90,7 +86,6 @@ describe('VendorAuthService', () => {
       mockPrisma,
       mockOtp,
       mockEmail,
-      mockAudit,
       mockAccountLock,
       mockRefreshSession,
       mockGoogleAuth,
@@ -344,18 +339,13 @@ describe('VendorAuthService', () => {
   // ===========================================================================
   describe('logout()', () => {
     it('revokes vendor session in RefreshSessionService and logs audit', async () => {
-      await service.logout('vendor-1');
+      const { details } = await captureAudit(() => service.logout('vendor-1'));
 
       expect(mockRefreshSession.revokeSession).toHaveBeenCalledWith(
         'vendor-1',
         'VENDOR',
       );
-      expect(mockAudit.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'VENDOR_LOGOUT',
-          entityId: 'vendor-1',
-        }),
-      );
+      expect(details).toMatchObject({ entityId: 'vendor-1' });
     });
   });
 });

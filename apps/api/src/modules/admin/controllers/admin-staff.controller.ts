@@ -8,18 +8,14 @@ import {
   Patch,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type {} from 'express';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { AdminService } from '../admin.service';
 import {
   AdminStaffResponseDto,
@@ -27,6 +23,7 @@ import {
   QueryAdminStaffDto,
   UpdateAdminStaffStatusDto,
 } from '../dto/admin-staff.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - STAFF GOVERNANCE')
 @ApiBearerAuth()
@@ -42,23 +39,18 @@ export class AdminStaffController {
     return this.adminService.getStaffList(query);
   }
 
+  @Audit({ action: 'ADMIN_STAFF_CREATED', entity: 'Admin' })
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create new admin staff member' })
   @Message('Admin staff created successfully')
   async createStaff(
     @Body() dto: CreateAdminStaffDto,
-    @GetUser('id') creatorId: string,
-    @Req() req: Request,
   ): Promise<AdminStaffResponseDto> {
-    return this.adminService.createStaff(
-      dto,
-      creatorId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminService.createStaff(dto);
   }
 
+  @Audit({ action: 'ADMIN_STAFF_ACTIVATED', entity: 'Admin', entityId: 'id' })
   @Patch(':id/status')
   @ApiOperation({ summary: 'Update admin staff active status' })
   @Message('Admin staff status updated successfully')
@@ -66,14 +58,11 @@ export class AdminStaffController {
     @Param('id') targetAdminId: string,
     @Body() dto: UpdateAdminStaffStatusDto,
     @GetUser('id') performingAdminId: string,
-    @Req() req: Request,
   ): Promise<AdminStaffResponseDto> {
     return this.adminService.updateStaffStatus(
       targetAdminId,
       dto,
       performingAdminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
     );
   }
 

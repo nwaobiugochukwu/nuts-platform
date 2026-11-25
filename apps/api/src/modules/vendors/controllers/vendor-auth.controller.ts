@@ -49,6 +49,7 @@ import { VendorLoginDto } from '../dto/update-vendor.dto';
 import { VendorResetPasswordDto } from '../dto/vendor-reset-password.dto';
 import { VendorResponseDto } from '../dto/vendor-response.dto';
 import { VendorAuthService } from '../vendor-auth.service';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('VENDORS - AUTH')
 @Controller('vendors/auth')
@@ -94,6 +95,7 @@ export class VendorAuthController {
   @StrictThrottle()
   @UseGuards(RegistrationsGuard)
   @RegistrationType('vendor')
+  @Audit({ action: 'VENDOR_REGISTER', entity: 'Vendor' })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @Message('Vendor registered successfully')
@@ -123,11 +125,7 @@ export class VendorAuthController {
     tokenType?: string;
     expiresIn?: number;
   }> {
-    const session = await this.vendorAuthService.register(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.vendorAuthService.register(dto);
 
     // Unapproved vendors do not receive session tokens
     if (session.tokens) {
@@ -149,6 +147,12 @@ export class VendorAuthController {
   @Public()
   @StrictThrottle()
   @UseGuards(AccountLockGuard)
+  @Audit({
+    action: 'VENDOR_LOGIN',
+    failureAction: 'VENDOR_LOGIN_FAILED',
+    onFailure: true,
+    entity: 'Vendor',
+  })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Message('Vendor logged in successfully')
@@ -174,11 +178,7 @@ export class VendorAuthController {
     tokenType?: string;
     expiresIn?: number;
   }> {
-    const session = await this.vendorAuthService.login(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.vendorAuthService.login(dto);
 
     // Login always produces tokens (only register can return null)
     this.authCookies.setAuthCookies(res, session.tokens!, 'vendor');
@@ -198,6 +198,7 @@ export class VendorAuthController {
 
   @Public()
   @StrictThrottle()
+  @Audit({ action: 'VENDOR_GOOGLE_LOGIN', entity: 'Vendor' })
   @Post('google')
   @HttpCode(HttpStatus.OK)
   @Message('Vendor Google authentication successful')
@@ -248,6 +249,7 @@ export class VendorAuthController {
   @StrictThrottle()
   @UseGuards(RegistrationsGuard)
   @RegistrationType('vendor')
+  @Audit({ action: 'VENDOR_GOOGLE_LOGIN', entity: 'Vendor' })
   @Post('google/register')
   @HttpCode(HttpStatus.OK)
   @Message('Vendor Google registration successful')
@@ -354,6 +356,7 @@ export class VendorAuthController {
   // ---------------------------------------------------------------------------
 
   @Roles(ROLE.VENDOR)
+  @Audit({ action: 'VENDOR_LOGOUT', entity: 'Vendor' })
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @Message('Logged out successfully')
@@ -407,6 +410,7 @@ export class VendorAuthController {
 
   @Public()
   @StrictThrottle()
+  @Audit({ action: 'VENDOR_RESET_PASSWORD', entity: 'Vendor' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Message('Password reset successfully')
@@ -421,15 +425,8 @@ export class VendorAuthController {
   @ApiBadRequestResponse({
     description: 'Invalid OTP or password format',
   })
-  async resetPassword(
-    @Body() dto: VendorResetPasswordDto,
-    @Req() req: Request,
-  ): Promise<null> {
-    await this.vendorAuthService.resetPassword(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+  async resetPassword(@Body() dto: VendorResetPasswordDto): Promise<null> {
+    await this.vendorAuthService.resetPassword(dto);
     return null;
   }
 }

@@ -28,10 +28,10 @@ import { CreateCategoryDto } from '@api/modules/categories/dto/create-category.d
 import { MoveCategoryDto } from '@api/modules/categories/dto/move-category.dto';
 import { ReorderCategoriesDto } from '@api/modules/categories/dto/reorder-categories.dto';
 import { UpdateCategoryDto } from '@api/modules/categories/dto/update-category.dto';
-import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiEnvelopeResponse } from '@api/common/decorators/api-envelope-response.decorator';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - CATEGORY')
 @ApiBearerAuth('JWT-auth')
@@ -85,6 +85,7 @@ export class AdminCategoryController {
 
   // â”€â”€â”€ WRITE / MUTATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  @Audit({ action: 'CATEGORY_CREATED', entity: 'Category' })
   @Post()
   @Message('Category created successfully')
   @ApiOperation({
@@ -101,13 +102,11 @@ export class AdminCategoryController {
     description: 'Validation error â€” invalid input data.',
   })
   @ApiConflictResponse({ description: 'Conflict â€” duplicate name or slug.' })
-  async create(
-    @Body() dto: CreateCategoryDto,
-    @GetUser('id') adminId: string,
-  ): Promise<CategoryResponseDto> {
-    return this.categoriesService.create(dto, adminId);
+  async create(@Body() dto: CreateCategoryDto): Promise<CategoryResponseDto> {
+    return this.categoriesService.create(dto);
   }
 
+  @Audit({ action: 'CATEGORY_UPDATED', entity: 'Category' })
   @Patch(':idOrSlug')
   @Message('Category updated successfully')
   @ApiOperation({
@@ -134,14 +133,14 @@ export class AdminCategoryController {
   async update(
     @Param('idOrSlug') idOrSlug: string,
     @Body() dto: UpdateCategoryDto,
-    @GetUser('id') adminId: string,
   ): Promise<CategoryResponseDto> {
     const category = await this.categoriesService
       .findBySlug(idOrSlug, true)
       .catch(() => this.categoriesService.findOne(idOrSlug));
-    return this.categoriesService.update(category.id, dto, adminId);
+    return this.categoriesService.update(category.id, dto);
   }
 
+  @Audit({ action: 'CATEGORY_UPDATED', entity: 'Category' })
   @Post(':id/move')
   @HttpCode(HttpStatus.OK)
   @Message('Category moved successfully')
@@ -159,11 +158,11 @@ export class AdminCategoryController {
   async move(
     @Param('id') id: string,
     @Body() dto: MoveCategoryDto,
-    @GetUser('id') adminId: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.moveCategory(id, dto, adminId);
+    return this.categoriesService.moveCategory(id, dto);
   }
 
+  @Audit({ action: 'CATEGORIES_REORDERED', entity: 'Category' })
   @Post('reorder')
   @HttpCode(HttpStatus.OK)
   @Message('Categories reordered successfully')
@@ -186,15 +185,14 @@ export class AdminCategoryController {
   async reorder(
     @Query('parentId') parentId: string | undefined,
     @Body() dto: ReorderCategoriesDto,
-    @GetUser('id') adminId: string,
   ): Promise<CategoryResponseDto[]> {
     return this.categoriesService.reorderChildren(
       parentId || null,
       dto.categoryIds,
-      adminId,
     );
   }
 
+  @Audit({ action: 'CATEGORY_ACTIVATED', entity: 'Category' })
   @Patch(':idOrSlug/activate')
   @HttpCode(HttpStatus.OK)
   @Message('Category activated successfully')
@@ -204,14 +202,12 @@ export class AdminCategoryController {
       'Activates a category and cascades to all its descendant categories.',
   })
   @ApiParam({ name: 'idOrSlug', description: 'Category UUID or slug' })
-  async activate(
-    @Param('idOrSlug') idOrSlug: string,
-    @GetUser('id') adminId: string,
-  ): Promise<null> {
-    await this.categoriesService.setActive(idOrSlug, true, adminId);
+  async activate(@Param('idOrSlug') idOrSlug: string): Promise<null> {
+    await this.categoriesService.setActive(idOrSlug, true);
     return null;
   }
 
+  @Audit({ action: 'CATEGORY_DEACTIVATED', entity: 'Category' })
   @Patch(':idOrSlug/deactivate')
   @HttpCode(HttpStatus.OK)
   @Message('Category deactivated successfully')
@@ -221,14 +217,12 @@ export class AdminCategoryController {
       'Deactivates a category and cascades to all its descendant categories.',
   })
   @ApiParam({ name: 'idOrSlug', description: 'Category UUID or slug' })
-  async deactivate(
-    @Param('idOrSlug') idOrSlug: string,
-    @GetUser('id') adminId: string,
-  ): Promise<null> {
-    await this.categoriesService.setActive(idOrSlug, false, adminId);
+  async deactivate(@Param('idOrSlug') idOrSlug: string): Promise<null> {
+    await this.categoriesService.setActive(idOrSlug, false);
     return null;
   }
 
+  @Audit({ action: 'CATEGORY_ARCHIVED', entity: 'Category' })
   @Patch(':idOrSlug/archive')
   @HttpCode(HttpStatus.OK)
   @Message('Category archived successfully')
@@ -240,11 +234,11 @@ export class AdminCategoryController {
   @ApiParam({ name: 'idOrSlug', description: 'Category UUID or slug' })
   async archive(
     @Param('idOrSlug') idOrSlug: string,
-    @GetUser('id') adminId: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.archiveCategory(idOrSlug, adminId);
+    return this.categoriesService.archiveCategory(idOrSlug);
   }
 
+  @Audit({ action: 'CATEGORY_RESTORED', entity: 'Category' })
   @Patch(':idOrSlug/restore')
   @HttpCode(HttpStatus.OK)
   @Message('Category restored successfully')
@@ -255,11 +249,11 @@ export class AdminCategoryController {
   @ApiParam({ name: 'idOrSlug', description: 'Category UUID or slug' })
   async restore(
     @Param('idOrSlug') idOrSlug: string,
-    @GetUser('id') adminId: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.restoreCategory(idOrSlug, adminId);
+    return this.categoriesService.restoreCategory(idOrSlug);
   }
 
+  @Audit({ action: 'CATEGORY_DELETED', entity: 'Category' })
   @Delete(':idOrSlug')
   @HttpCode(HttpStatus.OK)
   @Message('Category permanently deleted')
@@ -271,8 +265,7 @@ export class AdminCategoryController {
   @ApiParam({ name: 'idOrSlug', description: 'Category UUID or slug' })
   async remove(
     @Param('idOrSlug') idOrSlug: string,
-    @GetUser('id') adminId: string,
   ): Promise<{ message: string }> {
-    return this.categoriesService.remove(idOrSlug, adminId);
+    return this.categoriesService.remove(idOrSlug);
   }
 }

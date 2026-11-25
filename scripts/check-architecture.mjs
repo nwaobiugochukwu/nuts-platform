@@ -17,6 +17,11 @@
  *       4. Temporal workflow files (`infrastructure/temporal/workflows/`) are deterministic
  *          sandbox code: they may import only `@temporalio/workflow`, relative pure
  *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
+ *       5. Audit events are declared with `@Audit(...)` on the controller method and
+ *          enriched with `auditDetails(...)`; services do not call the audit log
+ *          directly. The few calls that run outside any request (scheduled or
+ *          background code) are listed in API_DIRECT_AUDIT_ALLOWED with their exact
+ *          count, and may only shrink.
  *  WEB  3. One import alias: `@/`. No relative imports that climb out of a layer
  *          directory more than two levels (use `@/`).
  *       4. Shared UI layers (`components/ui|form|data|feedback|modal|navigation|theme`)
@@ -75,6 +80,15 @@ const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/modules/vendors/vendor-follows.service.ts",
   "apps/api/src/modules/wallets/wallet.service.ts",
 ]);
+// Direct audit-log calls that run OUTSIDE a request, where there is no controller to
+// carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
+const API_DIRECT_AUDIT_ALLOWED = new Map([
+  ["apps/api/src/modules/admin/admin-announcements.service.ts", 2],
+  ["apps/api/src/modules/products/products.service.ts", 1],
+  ["apps/api/src/modules/users/users.service.ts", 1],
+]);
+const DIRECT_AUDIT_CALL = /this\.(?:auditLog|audit)\s*\.\s*(?:log|logWithRequest)\s*\(/g;
+
 const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/transaction/transaction-runner.ts";
 for (const file of walk(API_SRC)) {
   const r = rel(file);
@@ -87,6 +101,13 @@ for (const file of walk(API_SRC)) {
       if (typeOnly) continue;
       const allowed = spec === "@temporalio/workflow" || spec.startsWith(".");
       if (!allowed) violations.push(`[api:4] ${r} imports "${spec}" (workflow code may only import @temporalio/workflow and relative pure modules)`);
+    }
+  }
+  if (!isSpec && !r.startsWith("apps/api/src/common/audit-log/")) {
+    const calls = (fs.readFileSync(file, "utf8").match(DIRECT_AUDIT_CALL) ?? []).length;
+    const allowed = API_DIRECT_AUDIT_ALLOWED.get(r) ?? 0;
+    if (calls > allowed) {
+      violations.push(`[api:5] ${r} calls the audit log directly ${calls} time(s) (allowed ${allowed}); declare it with @Audit on the controller and auditDetails(...) instead`);
     }
   }
   if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {

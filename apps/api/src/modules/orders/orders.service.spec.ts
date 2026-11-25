@@ -11,7 +11,6 @@ import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { PaymentsService } from '@api/modules/payments/payments.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { WalletService } from '@api/modules/wallet/wallet.service';
 import { OrdersService } from './orders.service';
@@ -133,7 +132,6 @@ describe('OrdersService', () => {
       mockDiscountService,
       {} as unknown as ReferralService,
       mockPaymentsService,
-      { log: jest.fn() } as unknown as AuditLogService,
       mockWalletService,
       mockEventEmitter,
       { appendEvent: jest.fn() } as any,

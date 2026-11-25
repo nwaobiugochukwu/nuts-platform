@@ -47,6 +47,7 @@ import { VendorProductResponseDto } from './dto/vendor-product-response.dto';
 
 import type { CreateVariantDto } from '@api/modules/product-variants/dto/create-variant.dto';
 import type { VariantSummaryDto } from '@api/modules/product-variants/dto/variant-response.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 /* ============================================================================
  * SHARED SELECTS
@@ -676,10 +677,7 @@ export class ProductsService {
   /**
    * Create a product through the admin API.
    */
-  async create(
-    dto: AdminCreateProductDto,
-    adminId?: string,
-  ): Promise<ProductResponseDto> {
+  async create(dto: AdminCreateProductDto): Promise<ProductResponseDto> {
     if (!dto.vendorId) {
       throw new BadRequestException(
         'vendorId is required when creating a product through admin API',
@@ -767,11 +765,8 @@ export class ProductsService {
         vendorStoreSlug: product.vendor.storeSlug,
       });
 
-      await this.auditLog.log({
-        action: 'CREATE_PRODUCT',
-        entity: 'Product',
+      auditDetails({
         entityId: product.id,
-        adminId,
         payload: {
           name: product.name,
           sku: product.sku,
@@ -850,12 +845,8 @@ export class ProductsService {
         vendorStoreSlug: product.vendor.storeSlug,
       });
 
-      await this.auditLog.log({
-        action: 'CREATE_PRODUCT',
-        entity: 'Product',
+      auditDetails({
         entityId: product.id,
-        adminId: vendorId,
-        userId: vendorId,
         payload: {
           name: product.name,
           sku: product.sku,
@@ -1955,12 +1946,8 @@ export class ProductsService {
         vendorStoreSlug: product.vendor?.storeSlug,
       });
 
-      await this.auditLog.log({
-        action: 'UPDATE_PRODUCT_STOCK',
-        entity: 'Product',
+      auditDetails({
         entityId: id,
-        adminId: userId,
-        userId,
         payload: {
           previousStock: oldStock,
           newStock: updated.stock,
@@ -1994,7 +1981,6 @@ export class ProductsService {
   async update(
     id: string,
     dto: UpdateProductDto,
-    userId?: string,
   ): Promise<AdminProductResponseDto> {
     const existing = await this.findActiveProductOrThrow(id);
 
@@ -2161,12 +2147,8 @@ export class ProductsService {
         vendorStoreSlug: updated.vendor.storeSlug,
       });
 
-      await this.auditLog.log({
-        action: 'UPDATE_PRODUCT',
-        entity: 'Product',
+      auditDetails({
         entityId: id,
-        adminId: userId,
-        userId,
         payload: {
           changes: JSON.parse(JSON.stringify(dto)) as Prisma.InputJsonValue,
         },
@@ -2185,7 +2167,7 @@ export class ProductsService {
   /**
    * Soft-deactivates a product.
    */
-  async deactivate(id: string, userId?: string): Promise<void> {
+  async deactivate(id: string): Promise<void> {
     const product = await this.prisma.product.findFirst({
       where: {
         id,
@@ -2232,12 +2214,8 @@ export class ProductsService {
       vendorStoreSlug: product.vendor?.storeSlug,
     });
 
-    await this.auditLog.log({
-      action: 'DEACTIVATE_PRODUCT',
-      entity: 'Product',
+    auditDetails({
       entityId: id,
-      adminId: userId,
-      userId,
       payload: {
         name: product.name,
         sku: product.sku,
@@ -2251,10 +2229,7 @@ export class ProductsService {
    * A deleted product is not restored by this method; restore() handles
    * soft-deleted products.
    */
-  async reactivate(
-    id: string,
-    userId?: string,
-  ): Promise<ProductReactivateResponseDto> {
+  async reactivate(id: string): Promise<ProductReactivateResponseDto> {
     const product = await this.prisma.product.findUnique({
       where: {
         id,
@@ -2303,12 +2278,8 @@ export class ProductsService {
       vendorStoreSlug: updated.vendor?.storeSlug,
     });
 
-    await this.auditLog.log({
-      action: 'REACTIVATE_PRODUCT',
-      entity: 'Product',
+    auditDetails({
       entityId: id,
-      adminId: userId,
-      userId,
       payload: {
         name: product.name,
         sku: product.sku,
@@ -2323,7 +2294,7 @@ export class ProductsService {
    *
    * Foreign-key failures are mapped through mapPrismaError().
    */
-  async permanentRemove(id: string, userId?: string): Promise<void> {
+  async permanentRemove(id: string): Promise<void> {
     const product = await this.prisma.product.findUnique({
       where: {
         id,
@@ -2355,12 +2326,8 @@ export class ProductsService {
       slugs: [product.slug],
     });
 
-    await this.auditLog.log({
-      action: 'PERMANENT_DELETE_PRODUCT',
-      entity: 'Product',
+    auditDetails({
       entityId: id,
-      adminId: userId,
-      userId,
       payload: {
         name: product.name,
         sku: product.sku,
