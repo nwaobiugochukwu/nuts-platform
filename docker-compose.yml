@@ -48,6 +48,8 @@ services:
     image: temporalio/temporal:1.10.1
     restart: unless-stopped
     profiles: ["dev"]
+    # The image runs as a non-root user that cannot write to a fresh named volume.
+    user: "0:0"
     command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db", "--namespace", "nuts-dev"]
     ports:
       - "7233:7233"
