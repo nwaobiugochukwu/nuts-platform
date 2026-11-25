@@ -18,6 +18,8 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { NormalizeInputPipe } from './common/pipes/normalize-input.pipe';
 import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
 import { setupSwagger } from './swagger.setup';
+import { currentProcessRole } from './infrastructure/configuration/process-role';
+import { stopCronsUnlessJobsRole } from './infrastructure/configuration/role-runtime';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -199,9 +201,16 @@ async function bootstrap() {
   app.enableShutdownHooks();
   const port = config.get<number>('PORT') || 3001;
   await app.listen(port, '0.0.0.0');
+  const role = currentProcessRole();
+  const stoppedCrons = stopCronsUnlessJobsRole(app);
+  if (stoppedCrons > 0) {
+    logger.log(`Role "${role}": stopped ${stoppedCrons} cron job(s).`);
+  }
   logger.log(
     `Application running on port ${port} (0.0.0.0) [${config.get('NODE_ENV')}]`,
   );
+  // Tells PM2 (wait_ready) that this process is up.
+  process.send?.('ready');
 }
 
 bootstrap().catch((error) => {

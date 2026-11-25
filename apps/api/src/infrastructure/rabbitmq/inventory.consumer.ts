@@ -1,4 +1,5 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+﻿import { roleCan } from '@api/infrastructure/configuration/process-role';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RABBITMQ_QUEUES } from './rabbitmq.constants';
 import { RabbitMQService } from './rabbitmq.service';
@@ -26,6 +27,8 @@ export class InventoryConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Queue consumers run only in the worker role (or when one process runs everything).
+    if (!roleCan('consumers')) return;
     await this.rabbitmq.consume<InventoryQueuePayload>(
       RABBITMQ_QUEUES.INVENTORY,
       async (payload) => {
