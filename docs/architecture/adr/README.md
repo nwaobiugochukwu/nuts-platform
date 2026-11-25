@@ -6,6 +6,7 @@ This directory records consequential architecture choices and their validation h
 
 - [ADR 0001: Modular monolith with enforced layering](0001-modular-monolith-and-enforced-layering.md) — accepted.
 - [ADR 0002: Hub-consolidated fulfillment with distance-priced, tracked delivery in Lagos](0002-hub-consolidated-fulfillment-and-lagos-delivery.md) — accepted, not yet implemented.
+- [ADR 0003: Independent processes under PM2, an asynchronous audit pipeline and Temporal for durable workflows](0003-process-model-audit-pipeline-and-durable-workflows.md) — proposed, not yet implemented.
 
 The [template](0000-template.md) is available for new decisions.
 

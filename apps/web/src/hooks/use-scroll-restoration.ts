@@ -1,70 +1,125 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import {
+  RESTORE_GIVE_UP_MS,
+  canReachOffset,
+  decideRestore,
+  wasReachedByTraversal,
+} from "@/lib/scroll-restoration";
 
 const STORAGE_KEY_PREFIX = "nuts:scroll:";
 
+// Browser-wide state shared by every mount of the hook.
+let lastPopstateAt: number | null = null;
+let popstateListenerInstalled = false;
+let documentHasMountedHook = false;
+
+function installPopstateListener() {
+  if (popstateListenerInstalled || typeof window === "undefined") return;
+  popstateListenerInstalled = true;
+  // Back/Forward fires popstate; links, the logo, menus and reloads do not.
+  window.addEventListener("popstate", () => {
+    lastPopstateAt = Date.now();
+  });
+}
+installPopstateListener();
+
+function navigationType(): string | null {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    return entry?.type ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Production-grade scroll position restoration hook.
+ * Scroll restoration for list-style pages (the home shelves).
  *
- * Saves the current page's scroll position to sessionStorage as the user
- * scrolls, and restores it on mount (e.g. when navigating Back from a PDP).
+ * The saved position is restored ONLY when the shopper reached the page with
+ * Back/Forward. A fresh visit (link, logo, menu, reload, new tab) starts at the
+ * top and discards any older saved position, so the shopper never has to scroll
+ * up before using the page. If the page never grows tall enough to reach the
+ * saved spot, restoration is skipped rather than stranding the shopper midway.
  *
- * Uses `window.history.scrollRestoration = "manual"` to prevent the browser's
- * built-in scroll-restoration from racing with the client-side restore.
- *
- * Usage: call this hook once inside the page-level client component that wraps
- * the scrollable content (e.g. HomeProductShelves).
+ * Call this once from the page-level client component that owns the content.
  */
 export function useScrollRestoration() {
   const pathname = usePathname();
-  const restoredRef = useRef(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const restoreFrameRef = useRef<number | null>(null);
-  const restoreCommitFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Let us manage scroll position — disable native browser restoration so
-    // it doesn't snap back to top or conflict with our logic.
+    const storageKey = STORAGE_KEY_PREFIX + pathname;
+    const isFirstMountOfDocument = !documentHasMountedHook;
+    documentHasMountedHook = true;
+
+    // Take over from the browser only while this page is mounted.
     if ("scrollRestoration" in window.history) {
       window.history.scrollRestoration = "manual";
     }
 
-    const storageKey = STORAGE_KEY_PREFIX + pathname;
-
-    // Restore once on mount (back-navigation lands here with a stale position)
-    if (!restoredRef.current) {
-      restoredRef.current = true;
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const targetY = parseInt(saved, 10);
-        if (!Number.isNaN(targetY) && targetY > 0) {
-          // Double rAF ensures the browser has committed the layout before we
-          // scroll — single rAF can fire before paint on some browsers.
-          restoreFrameRef.current = requestAnimationFrame(() => {
-            restoreFrameRef.current = null;
-            restoreCommitFrameRef.current = requestAnimationFrame(() => {
-              restoreCommitFrameRef.current = null;
-              window.scrollTo({ top: targetY, behavior: "instant" });
-            });
-          });
-        }
-      }
+    let saved: string | null = null;
+    try {
+      saved = sessionStorage.getItem(storageKey);
+    } catch {
+      saved = null;
     }
 
-    // Throttled scroll saver — write at most once per 150 ms to avoid
-    // thrashing sessionStorage on every scroll event.
+    const decision = decideRestore({
+      saved,
+      isTraversal: wasReachedByTraversal({
+        now: Date.now(),
+        lastPopstateAt,
+        navigationType: navigationType(),
+        isFirstMountOfDocument,
+      }),
+    });
+
+    let restoreFrame: number | null = null;
+    if (decision.action === "clear") {
+      try {
+        sessionStorage.removeItem(storageKey);
+      } catch {
+        // sessionStorage can be unavailable in private modes.
+      }
+    } else if (decision.action === "restore") {
+      const startedAt = performance.now();
+      const tryRestore = () => {
+        restoreFrame = null;
+        if (
+          canReachOffset(
+            document.documentElement.scrollHeight,
+            window.innerHeight,
+            decision.top,
+          )
+        ) {
+          window.scrollTo({ top: decision.top, behavior: "instant" });
+          return;
+        }
+        if (performance.now() - startedAt < RESTORE_GIVE_UP_MS) {
+          restoreFrame = requestAnimationFrame(tryRestore);
+        }
+        // Otherwise give up quietly and stay at the top.
+      };
+      restoreFrame = requestAnimationFrame(tryRestore);
+    }
+
+    // Throttled saver: at most one write per 150 ms. Skip writes while a restore
+    // is pending so the initial top-of-page position cannot overwrite the saved one.
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
     const handleScroll = () => {
-      if (saveTimerRef.current !== null) return;
-      saveTimerRef.current = setTimeout(() => {
-        saveTimerRef.current = null;
+      if (restoreFrame !== null || saveTimer !== null) return;
+      saveTimer = setTimeout(() => {
+        saveTimer = null;
         try {
           sessionStorage.setItem(storageKey, String(Math.round(window.scrollY)));
         } catch {
-          // sessionStorage may be unavailable in some privacy modes — ignore.
+          // ignore
         }
       }, 150);
     };
@@ -72,24 +127,14 @@ export function useScrollRestoration() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      if (saveTimerRef.current !== null) {
-        clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-      }
-      if (restoreFrameRef.current !== null) {
-        cancelAnimationFrame(restoreFrameRef.current);
-        restoreFrameRef.current = null;
-      }
-      if (restoreCommitFrameRef.current !== null) {
-        cancelAnimationFrame(restoreCommitFrameRef.current);
-        restoreCommitFrameRef.current = null;
-      }
-      // Home uses manual restoration for its saved shelf position. Restore the
-      // browser default when leaving so later routes start at the top.
+      if (saveTimer !== null) clearTimeout(saveTimer);
+      if (restoreFrame !== null) cancelAnimationFrame(restoreFrame);
+      // Leaving: hand control back to the browser so other routes use their
+      // normal behaviour. The position was already saved while scrolling; it is
+      // not re-read here because the router may already have scrolled to the top.
       if ("scrollRestoration" in window.history) {
         window.history.scrollRestoration = "auto";
       }
     };
   }, [pathname]);
 }
-

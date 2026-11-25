@@ -18,6 +18,7 @@ import { RecommendationsService } from './recommendations.service';
 import { Public } from '@api/common/decorators/public.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { ClaimRecentHistoryDto } from './dto/claim-recent-history.dto';
+import { NotInterestedDto } from './dto/not-interested.dto';
 import { MarketplaceMixResponseDto } from './dto/marketplace-mix-response.dto';
 
 @ApiTags('RECOMMENDATIONS')
@@ -100,6 +101,26 @@ export class RecommendationsController {
     visitorId?: string,
   ) {
     return this.recommendations.recentlyViewed(userId, sessionId, visitorId);
+  }
+
+  @Post('not-interested')
+  @Header('Cache-Control', 'private, no-store')
+  @OptionalAuth()
+  @ApiBearerAuth('JWT-auth')
+  @Message('Got it. We will show you less like this')
+  @ApiOperation({
+    summary: 'Hide a product from the personalised shelf ("Not interested")',
+  })
+  notInterested(
+    @Body() body: NotInterestedDto,
+    @GetUser('id') userId?: string,
+  ) {
+    return this.recommendations.dismissProduct({
+      productId: body.productId,
+      userId,
+      sessionId: body.sessionId,
+      visitorId: body.visitorId,
+    });
   }
 
   @Post('recently-viewed/claim')

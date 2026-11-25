@@ -38,6 +38,13 @@ export const recommendationService = {
       signal,
     });
   },
+  notInterested(productId: string, sessionId: string, authenticated: boolean) {
+    const client = authenticated ? userApi : publicApi;
+    return client.post<{ dismissed: true }>("/recommendations/not-interested", {
+      productId,
+      sessionId,
+    });
+  },
   claimRecentlyViewed(visitorId: string) {
     return userApi.post<{ claimed: number }>("/recommendations/recently-viewed/claim", { visitorId });
   },
