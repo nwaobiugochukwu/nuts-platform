@@ -25,6 +25,7 @@ import { OutboxModule } from './infrastructure/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/transaction/transaction.module';
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { TemporalModule } from './infrastructure/temporal/temporal.module';
+import { HeartbeatModule } from './infrastructure/health/heartbeat.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
 import { MailModule } from './infrastructure/mail/mail.module';
@@ -106,6 +107,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     TransactionModule,
     MetricsModule,
     TemporalModule,
+    HeartbeatModule,
     ResiliencyModule,
     MailModule,
     CloudinaryModule,

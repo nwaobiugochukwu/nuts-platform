@@ -63,6 +63,9 @@ describe('MetricsService', () => {
     expect(text).toMatch(
       /nuts_rabbitmq_queue_messages\{[^}]*queue="q\.nuts\.dlq"[^}]*\} 3/,
     );
+    expect(text).toMatch(
+      /nuts_rabbitmq_queue_consumers\{[^}]*queue="q\.nuts\.emails"[^}]*\} 1/,
+    );
     expect(text).toContain('nuts_rabbitmq_up');
     expect(text).toContain('nuts_process_cpu_user_seconds_total');
   });

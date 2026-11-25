@@ -51,7 +51,7 @@ COPY scripts/postinstall.js ./scripts/postinstall.js
 RUN npm ci
 
 COPY packages/database ./packages/database
-RUN npx prisma generate --schema=packages/database/schema.prisma
+RUN npm run db:generate --workspace=@nuts/database
 
 COPY packages ./packages
 COPY apps/api ./apps/api

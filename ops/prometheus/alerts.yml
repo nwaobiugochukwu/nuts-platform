@@ -43,6 +43,14 @@ groups:
 
   - name: nuts-processes
     rules:
+      - alert: BackgroundProgramNotRunning
+        expr: min by (target) (nuts_background_up) == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "The {{ $labels.target }} program is not running"
+          description: Emails, notifications and queued work (worker) or scheduled jobs (jobs) have stopped. Start the worker-prod and jobs-prod services, or set PROCESS_ROLE=all on the api.
+
       - alert: RoleMissing
         expr: absent(up{job=~"nuts-(api|worker|jobs)"} == 1)
         for: 2m

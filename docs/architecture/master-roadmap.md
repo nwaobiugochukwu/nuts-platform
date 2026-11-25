@@ -20,11 +20,23 @@ Plus shared services: PostgreSQL, Redis, RabbitMQ (and Temporal later).
 
 | Environment | How it starts | Programs |
 |---|---|---|
-| **Local, all-in-one** | `npm run dev` | web, plus one backend program doing api + worker + jobs together. Simplest for everyday work. |
-| **Local, split** | `npm run dev:split` | web, api, worker, jobs as four separate programs, the same shape as staging and production. Health on `:3001` (api), `:3002` (worker), `:3003` (jobs); web on `:5173`. |
+| **Local** | `npm run dev` | web, api, worker and jobs as four separate programs, the same shape as staging and production. Health on `:3001` (api), `:3002` (worker), `:3003` (jobs); web on `:5173`. |
+| **Local, in Docker** | `npm run dev:docker` | The same four programs as containers (`api`, `worker`, `jobs`, `client`). |
 | **Staging / production** | Docker Compose on the server | The same four programs, each in its own container, with PM2 restarting a crashed one. |
 
-Both local modes need the database, Redis and RabbitMQ (`npm run dev` and `npm run dev:split` start them). Do not run both modes at once: they use the same ports.
+All environments run the same programs from the same code and differ only in configuration (env files, hosts, secrets). `npm run dev` starts the database, Redis and RabbitMQ first. A one-program mode (`npm run dev:single --prefix apps/api`) exists only for debugging and is not used anywhere else.
+
+### Should there be more than four programs?
+
+Four is the right number today. More would add cost without a problem to solve:
+
+- **temporal-worker** is the fifth program, added only when Temporal is turned on (step 6).
+- **Database migration** is a one-off job that runs before a deploy, not a running program.
+- **Splitting the worker further** (for example analytics apart from emails and notifications) is what larger companies do when one kind of work starts delaying another. The signal is in the metrics: a growing queue or rising event-loop lag on the worker. If that happens, the worker gets a setting that selects which queues it consumes, and a second worker container is added. No code rewrite is needed.
+- **A separate real-time (SSE) gateway** is common at much larger scale, when thousands of open streams compete with normal requests. Not needed now.
+- **A separate admin or vendor API** only makes sense with separate teams or scaling needs.
+
+Rule of thumb used here: split a program out when a measured problem (a slow queue, a noisy workload, a different scaling or security need) justifies it, not before.
 
 ## 2. What "staging needs one thing from you" means
 
@@ -38,24 +50,26 @@ Step 3 is the one thing that is yours. Before this work, the server only needed 
 
 So when you deploy staging, the command that starts it must start all of them. The repository's `docker-compose.yml` already defines them, so running it unchanged (`docker compose --profile staging up -d`) does the right thing. The risk is a server that still runs an older copy of the compose file, or starts only specific services by name. In that case the site still loads, but **no emails or notifications are sent and no scheduled job runs**, and nothing shows an error.
 
-How to check after every deploy: `docker compose --profile staging ps` should list `api-prod`, `worker-prod`, `jobs-prod`, `client-prod` and `nginx` as running (and `api-migrate` as exited successfully). Safety net if you cannot update the server's compose file yet: set `PROCESS_ROLE=all` on `api-prod`, which makes it do everything as before.
+Is that how production-grade companies work? Splitting into web, API, worker and scheduler programs is standard. Failing silently is not: mature teams (a) deploy all programs together from one definition so none can be forgotten, (b) alert when a queue has no consumer or a scheduler stops, and (c) run an automatic post-deploy check that fails the release. Here: (a) is the compose file, (b) is the heartbeat metric and alerts, and (c) is `scripts/verify-deploy.sh`, which checks that the API is up, the database and cache are reachable, and that the worker and jobs are running, and reports in plain language what is missing. The API also logs an error 90 seconds after start if the worker or jobs are absent.
+
+How to check after every deploy: run `scripts/verify-deploy.sh https://<your-staging-url>`, and `docker compose --profile staging ps` should list `api-prod`, `worker-prod`, `jobs-prod`, `client-prod` and `nginx` as running (and `api-migrate` as exited successfully). Safety net if you cannot update the server's compose file yet: set `PROCESS_ROLE=all` on `api-prod`, which makes it do everything as before.
 
 ## 3. The order of work
 
 Each step ends with something you can see, and the next step starts only when it holds. The big operation is last on purpose: it rewrites payment, refund and delivery logic, so it should start from a foundation that has been running and tested.
 
 ### Step 1. Local parity (done)
-`npm run dev:split` starts the four programs locally. Verified: all four healthy; stopping the worker leaves the API, jobs and web serving.
-**Done when:** you can run both local modes.
+`npm run dev` starts the four programs locally (and `npm run dev:docker` as containers). Verified: all four healthy; stopping the worker leaves the API, jobs and web serving, and `scripts/verify-deploy.sh` reports the stopped worker.
+**Done when:** `npm run dev` runs the four programs on your machine.
 
 ### Step 2. Ship what is built to `development`
 Merge #155 (Phase 0), then #156 to #161 in order (they are stacked, so each later one contains the earlier ones). One merge at a time; wait for CI between them.
-**Done when:** `development` contains everything and its CI is green. Local setup on `development` is then `npm install`, `npm run db:generate`, `npm run migrate:deploy`, `npm run dev:split`.
+**Done when:** `development` contains everything and its CI is green. Local setup on `development` is then `npm install`, `npm run db:generate`, `npm run migrate:deploy`, `npm run dev`.
 
 ### Step 3. Roll out to staging
 1. Make sure the server runs the repo's compose file (section 2) and its env files contain the required variables (see the environment checklist in the final message of the platform work, or `.env.example`).
 2. Deploy. The `api-migrate` container applies the new audit columns before the api starts.
-3. Check the five containers, the three health endpoints, and `docker compose logs worker-prod jobs-prod` for startup lines.
+3. Run `scripts/verify-deploy.sh https://<staging-url>` (it must pass), check the five containers, and `docker compose logs worker-prod jobs-prod` for startup lines.
 4. Optional but recommended: point Prometheus (or Grafana Cloud) at the metrics ports, load `ops/prometheus/alerts.yml` and import `ops/grafana/nuts-overview.json`.
 **Done when:** staging serves traffic with api, worker and jobs running separately, and the dead-letter queue is empty or understood.
 

@@ -1,16 +1,23 @@
 ﻿import {
   Controller,
   Get,
+  HttpStatus,
   Inject,
   Logger,
   Optional,
+  Res,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
 import { Public } from '@api/common/decorators/public.decorator';
+import type { Response } from 'express';
 import Redis from 'ioredis';
+import {
+  HeartbeatService,
+  type BackgroundStatus,
+} from '@api/infrastructure/health/heartbeat.service';
 
 @ApiTags('HEALTH')
 @Public()
@@ -21,6 +28,7 @@ export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis?: Redis,
+    @Optional() private readonly heartbeat?: HeartbeatService,
   ) {}
 
   @Get()
@@ -99,5 +107,35 @@ export class HealthController {
       redisLatencyMs,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  @Get('background')
+  @ApiOperation({
+    summary: 'Are the worker and jobs programs running?',
+    description:
+      'Fails (503) when the worker or jobs program has stopped sending heartbeats or a queue has no consumer, which would otherwise be a silent failure: queued emails and scheduled jobs would simply stop. Run after every deploy (scripts/verify-deploy.sh). Not used as a container health check, so a missing worker never takes the API out of rotation.',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'A background program is not running',
+  })
+  async background(
+    // Passthrough keeps the normal response wrapper, so the explanation reaches
+    // the caller even though the status is 503 (an exception would be masked).
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<BackgroundStatus & { timestamp: string }> {
+    const status: BackgroundStatus = this.heartbeat
+      ? await this.heartbeat.status()
+      : {
+          ok: false,
+          heartbeats: {
+            worker: { state: 'missing', ageSeconds: null },
+            jobs: { state: 'missing', ageSeconds: null },
+          },
+          queuesWithoutConsumers: [],
+          problems: ['heartbeat service unavailable'],
+        };
+    if (!status.ok) res.status(HttpStatus.SERVICE_UNAVAILABLE);
+    return { ...status, timestamp: new Date().toISOString() };
   }
 }

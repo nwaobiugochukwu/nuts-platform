@@ -3,7 +3,7 @@ import { existsSync, watch } from 'node:fs';
 import path from 'node:path';
 
 // Which compiled entry point to run. The default is the whole API in one process;
-// `npm run dev:split` starts one runner per role (api, worker, jobs) instead.
+// `npm run dev` starts one runner per role (api, worker, jobs) instead.
 const entry = process.env.DEV_ENTRY || 'dist/main.js';
 const label = process.env.DEV_LABEL || 'api';
 

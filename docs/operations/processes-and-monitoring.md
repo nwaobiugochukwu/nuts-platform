@@ -43,6 +43,16 @@ Alert rules are in [`ops/prometheus/alerts.yml`](../../ops/prometheus/alerts.yml
 - A queue is not draining: confirm `worker-prod` is up (`curl :3002/health` inside the network) and the queue's consumer count is above 0.
 - Scheduled jobs did not run: confirm `jobs-prod` is up; its logs show each job. Never start a second `jobs` container.
 
+## Silent failures: heartbeats and `verify-deploy`
+
+If the worker or jobs program is not running, nothing errors: queued emails, notifications and scheduled jobs simply stop. To make that loud:
+
+- The worker and jobs programs write a heartbeat to Redis every 30 s (`nuts:heartbeat:worker`, `nuts:heartbeat:jobs`); a program that is `all` writes both.
+- `GET /api/v1/health/background` returns 503 with a plain-language explanation if a heartbeat is stale or missing, or if any work queue has no consumer (the queue for workflows is ignored while Temporal is disabled). It is **not** used as a container health check, so a missing worker never takes the API out of rotation.
+- `scripts/verify-deploy.sh <base-url>` runs the three health checks and exits non-zero on any failure. Run it after every deploy.
+- The API logs an error 90 s after starting if the programs it relies on are missing.
+- Metric `nuts_background_up{target}` and alert `BackgroundProgramNotRunning` (critical after 3 minutes).
+
 ## Request ids
 
 Every request gets an id (`X-Request-Id`). It is carried through the outbox into the RabbitMQ message header (`x-request-id`), restored for the consumer that handles the message, added to every log line written while handling it, stored in `audit_logs.requestId` and set as a memo on Temporal workflows started from the request. To follow one request, search the logs for its id.

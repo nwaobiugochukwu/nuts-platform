@@ -1,6 +1,6 @@
 # Running and testing locally
 
-Everything below was run on a clean checkout of the `feat/ops-request-ids-dlq-dashboards` branch, which contains every change in PRs #155-#160 plus the ops tooling. After those PRs merge, use `development`.
+Everything below was run on the `feat/ops-request-ids-dlq-dashboards` branch, which contains every change in PRs #155-#160 plus the ops tooling. After those PRs merge, use `development`.
 
 ## 1. First-time setup
 
@@ -14,31 +14,40 @@ Requires Docker (databases and broker run in containers) and Node 22. Environmen
 
 ## 2. Start everything
 
-Two ways, both start the databases and broker first:
-
-| Command | What runs |
-|---|---|
-| `npm run dev` | web plus **one** backend program doing api, worker and jobs together. Simplest for everyday work. |
-| `npm run dev:split` | web, api, worker and jobs as **four separate programs**, the same shape as staging and production. Stopping one leaves the others serving. |
-
-Use one or the other, not both (they share ports). With `dev:split`: api `:3001`, worker health `:3002`, jobs health `:3003`, web `:5173`, metrics on `:9464` (api), `:9465` (worker), `:9466` (jobs). In this mode the worker and jobs programs do not restart by themselves if they crash (production does that with PM2); they restart when you change code.
-
-### `npm run dev`
-
 ```bash
 npm run dev
 ```
 
-This starts PostgreSQL (`:5433`), Redis (`:6379`), RabbitMQ (`:5672`, management UI `http://localhost:15672`) and RedisInsight (`:8001`) through `docker-compose.db.yml`, then runs the API and the web app with Turbo:
+This starts the databases and broker (`docker-compose.db.yml`), then **four separate programs**, the same shape as staging and production:
 
-| What | Where | Ready after |
+| Program | What it does | Where |
 |---|---|---|
-| API | `http://localhost:3001/api/v1/health` | about 35 s (the TypeScript compile runs first) |
-| Web | `http://localhost:5173` | about 15 s after the API starts compiling |
+| web | the screens | `http://localhost:5173` |
+| api | answers requests | `http://localhost:3001/api/v1/health`, metrics `:9464` |
+| worker | emails, notifications, analytics, stock updates, audit writing | health `:3002`, metrics `:9465` |
+| jobs | scheduled jobs (exactly one) | health `:3003`, metrics `:9466` |
 
-Locally the API runs **every role in one process** (`PROCESS_ROLE` unset means `all`): HTTP, queue consumers, scheduled jobs and the outbox relay, exactly as before. You do not need PM2, extra containers or Temporal to test the app. Stop with Ctrl+C; stop the databases with `npm run db:down`.
+Ready after about 30 s (the TypeScript compile runs first). Stopping one program leaves the others serving: try stopping the worker and open the site. Ctrl+C stops everything; `npm run db:down` stops the databases. In dev a crashed worker or jobs program does not restart by itself (production restarts them with PM2); it restarts when you change code or run `npm run dev` again.
 
-Each part can also run alone: `npm run dev:api`, `npm run dev:web`.
+Related commands:
+
+| Command | Use |
+|---|---|
+| `npm run dev:api` | only the three backend programs |
+| `npm run dev:web` | only the web app |
+| `npm run dev:docker` | the same four programs as Docker containers (`docker compose --profile dev`): `api`, `worker`, `jobs`, `client` |
+| `npm run dev --prefix apps/api` | same as `dev:api` |
+| `npm run dev:single --prefix apps/api` | one backend program doing everything. For debugging only; it is **not** how staging or production run |
+
+If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
+
+## Is everything running? `scripts/verify-deploy.sh`
+
+```bash
+scripts/verify-deploy.sh http://localhost:3001
+```
+
+Checks that the api is up, the database and cache are reachable, and that the **worker and jobs programs are running** (heartbeats plus a consumer on every queue). Without the worker or jobs, the site still loads but emails, notifications and scheduled jobs silently stop; this check turns that into a visible failure and says what is missing. Run it after every deploy, against staging and production URLs too.
 
 ## 3. What changed and how to check it
 
@@ -54,6 +63,8 @@ Each part can also run alone: `npm run dev:api`, `npm run dev:web`.
 
 ## 4. Running the roles under PM2 (production-style restart behaviour)
 
+`npm run dev` already runs the same separate programs; this section additionally shows PM2's automatic restarts.
+
 To see the API split into independent processes (as production does):
 
 ```bash
@@ -65,7 +76,7 @@ PM2_HOME=/tmp/pm2-worker HEALTH_PORT=3002 METRICS_PORT=9464 npx pm2-runtime ecos
 PM2_HOME=/tmp/pm2-jobs   HEALTH_PORT=3003 npx pm2-runtime ecosystem.config.cjs --only jobs
 ```
 
-Run each in its own terminal, each with its own `PM2_HOME` (in production each role is its own container, so they never share one). Check `curl localhost:3002/health` and `localhost:3003/health`. Do not run these at the same time as `npm run dev` on the same ports, and do not run the `all` role alongside them, or scheduled jobs and consumers will run twice.
+Run each in its own terminal, each with its own `PM2_HOME` (in production each role is its own container, so they never share one). Check `curl localhost:3002/health` and `localhost:3003/health`. Do not run these at the same time as `npm run dev` (same ports).
 
 ## 5. Temporal (optional)
 
