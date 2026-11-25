@@ -294,3 +294,49 @@ describe('NotificationsService', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('NotificationsService live-notification subscriber (connection budget)', () => {
+  const original = process.env.PROCESS_ROLE;
+  afterEach(() => {
+    if (original === undefined) delete process.env.PROCESS_ROLE;
+    else process.env.PROCESS_ROLE = original;
+  });
+
+  function build() {
+    const sub = {
+      on: jest.fn(),
+      subscribe: jest.fn().mockResolvedValue(undefined),
+      unsubscribe: jest.fn().mockResolvedValue(undefined),
+      quit: jest.fn().mockResolvedValue(undefined),
+    };
+    const redis = {
+      duplicate: jest.fn().mockReturnValue(sub),
+      publish: jest.fn(),
+    };
+    const service = new NotificationsService({} as never, redis as never);
+    return { service, redis, sub };
+  }
+
+  it.each(['api', 'all'])(
+    'opens the subscriber connection in the %s program',
+    async (role) => {
+      process.env.PROCESS_ROLE = role;
+      const { service, redis, sub } = build();
+      await service.onModuleInit();
+      expect(redis.duplicate).toHaveBeenCalledTimes(1);
+      expect(sub.subscribe).toHaveBeenCalled();
+      await service.onModuleDestroy();
+    },
+  );
+
+  it.each(['worker', 'jobs'])(
+    'does not open it in the %s program',
+    async (role) => {
+      process.env.PROCESS_ROLE = role;
+      const { service, redis } = build();
+      await service.onModuleInit();
+      expect(redis.duplicate).not.toHaveBeenCalled();
+      await expect(service.onModuleDestroy()).resolves.toBeUndefined();
+    },
+  );
+});
