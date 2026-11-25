@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -25,6 +25,7 @@ import { OutboxModule } from './infrastructure/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/transaction/transaction.module';
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { TemporalModule } from './infrastructure/temporal/temporal.module';
+import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
@@ -142,4 +143,9 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     { provide: APP_INTERCEPTOR, useClass: PerformanceInterceptor },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // Runs after the pino HTTP logger so the request id it assigned is available.
+    consumer.apply(RequestContextMiddleware).forRoutes('*path');
+  }
+}

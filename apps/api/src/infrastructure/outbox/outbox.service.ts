@@ -1,3 +1,4 @@
+import { currentRequestId } from '@api/common/request-context/request-context';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { OutboxStatus, Prisma } from '@prisma/client';
@@ -34,7 +35,14 @@ export class OutboxService {
         eventType,
         // Keep the event identity in the message so consumers can safely
         // deduplicate deliveries across retries and broker redeliveries.
-        payload: { ...payload, eventId },
+        // The request that caused this event, so the relay can put it back on the message.
+        payload: {
+          ...payload,
+          eventId,
+          ...(currentRequestId() && !('requestId' in payload)
+            ? { requestId: currentRequestId() }
+            : {}),
+        },
         status: OutboxStatus.PENDING,
       },
     });

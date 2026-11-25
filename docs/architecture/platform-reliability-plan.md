@@ -4,6 +4,12 @@
 - **Date:** 2026-11-25
 - **Relationship to the delivery plan:** this is a separate track. Its phases are named **P1-P7** so they are not confused with Phases 0-4 of the [hub fulfillment plan](hub-fulfillment-and-delivery-plan.md). The recommended order is in [section 9](#9-phases).
 
+## Implementation status (2026-11-25)
+
+Built and verified locally: **P1** transaction runner (cart converted; 16 other files are on a shrink-only list), **P2** `api` / `worker` / `jobs` roles under PM2, **P3** Prometheus metrics, alert rules (checked with `promtool`) and a Grafana dashboard, **P4** audit pipeline with `@Audit` and `ctx.audit`, **P5** Temporal foundation (client, worker, outbox-started workflows, glibc image), plus request ids through the outbox and RabbitMQ and a dead-letter replay tool. See [Running and testing locally](../operations/local-development.md).
+
+Not started: **P6** (W1-W8 workflows), **P7** (fulfillment on Temporal), moving the remaining raw `$transaction` sites and the critical audit call sites to the runner, and the delivery plan's Phases 1-4.
+
 ## 1. Goals
 
 1. A failure in one concern (a batch job, a message consumer, an audit write, one slow endpoint) must not stop checkout or the storefront.

@@ -18,6 +18,7 @@
     "start:debug": "concurrently -k -n tsc,api \"node ../../node_modules/@typescript/native/lib/tsc.js -p tsconfig.build.json --watch --preserveWatchOutput\" \"cross-env NODE_OPTIONS=--inspect node scripts/dev-runner.mjs\"",
     "start:worker": "cross-env NODE_ENV=production PROCESS_ROLE=worker TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/worker",
     "start:jobs": "cross-env NODE_ENV=production PROCESS_ROLE=jobs TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/worker",
+    "dlq": "node scripts/dlq.mjs",
     "pm2:api": "pm2-runtime ecosystem.config.cjs --only api",
     "pm2:worker": "pm2-runtime ecosystem.config.cjs --only worker",
     "pm2:jobs": "pm2-runtime ecosystem.config.cjs --only jobs",

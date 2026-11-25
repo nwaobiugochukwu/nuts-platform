@@ -1,4 +1,10 @@
 ﻿import {
+  REQUEST_ID_HEADER,
+  currentRequestId,
+  runWithRequestId,
+  sanitizeRequestId,
+} from '@api/common/request-context/request-context';
+import {
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -303,6 +309,15 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Adds the current request id (if any) to a message's headers. */
+  private withRequestId(
+    headers: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    const requestId = currentRequestId();
+    if (!requestId || headers?.[REQUEST_ID_HEADER]) return headers;
+    return { ...headers, [REQUEST_ID_HEADER]: requestId };
+  }
+
   public publish<T>(
     routingKey: string,
     message: T,
@@ -338,6 +353,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
             contentType: 'application/json',
             timestamp: Date.now(),
             ...options,
+            headers: this.withRequestId(
+              options?.headers as Record<string, unknown> | undefined,
+            ),
           },
           (err) => {
             if (err) {
@@ -460,7 +478,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           void (async () => {
             try {
               const content: unknown = JSON.parse(msg.content.toString());
-              await handler(content as T, msg);
+              // Restore the originating request id so logs, audit events and
+              // anything this handler publishes next stay on the same trail.
+              const requestId = sanitizeRequestId(
+                msg.properties.headers?.[REQUEST_ID_HEADER],
+              );
+              await (requestId
+                ? runWithRequestId(requestId, () => handler(content as T, msg))
+                : handler(content as T, msg));
               this.channel?.ack(msg);
             } catch (err: unknown) {
               this.logger.error(

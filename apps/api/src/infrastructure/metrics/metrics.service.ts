@@ -22,20 +22,6 @@ export function statusClass(status: number): string {
   return `${Math.floor(status / 100)}xx`;
 }
 
-/**
- * Collapses ids so one route is one label value. Used only when the framework
- * gives no matched route (404s and similar).
- */
-export function normalizePath(path: string): string {
-  return path
-    .replace(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-      ':id',
-    )
-    .replace(/\/\d+(?=\/|$)/g, '/:n')
-    .split('?')[0];
-}
-
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);

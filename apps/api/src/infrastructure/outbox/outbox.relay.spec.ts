@@ -60,9 +60,11 @@ describe('OutboxRelay', () => {
     });
 
     // 2. Published to RabbitMQ
-    expect(mockRabbitMQ.publish).toHaveBeenCalledWith('order.created', {
-      orderId: 'ord-123',
-    });
+    expect(mockRabbitMQ.publish).toHaveBeenCalledWith(
+      'order.created',
+      { orderId: 'ord-123' },
+      undefined,
+    );
 
     // 3. Batch marked as PUBLISHED in a single query
     expect(mockPrisma.outboxEvent.updateMany).toHaveBeenCalledWith(
@@ -70,6 +72,28 @@ describe('OutboxRelay', () => {
         where: { id: { in: ['evt-1'] } },
         data: expect.objectContaining({ status: OutboxStatus.PUBLISHED }),
       }),
+    );
+  });
+
+  it('puts the originating request id back on the message header', async () => {
+    mockRabbitMQ.isAvailable.mockReturnValue(true);
+    mockRabbitMQ.publish.mockResolvedValue(true);
+    mockPrisma.$queryRaw.mockResolvedValue([
+      {
+        id: 'evt-9',
+        eventType: 'order.created',
+        payload: { orderId: 'o9', requestId: 'req-from-outbox-9' },
+        attempts: 0,
+      },
+    ]);
+    mockPrisma.outboxEvent.updateMany.mockResolvedValue({ count: 1 });
+
+    await relay.processOutboxEvents();
+
+    expect(mockRabbitMQ.publish).toHaveBeenCalledWith(
+      'order.created',
+      expect.objectContaining({ orderId: 'o9' }),
+      { headers: { 'x-request-id': 'req-from-outbox-9' } },
     );
   });
 

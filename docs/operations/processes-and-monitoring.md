@@ -43,6 +43,14 @@ Alert rules are in [`ops/prometheus/alerts.yml`](../../ops/prometheus/alerts.yml
 - A queue is not draining: confirm `worker-prod` is up (`curl :3002/health` inside the network) and the queue's consumer count is above 0.
 - Scheduled jobs did not run: confirm `jobs-prod` is up; its logs show each job. Never start a second `jobs` container.
 
-## Not built yet
+## Request ids
 
-Correlation ids are logged on HTTP requests but not yet carried through RabbitMQ messages; there are no pre-built Grafana dashboards; the dead-letter queue has no replay tool. These are tracked in the platform reliability plan.
+Every request gets an id (`X-Request-Id`). It is carried through the outbox into the RabbitMQ message header (`x-request-id`), restored for the consumer that handles the message, added to every log line written while handling it, stored in `audit_logs.requestId` and set as a memo on Temporal workflows started from the request. To follow one request, search the logs for its id.
+
+## Dead-letter queue
+
+`npm run dlq --prefix apps/api -- list | replay | purge`; see [Running and testing locally](local-development.md#6-dead-letter-queue). The `DeadLetterQueueNotEmpty` alert fires when anything is waiting.
+
+## Dashboard
+
+[`ops/grafana/nuts-overview.json`](../../ops/grafana/nuts-overview.json): health at a glance, queues and outbox, API traffic and latency, transaction timing, process memory, event-loop lag and CPU. Import it into Grafana and choose your Prometheus data source. HTTP metrics are recorded for every response, including those rejected by middleware or guards (401, 403, 429), under the route label `unmatched` when no route matched.

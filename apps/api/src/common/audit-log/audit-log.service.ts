@@ -4,6 +4,7 @@ import type { IncomingMessage } from 'http';
 import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
 import { currentProcessRole } from '@api/infrastructure/configuration/process-role';
+import { currentRequestId } from '@api/common/request-context/request-context';
 import {
   extractIpAddress,
   extractUserAgent,
@@ -70,7 +71,13 @@ export class AuditLogService implements OnModuleDestroy {
   ) {}
 
   async log(params: AuditLogParams): Promise<void> {
-    this.record(buildAuditEvent({ ...params, source: currentProcessRole() }));
+    this.record(
+      buildAuditEvent({
+        ...params,
+        requestId: params.requestId ?? currentRequestId(),
+        source: currentProcessRole(),
+      }),
+    );
     return Promise.resolve();
   }
 
