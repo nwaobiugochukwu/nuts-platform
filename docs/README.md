@@ -18,6 +18,7 @@ This index separates product behavior, code navigation, shared engineering conce
 
 - [Architecture diagram gallery](architecture/README.md) — visual views of current boundaries and explicitly proposed paths.
 - [Code organization and dependency rules](architecture/code-organization.md) — folder layout, layering, naming, and the CI guardrails for the API and web app.
+- [Master roadmap](architecture/master-roadmap.md) — the ordered plan: how the programs run in each environment, the staging rollout, hardening steps and the big operation last.
 - [Platform reliability plan](architecture/platform-reliability-plan.md) — proposed plan for PM2-supervised independent processes, observability, an asynchronous audit pipeline and Temporal workflows (not built yet).
 - [Hub fulfillment and delivery plan](architecture/hub-fulfillment-and-delivery-plan.md) — proposed plan for consolidated parcels, Lagos distance pricing, live tracking and per-vendor payouts (not built yet).
 - [Architecture decision records](architecture/adr/README.md) — decision log and template.

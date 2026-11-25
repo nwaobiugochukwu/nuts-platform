@@ -14,6 +14,17 @@ Requires Docker (databases and broker run in containers) and Node 22. Environmen
 
 ## 2. Start everything
 
+Two ways, both start the databases and broker first:
+
+| Command | What runs |
+|---|---|
+| `npm run dev` | web plus **one** backend program doing api, worker and jobs together. Simplest for everyday work. |
+| `npm run dev:split` | web, api, worker and jobs as **four separate programs**, the same shape as staging and production. Stopping one leaves the others serving. |
+
+Use one or the other, not both (they share ports). With `dev:split`: api `:3001`, worker health `:3002`, jobs health `:3003`, web `:5173`, metrics on `:9464` (api), `:9465` (worker), `:9466` (jobs). In this mode the worker and jobs programs do not restart by themselves if they crash (production does that with PM2); they restart when you change code.
+
+### `npm run dev`
+
 ```bash
 npm run dev
 ```
@@ -41,7 +52,7 @@ Each part can also run alone: `npm run dev:api`, `npm run dev:web`.
 | Metrics | Set `METRICS_PORT=9464` in `apps/api/.env.development`, restart, then `curl localhost:9464/metrics`. |
 | Dead letters | `npm run dlq --prefix apps/api -- list` (see section 6). |
 
-## 4. Running the production-style roles under PM2
+## 4. Running the roles under PM2 (production-style restart behaviour)
 
 To see the API split into independent processes (as production does):
 

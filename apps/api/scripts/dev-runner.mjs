@@ -2,6 +2,11 @@ import { execSync, spawn } from 'node:child_process';
 import { existsSync, watch } from 'node:fs';
 import path from 'node:path';
 
+// Which compiled entry point to run. The default is the whole API in one process;
+// `npm run dev:split` starts one runner per role (api, worker, jobs) instead.
+const entry = process.env.DEV_ENTRY || 'dist/main.js';
+const label = process.env.DEV_LABEL || 'api';
+
 let child = null;
 let timer = null;
 let isShuttingDown = false;
@@ -9,9 +14,9 @@ let isShuttingDown = false;
 function startServer() {
   if (isShuttingDown) return;
 
-  const mainPath = path.resolve(process.cwd(), 'dist/main.js');
+  const mainPath = path.resolve(process.cwd(), entry);
   if (!existsSync(mainPath)) {
-    console.log('[api] Waiting for dist/main.js to be compiled...');
+    console.log(`[${label}] Waiting for ${entry} to be compiled...`);
     return;
   }
 
@@ -29,7 +34,7 @@ function startServer() {
 
   child = spawn(
     process.execPath,
-    ['-r', 'tsconfig-paths/register', 'dist/main.js'],
+    ['-r', 'tsconfig-paths/register', entry],
     {
       stdio: 'inherit',
       env: {
@@ -42,7 +47,7 @@ function startServer() {
 
   child.on('exit', (code, signal) => {
     if (!isShuttingDown && signal !== 'SIGTERM' && code !== null && code !== 0) {
-      console.log(`[api] Server exited with code ${code}. Waiting for code changes...`);
+      console.log(`[${label}] Server exited with code ${code}. Waiting for code changes...`);
     }
   });
 }
@@ -51,7 +56,7 @@ function queueRestart() {
   if (isShuttingDown) return;
   clearTimeout(timer);
   timer = setTimeout(() => {
-    console.log('[api] Build changes detected, reloading server...');
+    console.log(`[${label}] Build changes detected, reloading...`);
     startServer();
   }, 400);
 }
@@ -75,7 +80,7 @@ if (existsSync('dist')) {
       }
     });
   } catch (err) {
-    console.warn('[api] Directory watch initialization warning:', err.message);
+    console.warn(`[${label}] Directory watch initialization warning:`, err.message);
   }
 }
 
