@@ -19,6 +19,31 @@ x-client-env: &client-env
   NODE_ENV: ${NODE_ENV:-development}
   INTERNAL_API_URL: http://api:3001
 
+# ── Shared by the three development backend containers (api, worker, jobs) ──
+x-api-dev-common: &api-dev-common
+  restart: unless-stopped
+  profiles: ["dev"]
+  command: ["npm", "run", "dev:role"]
+  env_file:
+    - ./apps/api/.env.development
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./apps/api/src:/app/apps/api/src
+    - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
+
+x-api-dev-env: &api-dev-env
+  <<: *api-env
+  NODE_ENV: development
+  SWAGGER_ENABLED: "true"
+  RABBITMQ_ENABLED: "true"
+  RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
+  # Postgres/Redis run from docker-compose.db.yml and publish ports on the host.
+  # Inside a container "localhost" is the container itself, so the values in
+  # .env.development (localhost:5433 / :6379) cannot work here.
+  DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
+  REDIS_URL: redis://host.docker.internal:6379
+
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -60,41 +85,24 @@ services:
       - nuts_net
 
   # ── Backend programs (Development) ─────────────────────────────────────────
-  # Same shape as staging and production: three separate containers from one
-  # image, each running one role (api, worker, jobs) with a TypeScript watcher.
+  # Same shape as staging: three separate containers from ONE image, each running
+  # one program (api, worker, jobs) with a TypeScript watcher and PM2. The image is
+  # built once by `api`; worker and jobs reuse it (they never build or pull).
   api:
-    &api-dev
+    <<: *api-dev-common
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
       target: dev
+    image: nuts-api-dev:latest
     container_name: nuts_api
-    restart: unless-stopped
-    profiles: ["dev"]
-    command: ["npm", "run", "dev:role"]
     ports:
       - "${API_PORT:-3001}:3001"
-    env_file:
-      - ./apps/api/.env.development
-    environment: &api-dev-env
-      <<: *api-env
-      NODE_ENV: development
-      SWAGGER_ENABLED: "true"
-      RABBITMQ_ENABLED: "true"
-      RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
-      # Postgres/Redis run from docker-compose.db.yml and publish ports on the
-      # host. Inside this container "localhost" is the container itself, so the
-      # values in .env.development (localhost:5433 / :6379) cannot work here.
-      DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
-      REDIS_URL: redis://host.docker.internal:6379
+    environment:
+      <<: *api-dev-env
       PROCESS_ROLE: api
       DEV_LABEL: api
       METRICS_PORT: "9464"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./apps/api/src:/app/apps/api/src
-      - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -110,15 +118,20 @@ services:
       start_period: 60s
 
   worker:
-    <<: *api-dev
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
     container_name: nuts_worker_dev
-    ports: []
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: worker
-      DEV_ENTRY: dist/worker.js
       DEV_LABEL: worker
       HEALTH_PORT: "3002"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_started
     networks:
       - nuts_net
     healthcheck:
@@ -129,15 +142,20 @@ services:
       start_period: 60s
 
   jobs:
-    <<: *api-dev
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
     container_name: nuts_jobs_dev
-    ports: []
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: jobs
-      DEV_ENTRY: dist/worker.js
       DEV_LABEL: jobs
       HEALTH_PORT: "3003"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      api:
+        condition: service_started
     networks:
       - nuts_net
     healthcheck:

@@ -27,17 +27,20 @@ This starts the databases and broker (`docker-compose.db.yml`), then **four sepa
 | worker | emails, notifications, analytics, stock updates, audit writing | health `:3002`, metrics `:9465` |
 | jobs | scheduled jobs (exactly one) | health `:3003`, metrics `:9466` |
 
-Ready after about 30 s (the TypeScript compile runs first). Stopping one program leaves the others serving: try stopping the worker and open the site. Ctrl+C stops everything; `npm run db:down` stops the databases. In dev a crashed worker or jobs program does not restart by itself (production restarts them with PM2); it restarts when you change code or run `npm run dev` again.
+Ready after about 30 s (the TypeScript compile runs first). The programs run under **PM2**, the same supervisor staging uses: a program that crashes is restarted automatically, a change to the source recompiles and restarts the programs, and every log line starts with its program name (`[api]`, `[worker]`, `[jobs]`). Stopping one program leaves the others serving. Ctrl+C stops everything; `npm run db:down` stops the databases.
 
 Related commands:
 
 | Command | Use |
 |---|---|
-| `npm run dev:api` | only the three backend programs |
+| `npm run dev:backend` | the three backend programs (api, worker, jobs) without web |
+| `npm run dev:api` | only the api program (start `dev:worker` and `dev:jobs` in other terminals, or emails and scheduled jobs will not run) |
 | `npm run dev:web` | only the web app |
 | `npm run dev:docker` | the same four programs as Docker containers (`docker compose --profile dev`): `api`, `worker`, `jobs`, `client` |
-| `npm run dev --prefix apps/api` | same as `dev:api` |
-| `npm run dev:single --prefix apps/api` | one backend program doing everything. For debugging only; it is **not** how staging or production run |
+| `npm run dev:worker`, `npm run dev:jobs` | one program each, in its own terminal (each keeps its PM2 state under `apps/api/.pm2/`) |
+| `npm run dev --prefix apps/api` | same as `dev:backend` |
+| `npm run dev:single` | one backend program doing everything (`all`). For debugging only; it is **not** how staging or production run |
+| `npm run start:debug --prefix apps/api` | like `dev:single` with the Node inspector on port 9229 |
 
 If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
 

@@ -25,6 +25,7 @@ import { TemporalWorkerModule } from './infrastructure/temporal/temporal-worker.
  * musl build), so it ships as its own image target; see docs/operations.
  */
 async function bootstrap() {
+  process.env.LOG_PROGRAM = 'temporal-worker';
   const config = readTemporalConfig();
   if (!config.enabled) {
     throw new Error('Set TEMPORAL_ENABLED=true to run the Temporal worker.');
