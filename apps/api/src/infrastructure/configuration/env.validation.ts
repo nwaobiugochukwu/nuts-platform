@@ -185,6 +185,40 @@ export class EnvironmentVariables {
   @IsOptional()
   METRICS_TOKEN?: string;
 
+  // ─── Temporal (durable workflows) ───────────────────────────────────────────
+
+  /** "true" to connect to Temporal. Default off: workflow starts are logged no-ops. */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_ENABLED?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_ADDRESS?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_NAMESPACE?: string;
+
+  /** Temporal Cloud API key (enables TLS). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_TLS?: string;
+
+  /** Comma-separated task queues the worker polls (default: all). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_TASK_QUEUES?: string;
+
+  /** Prometheus port for the Temporal SDK metrics (worker only; off when unset). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_METRICS_PORT?: string;
+
   // ─── HTTP / CORS ─────────────────────────────────────────────────────────────
 
   @IsString()

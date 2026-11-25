@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { StartWorkflowInput } from '../temporal/temporal-client.service';
 import type {
   TransactionContext,
   TransactionOptions,
@@ -20,6 +21,7 @@ export class FakeTransactionRunner implements Pick<TransactionRunner, 'run'> {
   }> = [];
 
   readonly audited: Array<Record<string, unknown>> = [];
+  readonly workflows: StartWorkflowInput[] = [];
 
   constructor(private readonly tx: unknown = {}) {}
 
@@ -38,6 +40,10 @@ export class FakeTransactionRunner implements Pick<TransactionRunner, 'run'> {
       },
       audit: (input) => {
         this.audited.push(input);
+        return Promise.resolve();
+      },
+      startWorkflow: (input) => {
+        this.workflows.push(input);
         return Promise.resolve();
       },
       afterCommit: (hook) => {

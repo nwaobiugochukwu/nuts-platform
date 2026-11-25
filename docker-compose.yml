@@ -41,6 +41,22 @@ services:
       start_period: 20s
 
 
+  # ── Temporal dev server + UI (Development) ────────────────────────────────
+  # Single-process dev server with file persistence. Web UI on :8233.
+  # Production/staging use Temporal Cloud or a separate self-hosted cluster.
+  temporal:
+    image: temporalio/temporal:1.10.1
+    restart: unless-stopped
+    profiles: ["dev"]
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db", "--namespace", "nuts-dev"]
+    ports:
+      - "7233:7233"
+      - "8233:8233"
+    volumes:
+      - temporal_data:/data
+    networks:
+      - nuts_net
+
   # ── NestJS API (Development) ───────────────────────────────────────────────
   api:
     build:
@@ -233,6 +249,44 @@ services:
       retries: 5
       start_period: 40s
 
+  # ── Temporal worker (opt-in: `--profile temporal`) ─────────────────────────
+  # Not part of the prod/staging profiles, so enabling Temporal is an explicit
+  # step. Needs TEMPORAL_ENABLED=true plus an address and namespace in the env file.
+  temporal-worker-prod:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+      target: runner-temporal
+    image: nuts-api-temporal:latest
+    container_name: nuts_temporal_worker
+    restart: unless-stopped
+    profiles: ["temporal"]
+    env_file:
+      - ./apps/api/.env.${APP_ENV:-production}
+    environment:
+      <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-production}
+      TEMPORAL_ENABLED: "true"
+      HEALTH_PORT: "3004"
+      TEMPORAL_METRICS_PORT: "9465"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3004/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
   # ── Next.js Client (Development) ───────────────────────────────────────────
   client:
     build:
@@ -359,6 +413,8 @@ networks:
 volumes:
   rabbitmq_data:
     name: nuts_app_rabbitmq_data
+  temporal_data:
+    name: nuts_app_temporal_data
 
 # ==============================================================================
 # DOCKER COMMAND REFERENCE CHEAT SHEET
