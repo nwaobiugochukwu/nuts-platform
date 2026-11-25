@@ -10,11 +10,11 @@ The API image runs as three independent roles. Each role is its own container an
 | `worker` | `worker-prod` | RabbitMQ consumers, outbox relay sweep | `GET :3002/health` | 9464 |
 | `jobs` | `jobs-prod` | Scheduled (cron) jobs. **Run exactly one.** | `GET :3003/health` | 9464 |
 
-Selected by `PROCESS_ROLE` (and `PM2_APP` for PM2). With `PROCESS_ROLE` unset the process runs everything, which is what local development does.
+Under PM2 (every container) the program is chosen by **`PM2_APP`**: `all`, `api`, `worker` or `jobs`. The PM2 file then sets `PROCESS_ROLE` itself, so setting `PROCESS_ROLE` in an environment has no effect there; it only matters when PM2 is disabled. **`PM2_APP` defaults to `all`** (everything in one process, exactly as before the split), so a service nobody has configured keeps working; split environments set it explicitly on each service.
 
-**Deploy order matters.** Crons and queue consumers run only in `worker-prod` and `jobs-prod`. The repository does not deploy to a host, so the host's compose file must contain all three services before `api-prod` moves to the `api` role; otherwise nothing consumes queues or runs jobs. To run everything in one container temporarily, set `PROCESS_ROLE=all` on `api-prod`.
+**Deploy order matters.** Crons and queue consumers run only in `worker-prod` and `jobs-prod`. The repository does not deploy to a host, so the host's compose file must contain all three services before `api-prod` moves to the `api` role; otherwise nothing consumes queues or runs jobs. To run everything in one container temporarily, set `PM2_APP=all` on `api-prod` (this is also the default).
 
-**Rollback:** set `PM2_ENABLED=false` to start the plain Node process instead of PM2 (the role still comes from `PROCESS_ROLE`).
+**Rollback:** set `PM2_ENABLED=false` to start one plain Node process instead of PM2 (the role then comes from `PROCESS_ROLE`, default `all`).
 
 ## PM2 behaviour (`apps/api/ecosystem.config.cjs`)
 

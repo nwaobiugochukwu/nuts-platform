@@ -21,9 +21,13 @@ fi
 
 export TS_NODE_PROJECT=./tsconfig.runtime.json
 
-# PM2_APP selects which role this container runs: api (default), worker or jobs.
-# PM2_ENABLED=false is the rollback switch: run the single-process API as before.
-PM2_APP="${PM2_APP:-api}"
+# PM2_APP selects which program this container runs: all (the default: everything
+# in one process, exactly as before the split), api, worker or jobs. Split
+# environments set it explicitly on each service. NOTE: under PM2 the role comes
+# from PM2_APP; PROCESS_ROLE is set by the PM2 file and is ignored here.
+# PM2_ENABLED=false is the rollback switch: run one plain Node process (the role
+# then comes from PROCESS_ROLE, default all).
+PM2_APP="${PM2_APP:-all}"
 if [ "${PM2_ENABLED:-true}" = "false" ]; then
   echo "[entrypoint] PM2 disabled; starting NestJS API directly..."
   exec node -r tsconfig-paths/register dist/main

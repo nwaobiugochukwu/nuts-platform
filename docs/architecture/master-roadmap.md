@@ -52,7 +52,7 @@ So when you deploy staging, the command that starts it must start all of them. T
 
 Is that how production-grade companies work? Splitting into web, API, worker and scheduler programs is standard. Failing silently is not: mature teams (a) deploy all programs together from one definition so none can be forgotten, (b) alert when a queue has no consumer or a scheduler stops, and (c) run an automatic post-deploy check that fails the release. Here: (a) is the compose file, (b) is the heartbeat metric and alerts, and (c) is `scripts/verify-deploy.sh`, which checks that the API is up, the database and cache are reachable, and that the worker and jobs are running, and reports in plain language what is missing. The API also logs an error 90 seconds after start if the worker or jobs are absent.
 
-How to check after every deploy: run `scripts/verify-deploy.sh https://<your-staging-url>`, and `docker compose --profile staging ps` should list `api-prod`, `worker-prod`, `jobs-prod`, `client-prod` and `nginx` as running (and `api-migrate` as exited successfully). Safety net if you cannot update the server's compose file yet: set `PROCESS_ROLE=all` on `api-prod`, which makes it do everything as before.
+How to check after every deploy: run `scripts/verify-deploy.sh https://<your-staging-url>`, and `docker compose --profile staging ps` should list `api-prod`, `worker-prod`, `jobs-prod`, `client-prod` and `nginx` as running (and `api-migrate` as exited successfully). Safety net if you cannot update the server's compose file yet: set `PM2_APP=all` on `api-prod` (this is also the default), which makes it do everything as before.
 
 ## 3. The order of work
 
@@ -101,7 +101,7 @@ Only now:
 
 | If this goes wrong | Do this |
 |---|---|
-| Roles cause trouble on a server | `PROCESS_ROLE=all` on `api-prod` (one program does everything again) |
+| Roles cause trouble on a server | `PM2_APP=all` on the api service (one program does everything again; this is also the default) |
 | PM2 causes trouble | `PM2_ENABLED=false` (plain Node process) |
 | Temporal causes trouble | `TEMPORAL_ENABLED=false` (workflow starts become logged no-ops) |
 | A bad deploy | Redeploy the previous image tag; the migrations are additive, so the old version still runs |
