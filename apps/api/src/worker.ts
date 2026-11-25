@@ -12,6 +12,8 @@ import {
   stopCronsUnlessJobsRole,
 } from './infrastructure/configuration/role-runtime';
 import { RabbitMQService } from './infrastructure/rabbitmq/rabbitmq.service';
+import { MetricsService } from './infrastructure/metrics/metrics.service';
+import { startMetricsServer } from './infrastructure/metrics/metrics-server';
 
 /**
  * Entry point for the `worker` (queue consumers + outbox relay) and `jobs`
@@ -59,9 +61,13 @@ async function bootstrap() {
     res.end(JSON.stringify(health));
   });
   server.listen(healthPort, '0.0.0.0');
+  const metricsServer = startMetricsServer(app.get(MetricsService));
 
   app.enableShutdownHooks();
-  const shutdown = () => server.close();
+  const shutdown = () => {
+    server.close();
+    metricsServer?.close();
+  };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
 

@@ -130,6 +130,8 @@ services:
       # interrupt checkout.
       PROCESS_ROLE: api
       PM2_APP: api
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
     depends_on:
       api-migrate:
         condition: service_completed_successfully
@@ -169,6 +171,8 @@ services:
       AUTO_MIGRATE: "false"
       PROCESS_ROLE: worker
       PM2_APP: worker
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
       HEALTH_PORT: "3002"
     depends_on:
       api-migrate:
@@ -206,6 +210,8 @@ services:
       AUTO_MIGRATE: "false"
       PROCESS_ROLE: jobs
       PM2_APP: jobs
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
       HEALTH_PORT: "3003"
     depends_on:
       api-migrate:

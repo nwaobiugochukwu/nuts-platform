@@ -23,6 +23,7 @@ import { RedisThrottlerStorage } from './infrastructure/cache/redis-throttler.st
 import { RabbitMQModule } from './infrastructure/rabbitmq/rabbitmq.module';
 import { OutboxModule } from './infrastructure/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/transaction/transaction.module';
+import { MetricsModule } from './infrastructure/metrics/metrics.module';
 import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
@@ -101,6 +102,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     RabbitMQModule,
     OutboxModule,
     TransactionModule,
+    MetricsModule,
     ResiliencyModule,
     MailModule,
     CloudinaryModule,

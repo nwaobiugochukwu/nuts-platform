@@ -4,6 +4,7 @@ This directory documents production operations that can be established from repo
 
 ## Runbooks
 
+- [Processes, health and monitoring](processes-and-monitoring.md) — API roles under PM2, health endpoints, Prometheus metrics and alerts.
 - [Release and recovery](runbooks/release-and-recovery.md) — repository-backed release flow, checks, and recovery boundaries.
 
 ## Current automation and known gaps
