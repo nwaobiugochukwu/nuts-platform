@@ -85,6 +85,13 @@ export class VendorOrderResponseDto {
   stockRestored!: boolean;
 
   @ApiProperty({
+    description:
+      'True when another vendor also has items on this order. Shipping status is then managed by the platform and the vendor cannot change it.',
+    example: false,
+  })
+  isMultiVendor!: boolean;
+
+  @ApiProperty({
     description: 'Timestamp when the order was created',
     example: '2025-06-14T10:30:00.000Z',
   })

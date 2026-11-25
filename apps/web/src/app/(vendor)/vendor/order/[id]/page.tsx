@@ -27,7 +27,12 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-const getVendorNextStatus = (status: OrderStatus): OrderStatus | null => {
+const getVendorNextStatus = (
+  status: OrderStatus,
+  isMultiVendor = false,
+): OrderStatus | null => {
+  // On a multi-vendor order the platform hub, not one vendor, ships and delivers.
+  if (isMultiVendor) return null;
   if (status === "PROCESSING") return "SHIPPED";
   if (status === "SHIPPED") return "DELIVERED";
   return null;
@@ -102,7 +107,7 @@ export default function VendorOrderDetailPage() {
     );
   }
 
-  const nextStatus = getVendorNextStatus(order.status);
+  const nextStatus = getVendorNextStatus(order.status, order.isMultiVendor);
   const parsedAddress =
     typeof order.shippingAddress === "string"
       ? (() => {
@@ -178,6 +183,11 @@ export default function VendorOrderDetailPage() {
               <Truck className="h-4 w-4" />
               Mark as {nextStatus}
             </Button>
+          )}
+          {order.isMultiVendor && (order.status === "PROCESSING" || order.status === "SHIPPED") && (
+            <p className="max-w-xs self-start text-xs text-muted-foreground sm:self-auto sm:text-right">
+              This order includes other vendors. The platform ships and delivers it once every vendor&apos;s items are in.
+            </p>
           )}
         </div>
       </div>
