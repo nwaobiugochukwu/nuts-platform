@@ -28,7 +28,9 @@ export class RecommendationsService {
     return this.feed.forYou(...args);
   }
 
-  dismissProduct(...args: Parameters<PersonalizedFeedService['dismissProduct']>) {
+  dismissProduct(
+    ...args: Parameters<PersonalizedFeedService['dismissProduct']>
+  ) {
     return this.feed.dismissProduct(...args);
   }
 

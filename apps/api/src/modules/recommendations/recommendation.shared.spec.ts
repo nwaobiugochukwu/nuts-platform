@@ -61,7 +61,11 @@ describe('withExploration', () => {
     product('a5', 'v1'),
     product('a6', 'v2'),
   ];
-  const strangers = [product('n1', 'v9'), product('n2', 'v8'), product('n3', 'v9')];
+  const strangers = [
+    product('n1', 'v9'),
+    product('n2', 'v8'),
+    product('n3', 'v9'),
+  ];
   const all = scored([...familiar, ...strangers]);
   const selected = all.slice(0, 6);
   const weights = new Map([
@@ -86,13 +90,21 @@ describe('withExploration', () => {
 
   it('returns the shelf untouched when every store is already familiar', () => {
     const familiarOnly = scored(familiar);
-    const result = withExploration(familiarOnly.slice(0, 4), familiarOnly, weights, 2, 6);
+    const result = withExploration(
+      familiarOnly.slice(0, 4),
+      familiarOnly,
+      weights,
+      2,
+      6,
+    );
     expect(result).toEqual(familiarOnly.slice(0, 4));
   });
 
   it('does nothing when no slots are requested or the shelf is tiny', () => {
     expect(withExploration(selected, all, weights, 0, 6)).toBe(selected);
-    expect(withExploration(selected.slice(0, 3), all, weights, 2, 6)).toHaveLength(3);
+    expect(
+      withExploration(selected.slice(0, 3), all, weights, 2, 6),
+    ).toHaveLength(3);
   });
 });
 
