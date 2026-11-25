@@ -6,7 +6,10 @@ import { ConfigService } from '@nestjs/config';
 import { createServer } from 'node:http';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
-import { currentProcessRole } from './infrastructure/configuration/process-role';
+import {
+  currentProcessRole,
+  portFor,
+} from './infrastructure/configuration/process-role';
 import {
   buildWorkerHealth,
   stopCronsUnlessJobsRole,
@@ -41,7 +44,7 @@ async function bootstrap() {
   const brokerRequired =
     config.get<string>('RABBITMQ_ENABLED', 'true') !== 'false';
   const rabbit = app.get(RabbitMQService, { strict: false });
-  const healthPort = Number(config.get('HEALTH_PORT') ?? 3002);
+  const healthPort = portFor('health', role) ?? 3002;
 
   const server = createServer((req, res) => {
     if (req.url !== '/health' && req.url !== '/') {
