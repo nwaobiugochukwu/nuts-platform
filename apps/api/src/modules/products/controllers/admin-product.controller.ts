@@ -36,6 +36,7 @@ import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - PRODUCTS')
 @ApiBearerAuth('JWT-auth')
@@ -45,6 +46,7 @@ export class AdminProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   // CREATE PRODUCT
+  @Audit({ action: 'CREATE_PRODUCT', entity: 'Product' })
   @Post()
   @Message('Product created successfully')
   @ApiOperation({
@@ -63,7 +65,7 @@ export class AdminProductsController {
     @GetUser('id') adminId: string,
     @Body() dto: AdminCreateProductDto,
   ): Promise<ProductResponseDto> {
-    return this.productsService.create(dto, adminId);
+    return this.productsService.create(dto);
   }
 
   @Get()
@@ -125,6 +127,7 @@ export class AdminProductsController {
     return this.productsService.getStockHistory(id);
   }
 
+  @Audit({ action: 'UPDATE_PRODUCT_STOCK', entity: 'Product' })
   @Patch(':id/stock')
   @Message('Stock updated successfully')
   @ApiOperation({
@@ -151,6 +154,7 @@ export class AdminProductsController {
     );
   }
 
+  @Audit({ action: 'UPDATE_PRODUCT', entity: 'Product' })
   @Patch(':id')
   @Message('Product updated successfully')
   @ApiOperation({
@@ -166,10 +170,11 @@ export class AdminProductsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
   ): Promise<AdminProductResponseDto> {
-    return this.productsService.update(id, dto, adminId);
+    return this.productsService.update(id, dto);
   }
 
   // DEACTIVATE PRODUCT
+  @Audit({ action: 'DEACTIVATE_PRODUCT', entity: 'Product' })
   @Patch(':id/deactivate')
   @HttpCode(HttpStatus.OK)
   @Message('Product deactivated successfully')
@@ -183,10 +188,11 @@ export class AdminProductsController {
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
-    return this.productsService.deactivate(id, adminId);
+    return this.productsService.deactivate(id);
   }
 
   // REACTIVATE PRODUCT
+  @Audit({ action: 'REACTIVATE_PRODUCT', entity: 'Product' })
   @Patch(':id/reactivate')
   @Message('Product reactivated successfully')
   @ApiOperation({
@@ -203,10 +209,11 @@ export class AdminProductsController {
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ProductReactivateResponseDto> {
-    return this.productsService.reactivate(id, adminId);
+    return this.productsService.reactivate(id);
   }
 
   // DELETE PRODUCT
+  @Audit({ action: 'PERMANENT_DELETE_PRODUCT', entity: 'Product' })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @Message('Product permanently deleted')
@@ -220,6 +227,6 @@ export class AdminProductsController {
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
-    return this.productsService.permanentRemove(id, adminId);
+    return this.productsService.permanentRemove(id);
   }
 }

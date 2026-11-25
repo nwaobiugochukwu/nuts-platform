@@ -15,7 +15,6 @@ import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import {
   AuditLogService,
-  toAuditPayload,
   type AuditChanges,
 } from '@api/common/audit-log/audit-log.service';
 import { BCRYPT_COST_FACTOR } from '@api/common/constants/bcrypt.constants';
@@ -42,6 +41,7 @@ import {
 } from '@api/common/utils/cursor-pagination.util';
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const USER_ACTIVE_CACHE_TTL = 45;
 const PURGE_BATCH_SIZE = 100;
@@ -275,12 +275,7 @@ export class UsersService {
     };
   }
 
-  async update(
-    userId: string,
-    dto: UpdateUserDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<UserResponseDto> {
+  async update(userId: string, dto: UpdateUserDto): Promise<UserResponseDto> {
     const existing = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -396,16 +391,11 @@ export class UsersService {
     }
 
     if (Object.keys(changedFields).length > 0) {
-      await this.auditLog.log({
-        action: 'UPDATE_PROFILE',
-        entity: 'User',
+      auditDetails({
         entityId: userId,
-        userId,
-        payload: toAuditPayload({
+        payload: {
           changes: changedFields,
-        }),
-        ipAddress,
-        userAgent,
+        },
       });
     }
 
@@ -460,12 +450,7 @@ export class UsersService {
     };
   }
 
-  async changePassword(
-    userId: string,
-    dto: ChangePasswordDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -524,21 +509,12 @@ export class UsersService {
       },
     });
 
-    await this.auditLog.log({
-      action: 'CHANGE_PASSWORD',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      userId,
-      ipAddress,
-      userAgent,
     });
   }
 
-  async deactivate(
-    userId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<DeactivateAccountResponseDto> {
+  async deactivate(userId: string): Promise<DeactivateAccountResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -589,13 +565,8 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(userId);
 
-    await this.auditLog.log({
-      action: 'SELF_DEACTIVATE_USER',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      userId,
-      ipAddress,
-      userAgent,
     });
 
     const graceDays = this.getDeletionGraceDays();
@@ -606,12 +577,7 @@ export class UsersService {
     };
   }
 
-  async reactivate(
-    email: string,
-    password: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<UserResponseDto> {
+  async reactivate(email: string, password: string): Promise<UserResponseDto> {
     const normalizedEmail = email.trim().toLowerCase();
 
     const user = await this.prisma.user.findUnique({
@@ -661,23 +627,15 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(user.id);
 
-    await this.auditLog.log({
-      action: 'SELF_REACTIVATE_USER',
-      entity: 'User',
+    auditDetails({
       entityId: user.id,
       userId: user.id,
-      ipAddress,
-      userAgent,
     });
 
     return this.toResponseDto(updatedUser);
   }
 
-  async permanentDelete(
-    userId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async permanentDelete(userId: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -704,13 +662,8 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(userId);
 
-    await this.auditLog.log({
-      action: 'SELF_PERMANENT_DELETE_USER',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      userId,
-      ipAddress,
-      userAgent,
     });
   }
 
@@ -718,8 +671,6 @@ export class UsersService {
     adminId: string,
     userId: string,
     dtoOrReason: AdminSuspendDto | string,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<SuspendUserResponseDto> {
     const reason =
       typeof dtoOrReason === 'string' ? dtoOrReason : dtoOrReason.reason;
@@ -793,19 +744,14 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(userId);
 
-    await this.auditLog.log({
-      action: 'ADMIN_SUSPEND_USER',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      adminId,
-      payload: toAuditPayload({
+      payload: {
         reason,
         duration: duration ?? (isIndefinite ? 'indefinite' : 'custom'),
         suspendedUntil: suspendedUntil?.toISOString() ?? null,
         isIndefinite,
-      }),
-      ipAddress,
-      userAgent,
+      },
     });
 
     const message = suspendedUntil
@@ -825,24 +771,11 @@ export class UsersService {
     adminId: string,
     userId: string,
     dtoOrReason: AdminSuspendDto | string,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<SuspendUserResponseDto> {
-    return this.adminSuspend(
-      adminId,
-      userId,
-      dtoOrReason,
-      ipAddress,
-      userAgent,
-    );
+    return this.adminSuspend(adminId, userId, dtoOrReason);
   }
 
-  async adminUnsuspend(
-    userId: string,
-    adminId?: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<UserResponseDto> {
+  async adminUnsuspend(userId: string): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: {
         id: userId,
@@ -881,29 +814,19 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(userId);
 
-    await this.auditLog.log({
-      action: 'ADMIN_UNSUSPEND_USER',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      adminId,
-      payload: toAuditPayload({
+      payload: {
         previousReason: user.deactivationReason,
-      }),
-      ipAddress,
-      userAgent,
+      },
     });
 
     return this.toResponseDto(updatedUser);
   }
 
   // Alias for backward compatibility
-  async adminReactivate(
-    userId: string,
-    adminId?: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<UserResponseDto> {
-    return this.adminUnsuspend(userId, adminId, ipAddress, userAgent);
+  async adminReactivate(userId: string): Promise<UserResponseDto> {
+    return this.adminUnsuspend(userId);
   }
 
   async permanentRemove(
@@ -977,12 +900,7 @@ export class UsersService {
     });
   }
 
-  async adminSoftDelete(
-    userId: string,
-    adminId?: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async adminSoftDelete(userId: string, adminId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, role: true, isActive: true },
@@ -1018,13 +936,8 @@ export class UsersService {
 
     await this.invalidateActiveAccountCache(userId);
 
-    await this.auditLog.log({
-      action: 'ADMIN_SOFT_DELETE_USER',
-      entity: 'User',
+    auditDetails({
       entityId: userId,
-      adminId,
-      ipAddress,
-      userAgent,
     });
   }
 

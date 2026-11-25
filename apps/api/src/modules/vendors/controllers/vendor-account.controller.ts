@@ -31,10 +31,7 @@ import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { UpdateVendorDto } from '../dto/update-vendor.dto';
@@ -42,6 +39,7 @@ import { VendorReactivateDto } from '../dto/vendor-reactivate.dto';
 import { VendorProfileDto } from '../dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '../dto/vendor-status-response.dto';
 import { VendorsService } from '../vendors.service';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('VENDORS - ACCOUNT')
 @Controller('vendors')
@@ -94,6 +92,7 @@ export class VendorAccountController {
     return this.vendorsService.getProfile(vendorId);
   }
 
+  @Audit({ action: 'VENDOR_UPDATE_PROFILE', entity: 'Vendor' })
   @Patch('account')
   @ApiBearerAuth('JWT-auth')
   @Message('Profile updated successfully')
@@ -117,14 +116,8 @@ export class VendorAccountController {
   async updateProfile(
     @GetVendor('id') vendorId: string,
     @Body() dto: UpdateVendorDto,
-    @Req() req: Request,
   ): Promise<VendorProfileDto> {
-    return this.vendorsService.updateProfile(
-      vendorId,
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.vendorsService.updateProfile(vendorId, dto);
   }
 
   /**
@@ -132,6 +125,7 @@ export class VendorAccountController {
    * through the protected vendor routes.
    */
   @Public()
+  @Audit({ action: 'VENDOR_SELF_REACTIVATE', entity: 'Vendor' })
   @Post('account/reactivate')
   @HttpCode(HttpStatus.OK)
   @Message('Vendor account reactivated successfully')
@@ -155,15 +149,11 @@ export class VendorAccountController {
   })
   async reactivate(
     @Body() dto: VendorReactivateDto,
-    @Req() req: Request,
   ): Promise<VendorStatusResponseDto> {
-    return this.vendorsService.reactivate(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.vendorsService.reactivate(dto);
   }
 
+  @Audit({ action: 'VENDOR_SELF_DEACTIVATE', entity: 'Vendor' })
   @Patch('account/deactivate')
   @ApiBearerAuth('JWT-auth')
   @Message('Vendor account deactivated successfully')
@@ -187,17 +177,14 @@ export class VendorAccountController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<VendorStatusResponseDto> {
-    const result = await this.vendorsService.deactivateProfile(
-      vendorId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const result = await this.vendorsService.deactivateProfile(vendorId);
 
     this.authCookies.clearAuthCookies(res, 'vendor');
 
     return result;
   }
 
+  @Audit({ action: 'VENDOR_SELF_DELETE', entity: 'Vendor' })
   @Delete('account')
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
@@ -219,11 +206,7 @@ export class VendorAccountController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<null> {
-    await this.vendorsService.deleteProfile(
-      vendorId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    await this.vendorsService.deleteProfile(vendorId);
 
     this.authCookies.clearAuthCookies(res, 'vendor');
 

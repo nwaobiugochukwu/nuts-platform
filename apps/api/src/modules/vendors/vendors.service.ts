@@ -17,11 +17,7 @@ import {
   resolveCategoryHierarchy,
   type CategorySummaryRef,
 } from '@api/modules/products/products.service';
-import {
-  AuditLogService,
-  toAuditPayload,
-  type AuditChanges,
-} from '@api/common/audit-log/audit-log.service';
+import { type AuditChanges } from '@api/common/audit-log/audit-log.service';
 import { UNKNOWN_ACCOUNT_PASSWORD_HASH } from '@api/common/constants/bcrypt.constants';
 import {
   VENDOR_STORE,
@@ -35,6 +31,7 @@ import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { VendorReactivateDto } from './dto/vendor-reactivate.dto';
 import { FeaturedVendorDto, VendorProfileDto } from './dto/vendor-response.dto';
 import { VendorStatusResponseDto } from './dto/vendor-status-response.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const vendorSelect = {
   id: true,
@@ -123,7 +120,6 @@ export class VendorsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -145,8 +141,6 @@ export class VendorsService {
   async updateProfile(
     vendorId: string,
     dto: UpdateVendorDto,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<VendorProfileDto> {
     const vendor = await this.getVendorOrThrow(vendorId);
 
@@ -272,15 +266,11 @@ export class VendorsService {
     }
 
     if (Object.keys(changedFields).length > 0) {
-      await this.auditLog.log({
-        action: 'VENDOR_UPDATE_PROFILE',
-        entity: 'Vendor',
+      auditDetails({
         entityId: vendorId,
-        payload: toAuditPayload({
+        payload: {
           changes: changedFields,
-        }),
-        ipAddress,
-        userAgent,
+        },
       });
     }
 
@@ -303,11 +293,7 @@ export class VendorsService {
     return this.toVendorProfile(updated);
   }
 
-  async deactivateProfile(
-    vendorId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
+  async deactivateProfile(vendorId: string): Promise<VendorStatusResponseDto> {
     await this.getVendorOrThrow(vendorId);
 
     const updated = await this.prisma.vendor.update({
@@ -335,18 +321,14 @@ export class VendorsService {
       },
     });
 
+    auditDetails({
+      entityId: vendorId,
+      payload: {
+        email: updated.email,
+        storeName: updated.storeName,
+      },
+    });
     await Promise.all([
-      this.auditLog.log({
-        action: 'VENDOR_SELF_DEACTIVATE',
-        entity: 'Vendor',
-        entityId: vendorId,
-        payload: {
-          email: updated.email,
-          storeName: updated.storeName,
-        },
-        ipAddress,
-        userAgent,
-      }),
       this.cacheService.del(VENDOR_STORE(updated.storeSlug)),
       this.cacheService.del(VENDOR_STORE_PRODUCTS(updated.storeSlug)),
     ]);
@@ -360,11 +342,7 @@ export class VendorsService {
     };
   }
 
-  async reactivate(
-    dto: VendorReactivateDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorStatusResponseDto> {
+  async reactivate(dto: VendorReactivateDto): Promise<VendorStatusResponseDto> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
     const vendor = await this.prisma.vendor.findUnique({
@@ -424,18 +402,14 @@ export class VendorsService {
       },
     });
 
+    auditDetails({
+      entityId: vendor.id,
+      payload: {
+        email: updated.email,
+        storeName: updated.storeName,
+      },
+    });
     await Promise.all([
-      this.auditLog.log({
-        action: 'VENDOR_SELF_REACTIVATE',
-        entity: 'Vendor',
-        entityId: vendor.id,
-        payload: {
-          email: updated.email,
-          storeName: updated.storeName,
-        },
-        ipAddress,
-        userAgent,
-      }),
       this.cacheService.del(VENDOR_STORE(updated.storeSlug)),
       this.cacheService.del(VENDOR_STORE_PRODUCTS(updated.storeSlug)),
     ]);
@@ -449,11 +423,7 @@ export class VendorsService {
     };
   }
 
-  async deleteProfile(
-    vendorId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async deleteProfile(vendorId: string): Promise<void> {
     let vendor: {
       id: string;
       email: string;
@@ -484,18 +454,14 @@ export class VendorsService {
       throw error;
     }
 
+    auditDetails({
+      entityId: vendorId,
+      payload: {
+        email: vendor.email,
+        storeName: vendor.storeName,
+      },
+    });
     await Promise.all([
-      this.auditLog.log({
-        action: 'VENDOR_SELF_DELETE',
-        entity: 'Vendor',
-        entityId: vendorId,
-        payload: {
-          email: vendor.email,
-          storeName: vendor.storeName,
-        },
-        ipAddress,
-        userAgent,
-      }),
       this.cacheService.del(VENDOR_STORE(vendor.storeSlug)),
       this.cacheService.del(VENDOR_STORE_PRODUCTS(vendor.storeSlug)),
     ]);

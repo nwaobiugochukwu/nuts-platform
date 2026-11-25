@@ -10,7 +10,6 @@
   Patch,
   Post,
   Query,
-  Req,
   UnauthorizedException,
 } from '@nestjs/common';
 import {
@@ -26,7 +25,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type {} from 'express';
 
 import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
@@ -35,10 +34,7 @@ import { OtpRequired } from '@api/common/decorators/otp-required.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { AdminSuspendDto } from '@api/modules/users/dto/admin-suspend.dto';
 import { QueryUserDto } from '@api/modules/users/dto/query-user.dto';
 import { SuspendUserResponseDto } from '@api/modules/users/dto/suspend-user-response.dto';
@@ -46,6 +42,7 @@ import { UserListItemResponseDto } from '@api/modules/users/dto/user-list-item-r
 import { UserResponseDto } from '@api/modules/users/dto/user-response.dto';
 import { UsersService } from '@api/modules/users/users.service';
 import { OtpService } from '@api/modules/auth/otp/otp.service';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @Roles(ROLE.ADMIN)
 @ApiTags('ADMIN - USERS')
@@ -135,6 +132,7 @@ export class AdminUsersController {
   }
 
   // SUSPEND USER (ADMIN)
+  @Audit({ action: 'ADMIN_SUSPEND_USER', entity: 'User', entityId: 'id' })
   @Patch(':id/suspend')
   @OtpRequired('admin:action')
   @Message('User account suspended successfully')
@@ -157,18 +155,12 @@ export class AdminUsersController {
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) userId: string,
     @Body() dto: AdminSuspendDto,
-    @Req() req: Request,
   ): Promise<SuspendUserResponseDto> {
-    return this.usersService.adminSuspend(
-      adminId,
-      userId,
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.usersService.adminSuspend(adminId, userId, dto);
   }
 
   // UNSUSPEND / RESTORE USER (ADMIN)
+  @Audit({ action: 'ADMIN_UNSUSPEND_USER', entity: 'User', entityId: 'id' })
   @Patch(':id/unsuspend')
   @OtpRequired('admin:action')
   @HttpCode(HttpStatus.OK)
@@ -183,17 +175,12 @@ export class AdminUsersController {
   async adminUnsuspend(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) userId: string,
-    @Req() req: Request,
   ): Promise<UserResponseDto> {
-    return this.usersService.adminUnsuspend(
-      userId,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.usersService.adminUnsuspend(userId);
   }
 
   // DELETE USER (ADMIN)
+  @Audit({ action: 'ADMIN_SOFT_DELETE_USER', entity: 'User', entityId: 'id' })
   @Delete(':id')
   @OtpRequired('admin:action')
   @HttpCode(HttpStatus.OK)
@@ -215,14 +202,8 @@ export class AdminUsersController {
   async deleteUser(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<null> {
-    await this.usersService.adminSoftDelete(
-      id,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    await this.usersService.adminSoftDelete(id, adminId);
     return null;
   }
 }

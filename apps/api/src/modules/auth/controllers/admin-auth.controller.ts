@@ -48,6 +48,7 @@ import { AdminAuthResponseDto } from '../dto/admin-auth-response.dto';
 import { AdminAuthUserDto } from '../dto/admin-auth-user.dto';
 import { AdminRegisterDto } from '../dto/admin-register.dto';
 import { UpdateAdminProfileDto } from '../dto/update-admin-profile.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - AUTH')
 @Controller('admin/auth')
@@ -60,6 +61,12 @@ export class AdminAuthController {
   @Public()
   @StrictThrottle()
   @UseGuards(AccountLockGuard)
+  @Audit({
+    action: 'ADMIN_LOGIN',
+    failureAction: 'ADMIN_LOGIN_FAILED',
+    onFailure: true,
+    entity: 'Admin',
+  })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Message('Admin logged in successfully')
@@ -90,11 +97,7 @@ export class AdminAuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AdminAuthResponseDto> {
-    const session = await this.adminAuthService.login(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.adminAuthService.login(dto);
 
     this.authCookies.setAuthCookies(res, session.tokens, 'admin');
 
@@ -108,6 +111,7 @@ export class AdminAuthController {
 
   @Public()
   @StrictThrottle()
+  @Audit({ action: 'ADMIN_SETUP', entity: 'Admin' })
   @Post('setup')
   @HttpCode(HttpStatus.CREATED)
   @Message('Initial admin account created successfully')
@@ -140,11 +144,7 @@ export class AdminAuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AdminAuthResponseDto> {
-    const session = await this.adminAuthService.setup(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.adminAuthService.setup(dto);
 
     this.authCookies.setAuthCookies(res, session.tokens, 'admin');
 
@@ -261,6 +261,7 @@ export class AdminAuthController {
   }
 
   @Roles(ROLE.ADMIN)
+  @Audit({ action: 'ADMIN_LOGOUT', entity: 'Admin' })
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @Message('Admin logged out successfully')

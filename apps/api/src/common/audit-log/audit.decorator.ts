@@ -26,6 +26,10 @@ export interface AuditOptions {
    * security-relevant endpoints (sign-in, permission changes).
    */
   onFailure?: boolean;
+  /** The action recorded for a failure, if different (for example `USER_LOGIN_FAILED`). */
+  failureAction?: string;
+  /** Record only failures (for example failed sign-ins), never the success. */
+  failureOnly?: boolean;
 }
 
 export const AUDIT_METADATA = 'nuts:audit';

@@ -8,7 +8,6 @@
 import { Category, CategoryStatus, Prisma } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import {
   CATEGORY_BY_PATH,
   CATEGORY_BY_SLUG,
@@ -24,6 +23,7 @@ import {
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { MoveCategoryDto } from './dto/move-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 @Injectable()
 export class CategoriesService {
@@ -32,7 +32,6 @@ export class CategoriesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
-    private readonly auditLog: AuditLogService,
   ) {}
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -177,10 +176,7 @@ export class CategoriesService {
   /**
    * Creates a new category node (root or child).
    */
-  async create(
-    dto: CreateCategoryDto,
-    adminId?: string,
-  ): Promise<CategoryResponseDto> {
+  async create(dto: CreateCategoryDto): Promise<CategoryResponseDto> {
     const parentId = dto.parentId ?? null;
     const parent = await this.validateParent(parentId);
     await this.validateSiblingNameUniqueness(dto.name, parentId);
@@ -210,11 +206,8 @@ export class CategoriesService {
         },
       });
 
-      await this.auditLog.log({
-        action: 'CATEGORY_CREATED',
-        entity: 'Category',
+      auditDetails({
         entityId: category.id,
-        adminId,
         payload: {
           name: category.name,
           slug: category.slug,
@@ -237,7 +230,6 @@ export class CategoriesService {
   async update(
     id: string,
     dto: UpdateCategoryDto,
-    adminId?: string,
   ): Promise<CategoryResponseDto> {
     const existing = await this.prisma.category.findUnique({ where: { id } });
     if (!existing) {
@@ -317,11 +309,8 @@ export class CategoriesService {
       return cat;
     });
 
-    await this.auditLog.log({
-      action: 'CATEGORY_UPDATED',
-      entity: 'Category',
+    auditDetails({
       entityId: updated.id,
-      adminId,
       payload: {
         old: {
           name: existing.name,
@@ -350,9 +339,8 @@ export class CategoriesService {
   async moveCategory(
     id: string,
     dto: MoveCategoryDto,
-    adminId?: string,
   ): Promise<CategoryResponseDto> {
-    return this.update(id, { parentId: dto.newParentId }, adminId);
+    return this.update(id, { parentId: dto.newParentId });
   }
 
   /**
@@ -361,7 +349,6 @@ export class CategoriesService {
   async reorderChildren(
     parentId: string | null,
     categoryIds: string[],
-    adminId?: string,
   ): Promise<CategoryResponseDto[]> {
     if (!categoryIds || categoryIds.length === 0) {
       throw new BadRequestException('categoryIds array cannot be empty.');
@@ -387,10 +374,7 @@ export class CategoriesService {
       ),
     );
 
-    await this.auditLog.log({
-      action: 'CATEGORIES_REORDERED',
-      entity: 'Category',
-      adminId,
+    auditDetails({
       payload: { parentId, order: categoryIds },
     });
 
@@ -401,11 +385,7 @@ export class CategoriesService {
   /**
    * Activates or deactivates a category node, cascading to all descendants.
    */
-  async setActive(
-    idOrSlug: string,
-    isActive: boolean,
-    adminId?: string,
-  ): Promise<void> {
+  async setActive(idOrSlug: string, isActive: boolean): Promise<void> {
     const category = await this.resolveCategory(idOrSlug);
     const targetStatus = isActive
       ? CategoryStatus.ACTIVE
@@ -424,11 +404,8 @@ export class CategoriesService {
       }),
     ]);
 
-    await this.auditLog.log({
-      action: isActive ? 'CATEGORY_ACTIVATED' : 'CATEGORY_DEACTIVATED',
-      entity: 'Category',
+    auditDetails({
       entityId: category.id,
-      adminId,
       payload: {
         categoryName: category.name,
         slug: category.slug,
@@ -443,10 +420,7 @@ export class CategoriesService {
    * Archives a category. Retains historical associations but prevents new product assignments.
    * Cascades ARCHIVED status to all descendants.
    */
-  async archiveCategory(
-    idOrSlug: string,
-    adminId?: string,
-  ): Promise<CategoryResponseDto> {
+  async archiveCategory(idOrSlug: string): Promise<CategoryResponseDto> {
     const category = await this.resolveCategory(idOrSlug);
     const descendantIds = await this.getDescendantIds(category.id);
     const allAffectedIds = Array.from(new Set([category.id, ...descendantIds]));
@@ -461,11 +435,8 @@ export class CategoriesService {
       }),
     ]);
 
-    await this.auditLog.log({
-      action: 'CATEGORY_ARCHIVED',
-      entity: 'Category',
+    auditDetails({
       entityId: category.id,
-      adminId,
       payload: {
         categoryName: category.name,
         slug: category.slug,
@@ -483,10 +454,7 @@ export class CategoriesService {
   /**
    * Restores an archived category to ACTIVE status.
    */
-  async restoreCategory(
-    idOrSlug: string,
-    adminId?: string,
-  ): Promise<CategoryResponseDto> {
+  async restoreCategory(idOrSlug: string): Promise<CategoryResponseDto> {
     const category = await this.resolveCategory(idOrSlug);
 
     if (category.parentId) {
@@ -508,11 +476,8 @@ export class CategoriesService {
       },
     });
 
-    await this.auditLog.log({
-      action: 'CATEGORY_RESTORED',
-      entity: 'Category',
+    auditDetails({
       entityId: category.id,
-      adminId,
       payload: {
         categoryName: category.name,
         slug: category.slug,
@@ -526,10 +491,7 @@ export class CategoriesService {
   /**
    * Safe permanent deletion. Only allowed for leaf categories with NO products attached.
    */
-  async remove(
-    idOrSlug: string,
-    adminId?: string,
-  ): Promise<{ message: string }> {
+  async remove(idOrSlug: string): Promise<{ message: string }> {
     const category = await this.resolveCategory(idOrSlug);
 
     const childCount = await this.prisma.category.count({
@@ -554,11 +516,8 @@ export class CategoriesService {
 
     await this.prisma.category.delete({ where: { id: category.id } });
 
-    await this.auditLog.log({
-      action: 'CATEGORY_DELETED',
-      entity: 'Category',
+    auditDetails({
       entityId: category.id,
-      adminId,
       payload: {
         deletedName: category.name,
         deletedSlug: category.slug,

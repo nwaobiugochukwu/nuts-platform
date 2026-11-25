@@ -27,7 +27,6 @@ import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.con
 import { PaymentsService } from '@api/modules/payments/payments.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { WalletService } from '@api/modules/wallet/wallet.service';
 
@@ -75,6 +74,7 @@ import type {
   OrderDeliveredPayload,
   OrderShippedPayload,
 } from '@api/common/events/event-payloads';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -361,7 +361,6 @@ export class OrdersService {
     private readonly discountCodeService: DiscountCodeService,
     private readonly referralService: ReferralService,
     private readonly paymentsService: PaymentsService,
-    private readonly auditLog: AuditLogService,
     private readonly walletService: WalletService,
     private readonly eventEmitter: EventEmitter2,
     private readonly outbox: OutboxService,
@@ -1055,11 +1054,8 @@ export class OrdersService {
       note,
     });
 
-    await this.auditLog.log({
-      action: 'UPDATE_ORDER_STATUS',
-      entity: 'Order',
+    auditDetails({
       entityId: orderId,
-      adminId,
       payload: {
         fromStatus: current.status,
         toStatus: nextStatus,

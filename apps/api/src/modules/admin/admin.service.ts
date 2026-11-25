@@ -9,10 +9,6 @@ import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import {
-  AuditLogService,
-  toAuditPayload,
-} from '@api/common/audit-log/audit-log.service';
 import { BCRYPT_COST_FACTOR } from '@api/common/constants/bcrypt.constants';
 import {
   CreateAdminStaffDto,
@@ -24,6 +20,7 @@ import {
   PlatformConfigResponseDto,
   UpdatePlatformConfigDto,
 } from './dto/admin-platform-config.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const PLATFORM_CONFIG_CACHE_KEY = 'platform:config:governance';
 
@@ -59,7 +56,6 @@ export class AdminService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditLog: AuditLogService,
     private readonly cache: CacheService,
   ) {}
 
@@ -105,12 +101,7 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async createStaff(
-    dto: CreateAdminStaffDto,
-    creatorId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<AdminStaffResponseDto> {
+  async createStaff(dto: CreateAdminStaffDto): Promise<AdminStaffResponseDto> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
     const existing = await this.prisma.admin.findUnique({
@@ -136,14 +127,9 @@ export class AdminService {
       select: ADMIN_STAFF_SELECT,
     });
 
-    await this.auditLog.log({
-      action: 'ADMIN_STAFF_CREATED',
-      entity: 'Admin',
+    auditDetails({
       entityId: staff.id,
-      adminId: creatorId,
       payload: { email: staff.email, role: staff.role },
-      ipAddress,
-      userAgent,
     });
 
     return staff;
@@ -153,8 +139,6 @@ export class AdminService {
     targetAdminId: string,
     dto: UpdateAdminStaffStatusDto,
     performingAdminId: string,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<AdminStaffResponseDto> {
     if (targetAdminId === performingAdminId && !dto.isActive) {
       throw new BadRequestException(
@@ -187,20 +171,16 @@ export class AdminService {
       select: ADMIN_STAFF_SELECT,
     });
 
-    await this.auditLog.log({
+    auditDetails({
       action: dto.isActive
         ? 'ADMIN_STAFF_ACTIVATED'
         : 'ADMIN_STAFF_DEACTIVATED',
-      entity: 'Admin',
       entityId: targetAdminId,
-      adminId: performingAdminId,
       payload: {
         email: updated.email,
         previousActive: admin.isActive,
         newActive: dto.isActive,
       },
-      ipAddress,
-      userAgent,
     });
 
     return updated;
@@ -242,9 +222,6 @@ export class AdminService {
 
   async updatePlatformConfig(
     dto: UpdatePlatformConfigDto,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<PlatformConfigResponseDto> {
     const current = await this.getPlatformConfig();
 
@@ -265,16 +242,11 @@ export class AdminService {
 
     await this.cache.set(PLATFORM_CONFIG_CACHE_KEY, updated, 86400);
 
-    await this.auditLog.log({
-      action: 'PLATFORM_CONFIG_UPDATED',
-      entity: 'PlatformConfig',
-      adminId,
-      payload: toAuditPayload({
+    auditDetails({
+      payload: {
         previous: current,
         updated: updated,
-      }),
-      ipAddress,
-      userAgent,
+      },
     });
 
     return updated;

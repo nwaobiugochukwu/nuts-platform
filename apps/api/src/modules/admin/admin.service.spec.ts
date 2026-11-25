@@ -4,11 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { captureAudit } from '@api/common/audit-log/audit-testing';
 
 describe('AdminService', () => {
   let service: AdminService;
   let mockPrisma: any;
-  let mockAudit: any;
   let mockCache: any;
 
   const baseAdmin = {
@@ -38,16 +38,12 @@ describe('AdminService', () => {
       auditLog: { findMany: jest.fn().mockResolvedValue([]) },
     };
 
-    mockAudit = {
-      log: jest.fn().mockResolvedValue(undefined),
-    };
-
     mockCache = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
     };
 
-    service = new AdminService(mockPrisma, mockAudit, mockCache);
+    service = new AdminService(mockPrisma, mockCache);
   });
 
   describe('getStaffList()', () => {
@@ -72,14 +68,13 @@ describe('AdminService', () => {
         email: 'staff2@nuts.dev',
       });
 
-      const res = await service.createStaff(
-        {
+      const { result: res, details } = await captureAudit(() =>
+        service.createStaff({
           email: 'staff2@nuts.dev',
           password: 'SuperPassword123!',
           firstName: 'New',
           lastName: 'Staff',
-        },
-        'admin-1',
+        }),
       );
 
       expect(mockPrisma.admin.create).toHaveBeenCalledWith(
@@ -91,24 +86,19 @@ describe('AdminService', () => {
         }),
       );
       expect(res.email).toBe('staff2@nuts.dev');
-      expect(mockAudit.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'ADMIN_STAFF_CREATED',
-        }),
-      );
+      expect(details).toMatchObject({
+        payload: { email: 'staff2@nuts.dev', role: 'ADMIN' },
+      });
     });
 
     it('throws ConflictException if admin email already exists', async () => {
       mockPrisma.admin.findUnique.mockResolvedValue(baseAdmin);
 
       await expect(
-        service.createStaff(
-          {
-            email: 'ops@nuts.dev',
-            password: 'SuperPassword123!',
-          },
-          'admin-1',
-        ),
+        service.createStaff({
+          email: 'ops@nuts.dev',
+          password: 'SuperPassword123!',
+        }),
       ).rejects.toThrow(ConflictException);
     });
   });
@@ -174,18 +164,18 @@ describe('AdminService', () => {
         updatedAt: new Date(),
       });
 
-      const updated = await service.updatePlatformConfig(
-        { maintenanceMode: true, announcement: 'Maintenance in progress' },
-        'admin-1',
+      const { result: updated, details: configDetails } = await captureAudit(
+        () =>
+          service.updatePlatformConfig({
+            maintenanceMode: true,
+            announcement: 'Maintenance in progress',
+          }),
       );
 
       expect(updated.maintenanceMode).toBe(true);
       expect(updated.announcement).toBe('Maintenance in progress');
-      expect(mockAudit.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'PLATFORM_CONFIG_UPDATED',
-        }),
-      );
+      expect(configDetails?.payload).toHaveProperty('previous');
+      expect(configDetails?.payload).toHaveProperty('updated');
     });
   });
 

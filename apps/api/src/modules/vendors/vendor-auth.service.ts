@@ -14,7 +14,6 @@ import { GoogleAuthService } from '@api/modules/auth/google-auth.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import {
   BCRYPT_COST_FACTOR,
   UNKNOWN_ACCOUNT_PASSWORD_HASH,
@@ -27,6 +26,7 @@ import { VendorGoogleAuthDto } from './dto/vendor-google-auth.dto';
 import { VendorResetPasswordDto } from './dto/vendor-reset-password.dto';
 import { VendorProfileDto } from './dto/vendor-response.dto';
 import type { AuthTokens } from '@api/modules/auth/types/auth.types';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 export const vendorAuthSelect = {
   id: true,
@@ -68,7 +68,6 @@ export class VendorAuthService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly emailService: EmailService,
-    private readonly auditLog: AuditLogService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
     private readonly googleAuthService?: GoogleAuthService,
@@ -96,11 +95,7 @@ export class VendorAuthService {
   // REGISTER
   // ---------------------------------------------------------------------------
 
-  async register(
-    dto: CreateVendorDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorAuthSession> {
+  async register(dto: CreateVendorDto): Promise<VendorAuthSession> {
     const normalizedEmail = dto.email.trim().toLowerCase();
     const slugSource = dto.storeSlug?.trim() || dto.storeName.trim();
     const storeSlug = generateSlug(slugSource);
@@ -178,22 +173,14 @@ export class VendorAuthService {
       throw error;
     }
 
-    void this.auditLog
-      .log({
-        action: 'VENDOR_REGISTER',
-        entity: 'Vendor',
-        entityId: vendor.id,
-        payload: {
-          email: vendor.email,
-          storeName: vendor.storeName,
-          storeSlug: vendor.storeSlug,
-        },
-        ipAddress,
-        userAgent,
-      })
-      .catch((error: unknown) => {
-        this.logger.warn('Failed to log vendor registration audit', error);
-      });
+    auditDetails({
+      entityId: vendor.id,
+      payload: {
+        email: vendor.email,
+        storeName: vendor.storeName,
+        storeSlug: vendor.storeSlug,
+      },
+    });
 
     void this.emailService
       .sendVendorApplicationReceivedEmail(
@@ -219,11 +206,7 @@ export class VendorAuthService {
   // LOGIN
   // ---------------------------------------------------------------------------
 
-  async login(
-    dto: VendorLoginDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<VendorAuthSession> {
+  async login(dto: VendorLoginDto): Promise<VendorAuthSession> {
     const email = dto.email.trim().toLowerCase();
     const identifier = `vendor:${email}`;
 
@@ -247,16 +230,13 @@ export class VendorAuthService {
     }
 
     if (!vendor || !passwordMatches) {
+      auditDetails({
+        action: 'VENDOR_LOGIN_FAILED',
+        entityId: vendor?.id,
+        payload: { credentialType: 'email' },
+      });
       await Promise.allSettled([
         this.accountLockService.recordFailedAttempt(identifier),
-        this.auditLog.log({
-          action: 'VENDOR_LOGIN_FAILED',
-          entity: 'Vendor',
-          entityId: vendor?.id,
-          payload: { credentialType: 'email' },
-          ipAddress,
-          userAgent,
-        }),
       ]);
 
       throw new UnauthorizedException('Invalid credentials');
@@ -307,18 +287,11 @@ export class VendorAuthService {
       tokenVersion: vendor.tokenVersion,
     });
 
-    void this.auditLog
-      .log({
-        action: 'VENDOR_LOGIN',
-        entity: 'Vendor',
-        entityId: vendor.id,
-        payload: { role: 'VENDOR' },
-        ipAddress,
-        userAgent,
-      })
-      .catch((error: unknown) => {
-        this.logger.warn('Failed to write vendor login audit log', error);
-      });
+    auditDetails({
+      action: 'VENDOR_LOGIN',
+      entityId: vendor.id,
+      payload: { role: 'VENDOR' },
+    });
 
     return {
       profile: this.toVendorProfile(vendor),
@@ -384,21 +357,11 @@ export class VendorAuthService {
         tokenVersion: existingByGoogleId.tokenVersion,
       });
 
-      void this.auditLog
-        .log({
-          action: 'VENDOR_GOOGLE_LOGIN',
-          entity: 'Vendor',
-          entityId: existingByGoogleId.id,
-          payload: { role: 'VENDOR', authProvider: 'GOOGLE' },
-          ipAddress,
-          userAgent,
-        })
-        .catch((err: unknown) => {
-          this.logger.warn(
-            'Failed to write vendor google login audit log',
-            err,
-          );
-        });
+      auditDetails({
+        action: 'VENDOR_GOOGLE_LOGIN',
+        entityId: existingByGoogleId.id,
+        payload: { role: 'VENDOR', authProvider: 'GOOGLE' },
+      });
 
       return {
         profile: this.toVendorProfile(existingByGoogleId),
@@ -454,21 +417,14 @@ export class VendorAuthService {
         tokenVersion: linkedVendor.tokenVersion,
       });
 
-      void this.auditLog
-        .log({
-          action: 'VENDOR_GOOGLE_ACCOUNT_LINKED',
-          entity: 'Vendor',
-          entityId: linkedVendor.id,
-          payload: {
-            role: 'VENDOR',
-            previousProvider: existingByEmail.authProvider,
-          },
-          ipAddress,
-          userAgent,
-        })
-        .catch((err: unknown) => {
-          this.logger.warn('Failed to write vendor google link audit log', err);
-        });
+      auditDetails({
+        action: 'VENDOR_GOOGLE_ACCOUNT_LINKED',
+        entityId: linkedVendor.id,
+        payload: {
+          role: 'VENDOR',
+          previousProvider: existingByEmail.authProvider,
+        },
+      });
 
       return {
         profile: this.toVendorProfile(linkedVendor),
@@ -559,23 +515,16 @@ export class VendorAuthService {
       throw error;
     }
 
-    void this.auditLog
-      .log({
-        action: 'VENDOR_GOOGLE_REGISTER',
-        entity: 'Vendor',
-        entityId: newVendor.id,
-        payload: {
-          email: newVendor.email,
-          storeName: newVendor.storeName,
-          storeSlug: newVendor.storeSlug,
-          authProvider: 'GOOGLE',
-        },
-        ipAddress,
-        userAgent,
-      })
-      .catch((err: unknown) => {
-        this.logger.warn('Failed to write vendor registration audit log', err);
-      });
+    auditDetails({
+      action: 'VENDOR_GOOGLE_REGISTER',
+      entityId: newVendor.id,
+      payload: {
+        email: newVendor.email,
+        storeName: newVendor.storeName,
+        storeSlug: newVendor.storeSlug,
+        authProvider: 'GOOGLE',
+      },
+    });
 
     void this.emailService
       .sendVendorApplicationReceivedEmail(
@@ -641,12 +590,8 @@ export class VendorAuthService {
       await this.refreshSessionService.revokeSession(vendorId, ROLE.VENDOR);
     }
 
-    await this.auditLog.log({
-      action: 'VENDOR_LOGOUT',
-      entity: 'Vendor',
+    auditDetails({
       entityId: vendorId,
-      ipAddress,
-      userAgent,
     });
   }
 
@@ -654,11 +599,7 @@ export class VendorAuthService {
   // PASSWORD RESET
   // ---------------------------------------------------------------------------
 
-  async resetPassword(
-    dto: VendorResetPasswordDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async resetPassword(dto: VendorResetPasswordDto): Promise<void> {
     const normalizedEmail = dto.email.trim().toLowerCase();
 
     const vendor = await this.prisma.vendor.findUnique({
@@ -693,12 +634,8 @@ export class VendorAuthService {
 
     await this.refreshSessionService.revokeSession(vendor.id, ROLE.VENDOR);
 
-    await this.auditLog.log({
-      action: 'VENDOR_RESET_PASSWORD',
-      entity: 'Vendor',
+    auditDetails({
       entityId: vendor.id,
-      ipAddress,
-      userAgent,
     });
 
     void this.emailService
