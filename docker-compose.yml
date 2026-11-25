@@ -334,6 +334,42 @@ services:
       retries: 5
       start_period: 60s
 
+  # ── Local monitoring (opt-in: `npm run obs:up`, profile "observability") ───
+  # Prometheus scrapes the programs started by `npm run dev` on the host; Grafana
+  # opens with the NUTS dashboard and the Prometheus data source already set up.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: nuts_prometheus
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    networks:
+      - nuts_net
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: nuts_grafana
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${GRAFANA_PORT:-3030}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/nuts-overview.json:/var/lib/grafana/dashboards/nuts-overview.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - nuts_net
+
   # ── Next.js Client (Development) ───────────────────────────────────────────
   client:
     build:

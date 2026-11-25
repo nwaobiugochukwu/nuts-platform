@@ -112,6 +112,35 @@ npm run check:architecture
 python3 scripts/check-doc-links.py
 ```
 
-## 8. Seeing metrics and the dashboard
+## 8. Seeing, tracking and tracing locally
 
-`ops/prometheus/prometheus.example.yml` shows how to scrape the roles and load `ops/prometheus/alerts.yml`; `ops/grafana/nuts-overview.json` is a Grafana dashboard (Dashboards, New, Import, upload the file, pick your Prometheus). Both were validated: `promtool` accepts the rules, every dashboard query ran against a live Prometheus scraping a real worker and API, and Grafana imported the dashboard.
+### The monitoring stack
+
+```bash
+npm run obs:up       # starts Prometheus and Grafana (profile "observability")
+npm run obs:down     # stops them
+```
+
+| What | Where | Notes |
+|---|---|---|
+| Grafana | `http://localhost:3030` | login `admin` and `GRAFANA_ADMIN_PASSWORD` from the root `.env` (default `admin`); opens with the **NUTS Platform Overview** dashboard and the Prometheus data source already set up |
+| Prometheus | `http://localhost:9090` | Status, Targets shows each program; Alerts shows the 13 alert rules from `ops/prometheus/alerts.yml` |
+| Raw metrics | `http://localhost:9464/metrics` (api), `:9465` (worker), `:9466` (jobs), `:9467` (temporal worker) | plain text, one line per measurement |
+
+Start `npm run dev` first (or after; a program that is not running shows as down). The temporal worker target stays down until Temporal is turned on. Every port can be changed in `apps/api/.env.development`; see `apps/api/.env.example` ("Programs, ports and monitoring").
+
+What the dashboard answers: *Is it healthy?* (dead-letter queue, oldest pending outbox event, broker up, 5xx rate), *Queues and outbox* (what is waiting, who is consuming), *API* (traffic and the slowest routes), *Database transactions* (timing and conflict retries), *Processes* (memory, event-loop lag, CPU, which programs report in).
+
+### Tracing one request
+
+Every API response carries an `X-Request-Id` header, and the same id is written to every log line produced while handling that request, copied onto the RabbitMQ messages it causes (header `x-request-id`), restored in the worker that handles them, stored in the audit row (`audit_logs.requestId`), and set as a memo on any Temporal workflow it starts. To follow a request end to end:
+
+1. Make the request and note the id: `curl -i http://localhost:3001/api/v1/categories | grep -i x-request-id`.
+2. Search the terminal output of `npm run dev` for that id. You will see lines from the api and, if the request caused background work, from the worker.
+3. Look it up in the database: `select action, entity, "entityId", "requestId" from audit_logs where "requestId" = '<id>';`.
+
+Distributed tracing with spans and a trace viewer (OpenTelemetry) is not built; request ids give you the same "follow one request" answer today, and Sentry already records traces for errors.
+
+### Checking the alerts and dashboard themselves
+
+`ops/prometheus/alerts.yml` is validated with `promtool`, every dashboard query was run against a live Prometheus, and Grafana imports the dashboard; the provisioned stack above loads both automatically.
