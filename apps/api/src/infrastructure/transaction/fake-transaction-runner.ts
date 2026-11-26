@@ -19,6 +19,8 @@ export class FakeTransactionRunner implements Pick<TransactionRunner, 'run'> {
     payload: Record<string, unknown>;
   }> = [];
 
+  readonly audited: Array<Record<string, unknown>> = [];
+
   constructor(private readonly tx: unknown = {}) {}
 
   async run<T>(
@@ -32,6 +34,10 @@ export class FakeTransactionRunner implements Pick<TransactionRunner, 'run'> {
       tx: (options.parent ?? this.tx) as Prisma.TransactionClient,
       emit: (aggregateType, aggregateId, eventType, payload) => {
         this.emitted.push({ aggregateType, aggregateId, eventType, payload });
+        return Promise.resolve();
+      },
+      audit: (input) => {
+        this.audited.push(input);
         return Promise.resolve();
       },
       afterCommit: (hook) => {

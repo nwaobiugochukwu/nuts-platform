@@ -4,6 +4,12 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { RABBITMQ_ROUTING_KEYS } from '../rabbitmq/rabbitmq.constants';
+import { currentProcessRole } from '../configuration/process-role';
+import {
+  buildAuditEvent,
+  type BuildAuditEventInput,
+} from '@api/common/audit-log/audit-event';
 
 export type TransactionPreset = 'default' | 'short' | 'critical';
 
@@ -46,6 +52,12 @@ export interface TransactionContext {
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<void>;
+  /**
+   * Records a critical audit event in this transaction (outbox), so it exists
+   * if and only if the change does. Use for money, permissions and sign-in;
+   * everything else can use `AuditLogService.log`.
+   */
+  audit(input: Omit<BuildAuditEventInput, 'eventId' | 'source'>): Promise<void>;
   /** Runs once, in order, after COMMIT. A failing hook never fails the work. */
   afterCommit(hook: () => void | Promise<void>): void;
   /** Runs once, in order, after the transaction (and all retries) rolled back. */
@@ -295,6 +307,23 @@ export class TransactionRunner {
           aggregateId,
           eventType,
           payload,
+          { wakeRelay: false },
+        );
+        if (!hooks.commit.includes(this.wakeRelayHook)) {
+          hooks.commit.push(this.wakeRelayHook);
+        }
+      },
+      audit: async (input) => {
+        const event = buildAuditEvent({
+          ...input,
+          source: currentProcessRole(),
+        });
+        await this.outbox.appendEvent(
+          tx,
+          'audit',
+          event.entityId ?? event.eventId,
+          RABBITMQ_ROUTING_KEYS.AUDIT_EVENT,
+          event as unknown as Record<string, unknown>,
           { wakeRelay: false },
         );
         if (!hooks.commit.includes(this.wakeRelayHook)) {

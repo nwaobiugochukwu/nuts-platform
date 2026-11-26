@@ -9,6 +9,7 @@ export const RABBITMQ_QUEUES = {
   ANALYTICS: 'q.nuts.analytics',
   VENDOR_EVENTS: 'q.nuts.vendor-events',
   INVENTORY: 'q.nuts.inventory',
+  AUDIT: 'q.nuts.audit',
   DLQ: 'q.nuts.dlq',
 } as const;
 
@@ -22,4 +23,5 @@ export const RABBITMQ_ROUTING_KEYS = {
   ANALYTICS_EVENT: 'analytics.event',
   VENDOR_FOLLOWED: 'vendor.followed',
   VENDOR_UNFOLLOWED: 'vendor.unfollowed',
+  AUDIT_EVENT: 'audit.event',
 } as const;

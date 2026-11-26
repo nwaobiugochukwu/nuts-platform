@@ -221,6 +221,13 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         'inventory.*',
       );
 
+      await this.channel.assertQueue(RABBITMQ_QUEUES.AUDIT, queueOptions);
+      await this.channel.bindQueue(
+        RABBITMQ_QUEUES.AUDIT,
+        RABBITMQ_EXCHANGES.TOPIC,
+        RABBITMQ_ROUTING_KEYS.AUDIT_EVENT,
+      );
+
       // Quality of Service: Prefetch 10 messages per consumer
       await this.channel.prefetch(10);
 
