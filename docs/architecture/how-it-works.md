@@ -23,9 +23,9 @@ They share these services (none are our code): **PostgreSQL** (all data), **Redi
 
 | Environment | How it starts | What runs |
 |---|---|---|
-| Your machine | `npm run dev` | web, api, worker, jobs and the compiler, started one after another, each waiting for the previous to be healthy (one terminal tab per service in VS Code) |
-| Your machine, in Docker | `npm run dev:docker` | the same programs as containers |
-| Staging (Render) | one Render service per program | the same programs; `PM2_APP` says which one a service runs |
+| Your machine | `npm run dev` | the data services from `db:up`, then Docker Compose runs web, api, worker, jobs and Temporal as separate containers, started in health order, logs per service |
+| Your machine, without Docker for the programs | `npm run dev:local` | the same programs started one after another on your machine |
+| Staging (Render) | two services | service 1 runs api, worker and jobs as three PM2 processes (`PM2_APP=api,worker,jobs`); service 2 runs web |
 
 Every program runs under **PM2**, a process manager that restarts a program if it crashes. The only differences between environments are settings (database addresses, secrets, ports). This is on purpose: if development ran everything in one process and staging ran four, bugs would appear only in staging.
 

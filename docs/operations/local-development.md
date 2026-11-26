@@ -18,28 +18,26 @@ Requires Docker (databases and broker run in containers) and Node 22. Environmen
 npm run dev
 ```
 
-`npm run dev` starts everything **in strict order, one service after another**. Each step waits until the previous one is healthy before the next begins:
+`npm run dev` runs everything with **Docker Compose**, the way most teams run a service together locally. The data services (PostgreSQL, Redis, RabbitMQ) come from `npm run db:up`, which waits until they are healthy. Every program is then its own container (`api`, `worker`, `jobs`, `client` for the web app, plus Temporal), and Compose starts them **in health order**: the api, then the worker, then the jobs, then the web app. Each waits until the previous reports healthy. The command runs in the background (`up -d --wait`), so your terminal shows a short status line per container as it becomes healthy and then a status table. It does **not** stream every service's logs into one terminal.
 
-| # | Step | Moves on when |
-|---|---|---|
-| 1 | data services (PostgreSQL, Redis, RabbitMQ) | all three report healthy |
-| 2 | compile (TypeScript, watching your code) | its first build finishes |
-| 3 | api | `http://localhost:3001/api/v1/health` answers 200 |
-| 4 | worker | `http://localhost:3002/health` answers 200 |
-| 5 | jobs | `http://localhost:3003/health` answers 200 |
-| 6 | web | Next.js says it is ready |
+To watch one service's logs, open a terminal per service (or use Docker Desktop's Containers view, which has a log tab per container):
 
-Every line is prefixed with the service name (`[api    ]`, `[worker ]`, ...) and coloured, and the run ends with a summary showing which services are OK. Press `ctrl+c` once to stop every service (no leftover processes). The data services keep running; stop them with `npm run db:down`.
+| Command | Shows |
+|---|---|
+| `npm run dev:logs:api` | the api's logs |
+| `npm run dev:logs:worker` | the worker's logs |
+| `npm run dev:logs:jobs` | the jobs runner's logs |
+| `npm run dev:logs:web` | the web app's logs |
+| `npm run dev:logs` | all of them together (the mixed view, only if you want it) |
+| `npm run dev:status` | which containers are up and healthy |
+| `docker compose --profile dev restart worker` | restart just one service |
+| `npm run dev:down` | stop the containers (the databases keep running; `npm run db:down` stops them) |
 
-If a step does not become healthy within its timeout (default 120 seconds, change with `npm run dev -- --timeout 60`), the launcher says so, still starts the remaining services (they do not depend on each other), and lists the failure in the summary. Use `npm run dev:skip-infra` when the data services are already up.
+Code edits reload inside the containers because the source folders are mounted into them.
 
-The full output of every service is also written to `.logs/dev/<service>.log` (git-ignored). `npm run dev:quiet` shows only the start, ready and failed lines in the terminal; follow one service with `tail -f .logs/dev/api.log`.
+### Running the programs directly on your machine (optional)
 
-### One VS Code terminal tab per service
-
-Press `ctrl+shift+B` (Terminal > Run Build Task) to run **dev: all (in order)** from [.vscode/tasks.json](../../.vscode/tasks.json). It opens a dedicated terminal tab for each service (data, compile, api, worker, jobs, web) and uses small "wait healthy" tasks between them, so the order is the same as above. To restart one service alone, use Terminal > Restart Running Task and pick it; the others keep running. You can also run a single task (for example `dev: worker`) from Terminal > Run Task. This VS Code setup has not been exercised in an editor by the person who wrote it, so report anything that behaves differently.
-
-Prefer Turborepo's all-at-once view? `npm run dev:parallel` starts everything at the same moment in Turborepo's terminal view (move with the arrow keys, press `m` for the list of keys it offers). It is kept as an option; the ordered start is the default.
+`npm run dev:local` is the same ordered start without Docker for the api, worker, jobs and web (the data services still run in Docker). It starts them one after another, each waiting for the previous to be healthy, and writes each service's full output to `.logs/dev/<service>.log`. `npm run dev:local:quiet` shows only the start, ready and failed lines; `npm run dev:local:skip-infra` skips the data services when they are already up. The VS Code task **dev: all (in order)** (`ctrl+shift+B`) does the same with one terminal tab per service. These local options have not been exercised in an editor by the person who wrote them. `npm run dev:parallel` and `npm run dev:plain` start the same programs all at once through Turborepo, kept as options.
 
 | Service | What it does | Where |
 |---|---|---|
