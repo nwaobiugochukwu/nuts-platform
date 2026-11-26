@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { MetricsService } from '../metrics/metrics.service';
+import type { StartWorkflowInput } from '../temporal/temporal-client.service';
 import { RABBITMQ_ROUTING_KEYS } from '../rabbitmq/rabbitmq.constants';
 import { currentProcessRole } from '../configuration/process-role';
 import {
@@ -58,6 +59,12 @@ export interface TransactionContext {
    * everything else can use `AuditLogService.log`.
    */
   audit(input: Omit<BuildAuditEventInput, 'eventId' | 'source'>): Promise<void>;
+  /**
+   * Starts a Temporal workflow when (and only when) this transaction commits:
+   * the request is written to the outbox, and a worker starts it. The workflow
+   * id is the business key, so retries and redeliveries never start it twice.
+   */
+  startWorkflow(input: StartWorkflowInput): Promise<void>;
   /** Runs once, in order, after COMMIT. A failing hook never fails the work. */
   afterCommit(hook: () => void | Promise<void>): void;
   /** Runs once, in order, after the transaction (and all retries) rolled back. */
@@ -324,6 +331,19 @@ export class TransactionRunner {
           event.entityId ?? event.eventId,
           RABBITMQ_ROUTING_KEYS.AUDIT_EVENT,
           event as unknown as Record<string, unknown>,
+          { wakeRelay: false },
+        );
+        if (!hooks.commit.includes(this.wakeRelayHook)) {
+          hooks.commit.push(this.wakeRelayHook);
+        }
+      },
+      startWorkflow: async (input) => {
+        await this.outbox.appendEvent(
+          tx,
+          'workflow',
+          input.workflowId,
+          RABBITMQ_ROUTING_KEYS.WORKFLOW_START,
+          input as unknown as Record<string, unknown>,
           { wakeRelay: false },
         );
         if (!hooks.commit.includes(this.wakeRelayHook)) {

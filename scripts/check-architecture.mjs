@@ -14,6 +14,9 @@
  *       3. Database transactions are opened only through `TransactionRunner`
  *          (infrastructure/transaction). Files that still call `$transaction`
  *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
+ *       4. Temporal workflow files (`infrastructure/temporal/workflows/`) are deterministic
+ *          sandbox code: they may import only `@temporalio/workflow`, relative pure
+ *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
  *  WEB  3. One import alias: `@/`. No relative imports that climb out of a layer
  *          directory more than two levels (use `@/`).
  *       4. Shared UI layers (`components/ui|form|data|feedback|modal|navigation|theme`)
@@ -77,6 +80,15 @@ for (const file of walk(API_SRC)) {
   const r = rel(file);
   const isSpec = /\.spec\.ts$/.test(r) || r.includes("/test/");
   const layer = r.split("/")[3]; // apps/api/src/<layer>/...
+  if (!isSpec && r.startsWith("apps/api/src/infrastructure/temporal/workflows/")) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const m of source.matchAll(/^\s*import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/gm)) {
+      const [, typeOnly, spec] = m;
+      if (typeOnly) continue;
+      const allowed = spec === "@temporalio/workflow" || spec.startsWith(".");
+      if (!allowed) violations.push(`[api:4] ${r} imports "${spec}" (workflow code may only import @temporalio/workflow and relative pure modules)`);
+    }
+  }
   if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
     violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
   }

@@ -5,6 +5,7 @@ This directory documents production operations that can be established from repo
 ## Runbooks
 
 - [Processes, health and monitoring](processes-and-monitoring.md) — API roles under PM2, health endpoints, Prometheus metrics and alerts.
+- [Temporal (durable workflows)](temporal.md) — client, worker, outbox-started workflows, local setup and production guidance (foundation only).
 - [Audit trail](audit-trail.md) — asynchronous audit pipeline, `@Audit`, critical events in transactions.
 - [Release and recovery](runbooks/release-and-recovery.md) — repository-backed release flow, checks, and recovery boundaries.
 

@@ -24,6 +24,7 @@ import { RabbitMQModule } from './infrastructure/rabbitmq/rabbitmq.module';
 import { OutboxModule } from './infrastructure/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/transaction/transaction.module';
 import { MetricsModule } from './infrastructure/metrics/metrics.module';
+import { TemporalModule } from './infrastructure/temporal/temporal.module';
 import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
@@ -103,6 +104,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     OutboxModule,
     TransactionModule,
     MetricsModule,
+    TemporalModule,
     ResiliencyModule,
     MailModule,
     CloudinaryModule,
