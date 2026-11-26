@@ -11,6 +11,9 @@
  *          and may only shrink).
  *       2. A module never reaches into another module's `controllers/` or `jobs/`.
  *          Only providers (services), DTOs, constants and types are shared.
+ *       3. Database transactions are opened only through `TransactionRunner`
+ *          (infrastructure/transaction). Files that still call `$transaction`
+ *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
  *  WEB  3. One import alias: `@/`. No relative imports that climb out of a layer
  *          directory more than two levels (use `@/`).
  *       4. Shared UI layers (`components/ui|form|data|feedback|modal|navigation|theme`)
@@ -48,10 +51,35 @@ const API_LEGACY_EXCEPTIONS = new Set([
   "apps/api/src/common/decorators/otp-required.decorator.ts",
   "apps/api/src/common/middleware/maintenance-mode.middleware.ts",
 ]);
+
+// Files that still open transactions with `prisma.$transaction` directly. Convert them to
+// `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
+const API_RAW_TRANSACTION_LEGACY = new Set([
+  "apps/api/src/infrastructure/outbox/outbox.relay.ts",
+  "apps/api/src/infrastructure/rabbitmq/inventory.consumer.ts",
+  "apps/api/src/modules/auth/admin-auth.service.ts",
+  "apps/api/src/modules/auth/auth.service.ts",
+  "apps/api/src/modules/auth/sessions/refresh-session.service.ts",
+  "apps/api/src/modules/categories/categories.service.ts",
+  "apps/api/src/modules/discounts/voucher-claims.service.ts",
+  "apps/api/src/modules/notifications/listeners/notification.listener.ts",
+  "apps/api/src/modules/orders/orders.service.ts",
+  "apps/api/src/modules/payments/payments.service.ts",
+  "apps/api/src/modules/products/product-variants.service.ts",
+  "apps/api/src/modules/products/products.service.ts",
+  "apps/api/src/modules/recommendations/personalized-feed.service.ts",
+  "apps/api/src/modules/referrals/referral.service.ts",
+  "apps/api/src/modules/vendors/vendor-follows.service.ts",
+  "apps/api/src/modules/wallets/wallet.service.ts",
+]);
+const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/transaction/transaction-runner.ts";
 for (const file of walk(API_SRC)) {
   const r = rel(file);
   const isSpec = /\.spec\.ts$/.test(r) || r.includes("/test/");
   const layer = r.split("/")[3]; // apps/api/src/<layer>/...
+  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
+    violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
+  }
   for (const spec of importsOf(file)) {
     if (!spec.startsWith("@api/modules/")) continue;
     if (!isSpec && (layer === "common" || layer === "infrastructure") && !API_LEGACY_EXCEPTIONS.has(r)) {
