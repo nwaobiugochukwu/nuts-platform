@@ -22,6 +22,10 @@ export const SEARCH_DISCOVERY_PRODUCT_LIMIT = 8;
 export const SEARCH_DISCOVERY_VENDOR_LIMIT = 4;
 export const SEARCH_DISCOVERY_POOL_LIMIT = 160;
 export const HISTORY_DAYS = 180;
+/** Slots on the personalised shelf reserved for stores the shopper has not engaged with yet. */
+export const EXPLORATION_SLOTS = 2;
+/** How much one "Not interested" lowers the affinity for that product's category. */
+export const DISMISSED_CATEGORY_PENALTY = 2;
 export const EXPOSURE_SUPPRESSION_DAYS = 14;
 export const RECENT_IMPRESSION_SCORE_PENALTY = 3.5;
 export const AVAILABLE_PRODUCT: Prisma.ProductWhereInput = {
@@ -80,6 +84,69 @@ export function addWeight(
   target.set(id, (target.get(id) ?? 0) + amount);
 }
 
+/**
+ * "Not interested" is a strong negative signal. The product itself is removed
+ * by the caller; this lowers the affinity for its category so near-identical
+ * items stop crowding the shelf, without erasing real interest in the category.
+ */
+export function applyDismissalPenalty(
+  categoryWeights: Map<string, number>,
+  dismissedCategoryIds: string[],
+  penaltyPerDismissal = DISMISSED_CATEGORY_PENALTY,
+): void {
+  for (const categoryId of dismissedCategoryIds) {
+    const current = categoryWeights.get(categoryId);
+    if (current === undefined) continue;
+    const next = current - penaltyPerDismissal;
+    if (next <= 0) categoryWeights.delete(categoryId);
+    else categoryWeights.set(categoryId, next);
+  }
+}
+
+/**
+ * Keeps a personalised shelf from becoming an echo chamber: swaps up to
+ * `slots` of the lowest-ranked picks for the best candidates from stores the
+ * shopper has shown no interest in yet (one per store), placed mid-shelf so
+ * they are seen. Returns the input untouched when there is nothing to explore.
+ */
+export function withExploration(
+  selected: ScoredProduct[],
+  scored: ScoredProduct[],
+  vendorWeights: Map<string, number>,
+  slots: number,
+  limit: number,
+): ScoredProduct[] {
+  if (slots <= 0 || selected.length < 4) return selected;
+  const selectedIds = new Set(selected.map(({ id }) => id));
+  const selectedVendors = new Set(
+    selected.map(({ product }) => product.vendorId),
+  );
+  const explorers: ScoredProduct[] = [];
+  const explorerVendors = new Set<string>();
+  for (const candidate of scored) {
+    const vendorId = candidate.product.vendorId;
+    if (
+      selectedIds.has(candidate.id) ||
+      selectedVendors.has(vendorId) ||
+      explorerVendors.has(vendorId) ||
+      (vendorWeights.get(vendorId) ?? 0) > 0
+    ) {
+      continue;
+    }
+    explorerVendors.add(vendorId);
+    explorers.push(candidate);
+    if (explorers.length === slots) break;
+  }
+  if (explorers.length === 0) return selected;
+
+  const keep = Math.min(selected.length, limit - explorers.length);
+  const result = selected.slice(0, keep);
+  explorers.forEach((explorer, index) => {
+    result.splice(Math.min(result.length, 3 + index * 4), 0, explorer);
+  });
+  return result;
+}
+
 export function stableHash(value: string): number {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -119,6 +186,7 @@ export function scoreAndDiversify(
   coPurchaseScores: Map<string, number>,
   limit = RECOMMENDATION_LIMIT,
   recentlyImpressedIds: Set<string> = new Set(),
+  explorationSlots = 0,
 ) {
   const now = Date.now();
   const scored: ScoredProduct[] = candidates
@@ -192,7 +260,13 @@ export function scoreAndDiversify(
       if (selected.length === limit) break;
     }
   }
-  return selected.map(({ id }) => id);
+  return withExploration(
+    selected,
+    scored,
+    vendorWeights,
+    explorationSlots,
+    limit,
+  ).map(({ id }) => id);
 }
 
 export function explainRecommendation(

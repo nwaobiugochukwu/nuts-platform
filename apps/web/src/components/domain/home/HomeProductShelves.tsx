@@ -14,6 +14,10 @@ import { useScrollRestoration } from "@/hooks/use-scroll-restoration";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { useRecentSearches } from "@/hooks/use-recent-searches";
+import { recommendationService } from "@/api/services/recommendations";
+import { refreshPersonalizedRecommendations } from "@/api/services/analytics";
+import { useState } from "react";
+import { toast } from "sonner";
 
 const MIN_PICKED_FOR_YOU_PRODUCTS = 1;
 
@@ -100,10 +104,30 @@ export function HomeProductShelves({
     cartCount > 0 ||
     wishlistCount > 0 ||
     recentSearches.length > 0;
+  // Products the shopper dismissed this visit disappear at once; the server
+  // also remembers them so they stay gone after a refresh.
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
   const visibleForYou = !hasActivitySignal ? [] : dedupeOrKeep(
-    forYou,
+    forYou.filter(({ id }) => !dismissedIds.has(id)),
     new Set([...visibleRecent, ...visibleFollowing].map(({ id }) => id)),
   );
+  const dismissForYou = (product: ProductCardDto) => {
+    setDismissedIds((current) => new Set(current).add(product.id));
+    recommendationService
+      .notInterested(product.id, sessionId, isCustomer)
+      .then(() => {
+        toast.success("Got it. We'll show you less like this.");
+        refreshPersonalizedRecommendations();
+      })
+      .catch(() => {
+        setDismissedIds((current) => {
+          const next = new Set(current);
+          next.delete(product.id);
+          return next;
+        });
+        toast.error("Couldn't save that. Please try again.");
+      });
+  };
   const visibleStarterPicks = dedupeOrKeep(
     starterPicks,
     new Set(
@@ -252,6 +276,7 @@ export function HomeProductShelves({
             initialProducts={visibleForYou}
             recommendationSurface="HOME_FOR_YOU"
             recommendationSessionId={sessionId}
+            onDismiss={dismissForYou}
           />
         </section>
       )}

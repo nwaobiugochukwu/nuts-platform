@@ -189,6 +189,8 @@ export interface VendorOrderResponseDto {
   items: OrderItemResponseDto[];
   shippingAddress?: string | null;
   stockRestored: boolean;
+  /** Another vendor also has items on this order, so the platform manages shipping status. */
+  isMultiVendor?: boolean;
   createdAt: Date;
   updatedAt: Date;
   customer: OrderCustomerDto;
