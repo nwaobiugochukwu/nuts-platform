@@ -107,6 +107,13 @@ Notification APIs manage inbox and preferences; SSE streams authenticated update
 
 Outbox delivery is at least once, so inbox persistence uses deduplication. Consumer failures go to the shared DLQ without a delayed retry queue. Email confirmation/status delivery is not covered by the same transaction guarantee; durable idempotent email jobs and a controlled retry/replay process are future work.
 
+## Operational notes: programs, tracing and recovery
+
+- **Which program does what.** Queue consumers run only in the `worker` program (or in `all`); the `api` serves requests and the live notification streams; scheduled jobs run only in `jobs`. They share Redis, RabbitMQ and PostgreSQL and never call each other. See [How the system works](../architecture/how-it-works.md).
+- **Live notifications across programs.** A notification created by the worker is published through Redis; only the `api` holds the subscriber that feeds open browser streams, so the worker and jobs hold one fewer Redis connection.
+- **Tracing.** The request id travels with every outbox event and queue message (`x-request-id` header) and appears in worker logs, so one order can be followed from the request to its email.
+- **Recovery.** Failed messages land in the dead-letter queue; `npm run dlq -- list | replay | purge` inspects and replays them (original routing key, acknowledged after broker confirmation, at most three replays unless forced, bodies shown redacted). An alert fires when the queue is not empty, and `GET /api/v1/health/background` plus `scripts/verify-deploy.sh` report a worker that is not running.
+
 ## Scaling and traffic direction
 
 The [Scaling Strategy](../scaling/README.md#notifications-and-asynchronous-delivery) contains the staged concurrency, traffic, and growth recommendations for this domain. Scale notification delivery, outbox relays, consumers, email, and SSE independently using queue age, deduplication, backpressure, and replay controls.

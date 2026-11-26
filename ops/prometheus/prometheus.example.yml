@@ -1,0 +1,18 @@
+# Example scrape configuration. The metrics ports are internal (compose network
+# only); never publish them or route them through nginx.
+global:
+  scrape_interval: 15s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: nuts-api
+    authorization: { credentials: "${METRICS_TOKEN}" }   # only if METRICS_TOKEN is set
+    static_configs: [{ targets: ["api-prod:9464"] }]
+  - job_name: nuts-worker
+    authorization: { credentials: "${METRICS_TOKEN}" }
+    static_configs: [{ targets: ["worker-prod:9464"] }]
+  - job_name: nuts-jobs
+    authorization: { credentials: "${METRICS_TOKEN}" }
+    static_configs: [{ targets: ["jobs-prod:9464"] }]

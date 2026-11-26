@@ -1,0 +1,21 @@
+# Local Prometheus (compose profile "observability", `npm run obs:up`).
+# It scrapes the programs started by `npm run dev` on the host, using the
+# development metrics ports (see apps/api/.env.example). A program that is not
+# running simply shows as down.
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: nuts-api
+    static_configs: [{ targets: ["host.docker.internal:9464"] }]
+  - job_name: nuts-worker
+    static_configs: [{ targets: ["host.docker.internal:9465"] }]
+  - job_name: nuts-jobs
+    static_configs: [{ targets: ["host.docker.internal:9466"] }]
+  # Only present when the Temporal worker is running (release F); down otherwise.
+  - job_name: nuts-temporal-worker
+    static_configs: [{ targets: ["host.docker.internal:9467"] }]

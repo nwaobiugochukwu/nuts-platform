@@ -6,6 +6,8 @@ import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { CartService } from './cart.service';
+import { FakeTransactionRunner } from '@api/infrastructure/transaction/fake-transaction-runner';
+import type { TransactionRunner } from '@api/infrastructure/transaction/transaction-runner';
 
 describe('CartService', () => {
   let service: CartService;
@@ -70,6 +72,7 @@ describe('CartService', () => {
       mockUsersService,
       mockDiscountService,
       mockCacheService,
+      new FakeTransactionRunner(mockPrisma) as unknown as TransactionRunner,
     );
   });
 

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import {
   detectPushSupport,
   explainSubscribeError,
+  isExpectedSubscribeError,
   type PushSupport,
 } from "@/lib/push-support";
 
@@ -252,7 +253,8 @@ export function usePushNotifications() {
         }
         return true;
       } catch (err: unknown) {
-        console.error("[usePushNotifications] Failed to enable push notifications:", err);
+        const log = isExpectedSubscribeError(err) ? console.warn : console.error;
+        log("[usePushNotifications] Failed to enable push notifications:", err);
         setIsSubscribed(false);
         if (!silent) {
           toast.error(explainSubscribeError(err, { isBrave: await detectBrave() }), {

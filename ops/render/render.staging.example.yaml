@@ -1,0 +1,100 @@
+# Reference template for the staging services on Render. NOT a live Blueprint:
+# nothing reads this file. See docs/operations/render-deployment.md.
+#
+# To manage Render from code instead of the dashboard, copy this file to
+# `render.yaml` at the repository root and apply it as a Blueprint. A Blueprint
+# creates NEW services; it does not adopt services created by hand, so rename the
+# entries below or remove the ones that already exist. The Docker runtime builds
+# the Dockerfile's last stage (`runner`), so keep `runner` as the last stage.
+#
+# Secrets are listed with `sync: false`: Render asks you for the value and the
+# file never contains it.
+
+envVarGroups:
+  # One group, linked to api + worker + jobs, so shared values cannot drift apart.
+  - name: nuts-staging-api
+    envVars:
+      - { key: NODE_ENV, value: production }
+      - { key: SENTRY_ENVIRONMENT, value: staging }
+      - { key: ALLOWED_ORIGINS, sync: false }
+      - { key: BASE_URL, sync: false }
+      - { key: DATABASE_URL, sync: false }          # Supabase transaction pooler
+      - { key: DIRECT_URL, sync: false }            # Supabase session pooler (migrations)
+      - { key: REDIS_URL, sync: false }             # Redis Cloud, rediss://
+      - { key: RABBITMQ_ENABLED, value: "true" }
+      - { key: RABBITMQ_URL, sync: false }          # hosted broker, amqps://
+      - { key: JWT_SECRET, sync: false }
+      - { key: JWT_REFRESH_SECRET, sync: false }
+      - { key: JWT_ISSUER, value: nuts }
+      - { key: JWT_ACCESS_AUDIENCE, value: nuts-api }
+      - { key: JWT_REFRESH_AUDIENCE, value: nuts-api }
+      - { key: OTP_PEPPER, sync: false }
+      - { key: ADMIN_SETUP_SECRET, sync: false }
+      - { key: PAYSTACK_SECRET_KEY, sync: false }
+      - { key: PAYSTACK_CALLBACK_URL, sync: false }
+      - { key: EMAIL_FROM, sync: false }
+      - { key: BREVO_API_KEY, sync: false }
+      - { key: CLOUDINARY_CLOUD_NAME, sync: false }
+      - { key: CLOUDINARY_API_KEY, sync: false }
+      - { key: CLOUDINARY_API_SECRET, sync: false }
+      - { key: GOOGLE_CLIENT_ID, sync: false }
+      - { key: GOOGLE_CLIENT_SECRET, sync: false }
+      - { key: VAPID_PUBLIC_KEY, sync: false }
+      - { key: VAPID_PRIVATE_KEY, sync: false }
+      - { key: VAPID_SUBJECT, sync: false }
+      - { key: SENTRY_DSN, sync: false }
+
+services:
+  # --- Storefront / admin / vendor screens (unchanged) ---
+  - type: web
+    name: nuts-platform
+    runtime: docker
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    branch: staging
+    healthCheckPath: /health
+    # NEXT_PUBLIC_* values are baked in at build time; set them as build env vars
+    # exactly as on the existing service.
+
+  # --- API: HTTP requests, login, checkout, live notifications ---
+  - type: web
+    name: nutsonline-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    branch: staging
+    healthCheckPath: /api/v1/health
+    numInstances: 1
+    envVars:
+      - fromGroup: nuts-staging-api
+      - { key: PM2_APP, value: api }
+      - { key: DB_CONNECTION_LIMIT, value: "10" }
+      # Only the api applies database migrations on start (the default).
+
+  # --- Worker: queue consumers (emails, notifications, analytics, stock, audit) ---
+  - type: worker
+    name: nutsonline-worker
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    branch: staging
+    numInstances: 1
+    envVars:
+      - fromGroup: nuts-staging-api
+      - { key: PM2_APP, value: worker }
+      - { key: DB_CONNECTION_LIMIT, value: "5" }
+      - { key: AUTO_MIGRATE, value: "false" }
+
+  # --- Jobs: scheduled jobs. EXACTLY ONE instance, never more. ---
+  - type: worker
+    name: nutsonline-jobs
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    branch: staging
+    numInstances: 1
+    envVars:
+      - fromGroup: nuts-staging-api
+      - { key: PM2_APP, value: jobs }
+      - { key: DB_CONNECTION_LIMIT, value: "3" }
+      - { key: AUTO_MIGRATE, value: "false" }

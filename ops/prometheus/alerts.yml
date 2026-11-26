@@ -1,0 +1,111 @@
+# Prometheus alert rules for the NUTS platform.
+# Load with `rule_files` (self-hosted) or import into Grafana Cloud alerting.
+# Metric names come from apps/api/src/infrastructure/metrics.
+groups:
+  - name: nuts-pipeline
+    rules:
+      - alert: DeadLetterQueueNotEmpty
+        expr: max(nuts_rabbitmq_queue_messages{queue="q.nuts.dlq"}) > 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Messages are sitting in the dead-letter queue
+          description: Inspect and replay or discard them; each one is a failed side effect (email, notification, analytics, inventory).
+
+      - alert: QueueBacklog
+        expr: max by (queue) (nuts_rabbitmq_queue_messages{queue!="q.nuts.dlq"}) > 500
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Queue {{ $labels.queue }} has a growing backlog"
+
+      - alert: QueueWithoutConsumers
+        expr: max by (queue) (nuts_rabbitmq_queue_consumers{queue!="q.nuts.dlq"}) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Queue {{ $labels.queue }} has no consumers (is the worker role running?)"
+
+      - alert: OutboxStuck
+        expr: max(nuts_outbox_oldest_pending_age_seconds) > 120
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: The oldest pending outbox event is older than 2 minutes
+          description: Events are not reaching the broker. Check the broker connection and the worker role.
+
+      - alert: BrokerDown
+        expr: min(nuts_rabbitmq_up) == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: A process cannot reach RabbitMQ
+
+  - name: nuts-processes
+    rules:
+      - alert: BackgroundProgramNotRunning
+        expr: min by (target) (nuts_background_up) == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: "The {{ $labels.target }} program is not running"
+          description: Emails, notifications and queued work (worker) or scheduled jobs (jobs) have stopped. Start the worker-prod and jobs-prod services, or set PROCESS_ROLE=all on the api.
+
+      - alert: RoleMissing
+        expr: absent(up{job=~"nuts-(api|worker|jobs)"} == 1)
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: A NUTS role is not reporting metrics (api, worker or jobs)
+
+      - alert: HighMemory
+        expr: nuts_process_resident_memory_bytes > 500 * 1024 * 1024
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.role }} is using over 500 MB (PM2 restarts it at 600 MB)"
+
+      - alert: EventLoopLag
+        expr: nuts_nodejs_eventloop_lag_p99_seconds > 0.5
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.role }} event loop is lagging (p99 above 500 ms)"
+
+  - name: nuts-api
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(nuts_http_request_duration_seconds_count{status="5xx"}[5m]))
+            / clamp_min(sum(rate(nuts_http_request_duration_seconds_count[5m])), 1) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: More than 5% of API requests are failing with 5xx
+
+      - alert: SlowRequests
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(nuts_http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: API p95 latency is above 1.5 s
+
+  - name: nuts-database
+    rules:
+      - alert: TransactionConflictsRising
+        expr: sum by (name) (rate(nuts_db_transaction_retries_total[10m])) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Transaction {{ $labels.name }} keeps conflicting; check for a hot row"
+
+      - alert: SlowTransactions
+        expr: |
+          histogram_quantile(0.95,
+            sum by (name, le) (rate(nuts_db_transaction_duration_seconds_bucket[10m]))) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Transaction {{ $labels.name }} p95 is above 2 s"

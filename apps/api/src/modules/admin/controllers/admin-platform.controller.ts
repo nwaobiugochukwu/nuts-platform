@@ -1,19 +1,17 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type {} from 'express';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { GetUser } from '@api/common/decorators/get-user.decorator';
+import {} from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { AdminService } from '../admin.service';
 import {
   PlatformConfigResponseDto,
   UpdatePlatformConfigDto,
 } from '../dto/admin-platform-config.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - PLATFORM GOVERNANCE')
 @ApiBearerAuth()
@@ -31,6 +29,7 @@ export class AdminPlatformController {
     return this.adminService.getPlatformConfig();
   }
 
+  @Audit({ action: 'PLATFORM_CONFIG_UPDATED', entity: 'PlatformConfig' })
   @Patch('config')
   @ApiOperation({
     summary: 'Update platform configuration (maintenance mode, toggles)',
@@ -38,15 +37,8 @@ export class AdminPlatformController {
   @Message('Platform configuration updated successfully')
   async updatePlatformConfig(
     @Body() dto: UpdatePlatformConfigDto,
-    @GetUser('id') adminId: string,
-    @Req() req: Request,
   ): Promise<PlatformConfigResponseDto> {
-    return this.adminService.updatePlatformConfig(
-      dto,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminService.updatePlatformConfig(dto);
   }
 
   @Get('overview')

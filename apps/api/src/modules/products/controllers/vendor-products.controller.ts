@@ -49,6 +49,7 @@ import {
   ApiResponseDto,
   PaginationMetaDto,
 } from '@api/common/dto/api-response.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('VENDOR - PRODUCTS')
 @ApiBearerAuth('JWT-auth')
@@ -67,6 +68,7 @@ export class VendorProductsController {
    * from the request body, preventing users from creating products for
    * another vendor.
    */
+  @Audit({ action: 'CREATE_PRODUCT', entity: 'Product' })
   @Post()
   @Message('Product created successfully')
   @ApiOperation({
@@ -153,6 +155,7 @@ export class VendorProductsController {
     return this.productsService.findOneForVendor(slug, vendorId);
   }
 
+  @Audit({ action: 'UPDATE_PRODUCT', entity: 'Product' })
   @Patch(':id')
   @Message('Product updated successfully')
   @ApiOperation({
@@ -190,9 +193,10 @@ export class VendorProductsController {
     // update another vendor's product by guessing its UUID.
     await this.assertProductOwnership(vendorId, id);
 
-    return this.productsService.update(id, dto, vendorId);
+    return this.productsService.update(id, dto);
   }
 
+  @Audit({ action: 'UPDATE_PRODUCT_STOCK', entity: 'Product' })
   @Patch(':id/stock')
   @Message('Stock updated successfully')
   @ApiOperation({
@@ -230,6 +234,7 @@ export class VendorProductsController {
     );
   }
 
+  @Audit({ action: 'DEACTIVATE_PRODUCT', entity: 'Product' })
   @Patch(':id/deactivate')
   @HttpCode(HttpStatus.OK)
   @Message('Product deactivated successfully')
@@ -263,6 +268,7 @@ export class VendorProductsController {
     return null;
   }
 
+  @Audit({ action: 'REACTIVATE_PRODUCT', entity: 'Product' })
   @Patch(':id/reactivate')
   @Message('Product reactivated successfully')
   @ApiOperation({
@@ -293,6 +299,7 @@ export class VendorProductsController {
     return this.productsService.reactivate(id);
   }
 
+  @Audit({ action: 'PERMANENT_DELETE_PRODUCT', entity: 'Product' })
   @Delete(':id/permanent')
   @HttpCode(HttpStatus.OK)
   @Message('Product permanently deleted')

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -26,7 +27,6 @@ import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.con
 import { PaymentsService } from '@api/modules/payments/payments.service';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { WalletService } from '@api/modules/wallet/wallet.service';
 
@@ -54,7 +54,9 @@ import {
 import {
   assertValidOrderTransition,
   generateStatusNote,
+  MULTI_VENDOR_STATUS_MESSAGE,
   shouldRestoreStock,
+  vendorMayChangeOrderStatus,
 } from './constants/order-status.constants';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
@@ -72,6 +74,7 @@ import type {
   OrderDeliveredPayload,
   OrderShippedPayload,
 } from '@api/common/events/event-payloads';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -358,7 +361,6 @@ export class OrdersService {
     private readonly discountCodeService: DiscountCodeService,
     private readonly referralService: ReferralService,
     private readonly paymentsService: PaymentsService,
-    private readonly auditLog: AuditLogService,
     private readonly walletService: WalletService,
     private readonly eventEmitter: EventEmitter2,
     private readonly outbox: OutboxService,
@@ -1052,11 +1054,8 @@ export class OrdersService {
       note,
     });
 
-    await this.auditLog.log({
-      action: 'UPDATE_ORDER_STATUS',
-      entity: 'Order',
+    auditDetails({
       entityId: orderId,
-      adminId,
       payload: {
         fromStatus: current.status,
         toStatus: nextStatus,
@@ -1096,6 +1095,17 @@ export class OrdersService {
       throw new BadRequestException(
         `Vendors can only transition orders to: ${allowedStatuses.join(', ')}`,
       );
+    }
+
+    const vendorsOnOrder = await this.prisma.orderItem.findMany({
+      where: { orderId },
+      distinct: ['vendorId'],
+      select: { vendorId: true },
+    });
+    if (
+      !vendorMayChangeOrderStatus(vendorsOnOrder.map((row) => row.vendorId))
+    ) {
+      throw new ForbiddenException(MULTI_VENDOR_STATUS_MESSAGE);
     }
 
     await this.transitionOrderStatus({
@@ -2653,6 +2663,10 @@ export class OrdersService {
       shippingAddress: order.shippingAddress,
 
       stockRestored: order.stockRestored,
+
+      isMultiVendor: !vendorMayChangeOrderStatus(
+        order.orderItems.map((item) => item.vendorId),
+      ),
 
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,

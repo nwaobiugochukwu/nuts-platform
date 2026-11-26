@@ -922,6 +922,18 @@ model AuditLog {
   adminId   String?
   userId    String?
 
+  // Audit pipeline (ADR 0003): events are written asynchronously, so the time
+  // the action happened (occurredAt) can differ from the row's createdAt, and
+  // eventId makes redelivered messages idempotent.
+  eventId    String?  @unique
+  occurredAt DateTime @default(now())
+  requestId  String?
+  outcome    String?
+  statusCode Int?
+  source     String?
+  before     Json?
+  after      Json?
+
   admin Admin? @relation(fields: [adminId], references: [id])
   user  User?  @relation(fields: [userId], references: [id])
 
@@ -930,6 +942,7 @@ model AuditLog {
   @@index([adminId, createdAt])
   @@index([action, createdAt])
   @@index([createdAt])
+  @@index([requestId])
   @@map("audit_logs")
 }
 

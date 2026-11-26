@@ -11,6 +11,17 @@
  *          and may only shrink).
  *       2. A module never reaches into another module's `controllers/` or `jobs/`.
  *          Only providers (services), DTOs, constants and types are shared.
+ *       3. Database transactions are opened only through `TransactionRunner`
+ *          (infrastructure/transaction). Files that still call `$transaction`
+ *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
+ *       4. Temporal workflow files (`infrastructure/temporal/workflows/`) are deterministic
+ *          sandbox code: they may import only `@temporalio/workflow`, relative pure
+ *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
+ *       5. Audit events are declared with `@Audit(...)` on the controller method and
+ *          enriched with `auditDetails(...)`; services do not call the audit log
+ *          directly. The few calls that run outside any request (scheduled or
+ *          background code) are listed in API_DIRECT_AUDIT_ALLOWED with their exact
+ *          count, and may only shrink.
  *  WEB  3. One import alias: `@/`. No relative imports that climb out of a layer
  *          directory more than two levels (use `@/`).
  *       4. Shared UI layers (`components/ui|form|data|feedback|modal|navigation|theme`)
@@ -48,10 +59,60 @@ const API_LEGACY_EXCEPTIONS = new Set([
   "apps/api/src/common/decorators/otp-required.decorator.ts",
   "apps/api/src/common/middleware/maintenance-mode.middleware.ts",
 ]);
+
+// Files that still open transactions with `prisma.$transaction` directly. Convert them to
+// `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
+const API_RAW_TRANSACTION_LEGACY = new Set([
+  "apps/api/src/infrastructure/outbox/outbox.relay.ts",
+  "apps/api/src/infrastructure/rabbitmq/inventory.consumer.ts",
+  "apps/api/src/modules/auth/admin-auth.service.ts",
+  "apps/api/src/modules/auth/auth.service.ts",
+  "apps/api/src/modules/auth/sessions/refresh-session.service.ts",
+  "apps/api/src/modules/categories/categories.service.ts",
+  "apps/api/src/modules/discounts/voucher-claims.service.ts",
+  "apps/api/src/modules/notifications/listeners/notification.listener.ts",
+  "apps/api/src/modules/orders/orders.service.ts",
+  "apps/api/src/modules/payments/payments.service.ts",
+  "apps/api/src/modules/products/product-variants.service.ts",
+  "apps/api/src/modules/products/products.service.ts",
+  "apps/api/src/modules/recommendations/personalized-feed.service.ts",
+  "apps/api/src/modules/referrals/referral.service.ts",
+  "apps/api/src/modules/vendors/vendor-follows.service.ts",
+  "apps/api/src/modules/wallets/wallet.service.ts",
+]);
+// Direct audit-log calls that run OUTSIDE a request, where there is no controller to
+// carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
+const API_DIRECT_AUDIT_ALLOWED = new Map([
+  ["apps/api/src/modules/admin/admin-announcements.service.ts", 2],
+  ["apps/api/src/modules/products/products.service.ts", 1],
+  ["apps/api/src/modules/users/users.service.ts", 1],
+]);
+const DIRECT_AUDIT_CALL = /this\.(?:auditLog|audit)\s*\.\s*(?:log|logWithRequest)\s*\(/g;
+
+const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/transaction/transaction-runner.ts";
 for (const file of walk(API_SRC)) {
   const r = rel(file);
   const isSpec = /\.spec\.ts$/.test(r) || r.includes("/test/");
   const layer = r.split("/")[3]; // apps/api/src/<layer>/...
+  if (!isSpec && r.startsWith("apps/api/src/infrastructure/temporal/workflows/")) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const m of source.matchAll(/^\s*import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/gm)) {
+      const [, typeOnly, spec] = m;
+      if (typeOnly) continue;
+      const allowed = spec === "@temporalio/workflow" || spec.startsWith(".");
+      if (!allowed) violations.push(`[api:4] ${r} imports "${spec}" (workflow code may only import @temporalio/workflow and relative pure modules)`);
+    }
+  }
+  if (!isSpec && !r.startsWith("apps/api/src/common/audit-log/")) {
+    const calls = (fs.readFileSync(file, "utf8").match(DIRECT_AUDIT_CALL) ?? []).length;
+    const allowed = API_DIRECT_AUDIT_ALLOWED.get(r) ?? 0;
+    if (calls > allowed) {
+      violations.push(`[api:5] ${r} calls the audit log directly ${calls} time(s) (allowed ${allowed}); declare it with @Audit on the controller and auditDetails(...) instead`);
+    }
+  }
+  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
+    violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
+  }
   for (const spec of importsOf(file)) {
     if (!spec.startsWith("@api/modules/")) continue;
     if (!isSpec && (layer === "common" || layer === "infrastructure") && !API_LEGACY_EXCEPTIONS.has(r)) {

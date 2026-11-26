@@ -15,7 +15,6 @@ import type { AuthSession } from '@api/modules/auth/types/auth.types';
 import { ADMIN_AUTH_SELECT } from '@api/modules/auth/auth.selects';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import {
   BCRYPT_COST_FACTOR,
   UNKNOWN_ACCOUNT_PASSWORD_HASH,
@@ -23,6 +22,7 @@ import {
 import { AdminAuthUserDto } from './dto/admin-auth-user.dto';
 import { AdminRegisterDto } from './dto/admin-register.dto';
 import { LoginDto } from '@api/modules/auth/dto/login.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 @Injectable()
 export class AdminAuthService {
@@ -31,15 +31,12 @@ export class AdminAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly auditLog: AuditLogService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
   ) {}
 
   async login(
     dto: LoginDto,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<{ user: AdminAuthUserDto; tokens: AuthSession['tokens'] }> {
     const normalizedEmail = dto.email.trim().toLowerCase();
     const identifier = `email:${normalizedEmail}`;
@@ -64,21 +61,11 @@ export class AdminAuthService {
             error,
           );
         });
-      await this.auditLog
-        .log({
-          action: 'ADMIN_LOGIN_FAILED',
-          entity: 'Admin',
-          entityId: admin?.id,
-          payload: { credentialType: 'email' },
-          ipAddress,
-          userAgent,
-        })
-        .catch((error: unknown) => {
-          this.logger.warn(
-            'Failed to persist admin login failure audit',
-            error,
-          );
-        });
+      auditDetails({
+        action: 'ADMIN_LOGIN_FAILED',
+        entityId: admin?.id,
+        payload: { credentialType: 'email' },
+      });
       throw new UnauthorizedException('Invalid admin credentials');
     }
 
@@ -110,27 +97,18 @@ export class AdminAuthService {
     const session = await this.refreshSessionService.issueAdminSession(admin);
 
     // Fire-and-forget audit log
-    this.auditLog
-      .log({
-        action: 'ADMIN_LOGIN',
-        entity: 'Admin',
-        entityId: admin.id,
-        adminId: admin.id,
-        payload: { role: 'ADMIN' },
-        ipAddress,
-        userAgent,
-      })
-      .catch((err: unknown) => {
-        this.logger.error('Failed to write admin login audit log', err);
-      });
+    auditDetails({
+      action: 'ADMIN_LOGIN',
+      entityId: admin.id,
+      adminId: admin.id,
+      payload: { role: 'ADMIN' },
+    });
 
     return { user: this.toAuthUserDto(admin), tokens: session.tokens };
   }
 
   async setup(
     dto: AdminRegisterDto,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<{ user: AdminAuthUserDto; tokens: AuthSession['tokens'] }> {
     const setupSecret = this.configService.get<string>('ADMIN_SETUP_SECRET');
     if (!setupSecret) {
@@ -188,14 +166,10 @@ export class AdminAuthService {
 
     this.logger.log('Initial admin account created');
 
-    await this.auditLog.log({
-      action: 'ADMIN_SETUP',
-      entity: 'Admin',
+    auditDetails({
       entityId: admin.id,
       adminId: admin.id,
       payload: { role: 'ADMIN' },
-      ipAddress,
-      userAgent,
     });
 
     const session = await this.refreshSessionService.issueAdminSession(admin);
@@ -297,18 +271,9 @@ export class AdminAuthService {
       await this.refreshSessionService.revokeSession(adminId, ROLE.ADMIN);
     }
 
-    await this.auditLog
-      .log({
-        action: 'ADMIN_LOGOUT',
-        entity: 'Admin',
-        entityId: adminId,
-        adminId,
-        ipAddress,
-        userAgent,
-      })
-      .catch((error: unknown) => {
-        this.logger.warn('Failed to persist admin logout audit', error);
-      });
+    auditDetails({
+      entityId: adminId,
+    });
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

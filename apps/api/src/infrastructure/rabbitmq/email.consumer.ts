@@ -1,4 +1,5 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+﻿import { roleCan } from '@api/infrastructure/configuration/process-role';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { EmailService } from '../mail/email.service';
 import { RABBITMQ_QUEUES } from './rabbitmq.constants';
 import { RabbitMQService } from './rabbitmq.service';
@@ -26,6 +27,8 @@ export class EmailConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Queue consumers run only in the worker role (or when one process runs everything).
+    if (!roleCan('consumers')) return;
     await this.rabbitmq.consume<EmailQueuePayload>(
       RABBITMQ_QUEUES.EMAILS,
       async (payload) => {

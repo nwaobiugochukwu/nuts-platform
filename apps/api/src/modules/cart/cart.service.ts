@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { TransactionRunner } from '@api/infrastructure/transaction/transaction-runner';
 import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
 import type { DiscountLineItem } from '@api/modules/promotions/discount-eligibility';
 import { UsersService } from '@api/modules/users/users.service';
@@ -126,6 +127,7 @@ export class CartService {
     private readonly usersService: UsersService,
     private readonly discountCodeService: DiscountCodeService,
     private readonly cacheService: CacheService,
+    private readonly transactions: TransactionRunner,
     @Optional() private readonly marketplaceEvents?: MarketplaceEventsService,
   ) {}
 
@@ -1203,38 +1205,14 @@ export class CartService {
   private async runSerializableTransaction<T>(
     callback: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
-    /*
-     * PostgreSQL can abort a serializable transaction with P2034 when
-     * another transaction modified the same data concurrently.
-     *
-     * Retrying a small number of times is standard for this pattern.
-     */
-    const MAX_RETRIES = 3;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        return await this.prisma.$transaction(callback, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-
-          maxWait: 5_000,
-          timeout: 10_000,
-        });
-      } catch (error) {
-        const isSerializationConflict =
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2034';
-
-        if (!isSerializationConflict || attempt === MAX_RETRIES) {
-          throw error;
-        }
-
-        this.logger.warn(
-          `Cart transaction conflict. Retrying attempt ${attempt + 1}/${MAX_RETRIES}`,
-        );
-      }
-    }
-
-    throw new Error('Cart transaction failed after retries');
+    // Serializable transactions can be aborted by a concurrent writer; the
+    // runner re-runs the callback with backoff (3 attempts in total).
+    return this.transactions.run((ctx) => callback(ctx.tx), {
+      name: 'cart.mutate',
+      preset: 'critical',
+      retries: 2,
+      timeoutMs: 10_000,
+    });
   }
 
   // ---------------------------------------------------------------------------

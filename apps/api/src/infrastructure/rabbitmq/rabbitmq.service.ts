@@ -1,4 +1,10 @@
 ﻿import {
+  REQUEST_ID_HEADER,
+  currentRequestId,
+  runWithRequestId,
+  sanitizeRequestId,
+} from '@api/common/request-context/request-context';
+import {
   Injectable,
   Logger,
   OnModuleDestroy,
@@ -221,6 +227,20 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         'inventory.*',
       );
 
+      await this.channel.assertQueue(RABBITMQ_QUEUES.AUDIT, queueOptions);
+      await this.channel.bindQueue(
+        RABBITMQ_QUEUES.AUDIT,
+        RABBITMQ_EXCHANGES.TOPIC,
+        RABBITMQ_ROUTING_KEYS.AUDIT_EVENT,
+      );
+
+      await this.channel.assertQueue(RABBITMQ_QUEUES.WORKFLOWS, queueOptions);
+      await this.channel.bindQueue(
+        RABBITMQ_QUEUES.WORKFLOWS,
+        RABBITMQ_EXCHANGES.TOPIC,
+        RABBITMQ_ROUTING_KEYS.WORKFLOW_START,
+      );
+
       // Quality of Service: Prefetch 10 messages per consumer
       await this.channel.prefetch(10);
 
@@ -289,6 +309,15 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /** Adds the current request id (if any) to a message's headers. */
+  private withRequestId(
+    headers: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    const requestId = currentRequestId();
+    if (!requestId || headers?.[REQUEST_ID_HEADER]) return headers;
+    return { ...headers, [REQUEST_ID_HEADER]: requestId };
+  }
+
   public publish<T>(
     routingKey: string,
     message: T,
@@ -324,6 +353,9 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
             contentType: 'application/json',
             timestamp: Date.now(),
             ...options,
+            headers: this.withRequestId(
+              options?.headers as Record<string, unknown> | undefined,
+            ),
           },
           (err) => {
             if (err) {
@@ -358,6 +390,38 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
    */
   public isAvailable(): boolean {
     return this.isConnected && this.channel !== null;
+  }
+
+  /**
+   * Message and consumer counts for every queue we declare, for monitoring.
+   * Returns an empty list when the broker is unavailable. Queues are asserted at
+   * connect time, so `checkQueue` cannot hit a missing queue (which would close
+   * the channel).
+   */
+  public async getQueueStats(): Promise<
+    Array<{ queue: string; messages: number; consumers: number }>
+  > {
+    if (!this.isAvailable() || !this.channel) return [];
+    const stats: Array<{ queue: string; messages: number; consumers: number }> =
+      [];
+    for (const queue of Object.values(RABBITMQ_QUEUES)) {
+      try {
+        const info = await this.channel.checkQueue(queue);
+        stats.push({
+          queue,
+          messages: info.messageCount,
+          consumers: info.consumerCount,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Could not read stats for queue ${queue}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        break;
+      }
+    }
+    return stats;
   }
 
   /**
@@ -414,7 +478,14 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
           void (async () => {
             try {
               const content: unknown = JSON.parse(msg.content.toString());
-              await handler(content as T, msg);
+              // Restore the originating request id so logs, audit events and
+              // anything this handler publishes next stay on the same trail.
+              const requestId = sanitizeRequestId(
+                msg.properties.headers?.[REQUEST_ID_HEADER],
+              );
+              await (requestId
+                ? runWithRequestId(requestId, () => handler(content as T, msg))
+                : handler(content as T, msg));
               this.channel?.ack(msg);
             } catch (err: unknown) {
               this.logger.error(

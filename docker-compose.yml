@@ -19,66 +19,125 @@ x-client-env: &client-env
   NODE_ENV: ${NODE_ENV:-development}
   INTERNAL_API_URL: http://api:3001
 
+# ── Shared by the three development backend containers (api, worker, jobs) ──
+x-api-dev-common: &api-dev-common
+  restart: unless-stopped
+  profiles: ["dev"]
+  command: ["npm", "run", "dev:role"]
+  env_file:
+    - ./apps/api/.env.development
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./apps/api/src:/app/apps/api/src
+    - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
+
+x-api-dev-env: &api-dev-env
+  <<: *api-env
+  NODE_ENV: development
+  SWAGGER_ENABLED: "true"
+  RABBITMQ_ENABLED: "true"
+  RABBITMQ_URL: amqp://nuts:nuts_local_dev@host.docker.internal:5672
+  # Postgres/Redis run from docker-compose.db.yml and publish ports on the host.
+  # Inside a container "localhost" is the container itself, so the values in
+  # .env.development (localhost:5433 / :6379) cannot work here.
+  DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
+  REDIS_URL: redis://host.docker.internal:6379
+
 services:
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
+  # ── Temporal dev server + UI (Development) ────────────────────────────────
+  # Single-process dev server with file persistence. Web UI on :8233.
+  # Production/staging use Temporal Cloud or a separate self-hosted cluster.
+  temporal:
+    image: temporalio/temporal:1.10.1
     restart: unless-stopped
     profiles: ["dev"]
-    environment:
-      RABBITMQ_DEFAULT_USER: nuts
-      RABBITMQ_DEFAULT_PASS: nuts_local_dev
+    # The image runs as a non-root user that cannot write to a fresh named volume.
+    user: "0:0"
+    command: ["server", "start-dev", "--ip", "0.0.0.0", "--db-filename", "/data/temporal.db", "--namespace", "nuts-dev"]
     ports:
-      - "15673:15672"
+      - "7233:7233"
+      - "8233:8233"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - temporal_data:/data
     networks:
       - nuts_net
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
 
-
-  # ── NestJS API (Development) ───────────────────────────────────────────────
+  # ── Backend programs (Development) ─────────────────────────────────────────
+  # Same shape as staging: three separate containers from ONE image, each running
+  # one program (api, worker, jobs) with a TypeScript watcher and PM2. The image is
+  # built once by `api`; worker and jobs reuse it (they never build or pull).
   api:
+    <<: *api-dev-common
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
       target: dev
+    image: nuts-api-dev:latest
     container_name: nuts_api
-    restart: unless-stopped
-    profiles: ["dev"]
     ports:
       - "${API_PORT:-3001}:3001"
-    env_file:
-      - ./apps/api/.env.development
+      # Metrics for the local Prometheus (npm run obs:up), which reads these host ports.
+      - "9464:9464"
     environment:
-      <<: *api-env
-      NODE_ENV: development
-      SWAGGER_ENABLED: "true"
-      RABBITMQ_ENABLED: "true"
-      RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
-      # Postgres/Redis run from docker-compose.db.yml and publish ports on the
-      # host. Inside this container "localhost" is the container itself, so the
-      # values in .env.development (localhost:5433 / :6379) cannot work here.
-      DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
-      REDIS_URL: redis://host.docker.internal:6379
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./apps/api/src:/app/apps/api/src
-      - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
+      <<: *api-dev-env
+      PROCESS_ROLE: api
+      DEV_LABEL: api
+      METRICS_PORT: "9464"
     networks:
       nuts_net:
         aliases:
           - api
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3001/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  worker:
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
+    container_name: nuts_worker_dev
+    ports:
+      - "9465:9465"
+    environment:
+      <<: *api-dev-env
+      PROCESS_ROLE: worker
+      DEV_LABEL: worker
+      HEALTH_PORT: "3002"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  jobs:
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
+    container_name: nuts_jobs_dev
+    ports:
+      - "9466:9466"
+    environment:
+      <<: *api-dev-env
+      PROCESS_ROLE: jobs
+      DEV_LABEL: jobs
+      HEALTH_PORT: "3003"
+    depends_on:
+      worker:
+        condition: service_healthy
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3003/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -125,6 +184,13 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       SWAGGER_ENABLED: "${SWAGGER_ENABLED:-false}"
       AUTO_MIGRATE: "false"
+      # HTTP and SSE only. Queue consumers and scheduled jobs run in the
+      # worker-prod and jobs-prod services below, so a crash there cannot
+      # interrupt checkout.
+      PROCESS_ROLE: api
+      PM2_APP: api
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
     depends_on:
       api-migrate:
         condition: service_completed_successfully
@@ -146,6 +212,159 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+
+  # ── Queue consumers + outbox relay (Production) ────────────────────────────
+  # Same image as the API, different role. Add replicas for throughput; the
+  # queues use competing consumers and the outbox relay claims rows safely.
+  worker-prod:
+    image: nuts-api:latest
+    container_name: nuts_worker
+    restart: unless-stopped
+    profiles: ["prod", "staging"]
+    env_file:
+      - ./apps/api/.env.${APP_ENV:-production}
+    environment:
+      <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-production}
+      AUTO_MIGRATE: "false"
+      PROCESS_ROLE: worker
+      PM2_APP: worker
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
+      HEALTH_PORT: "3002"
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 192M
+          cpus: "0.1"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── Scheduled jobs (Production) ────────────────────────────────────────────
+  # Exactly ONE instance: scheduled jobs must not be scaled out.
+  jobs-prod:
+    image: nuts-api:latest
+    container_name: nuts_jobs
+    restart: unless-stopped
+    profiles: ["prod", "staging"]
+    env_file:
+      - ./apps/api/.env.${APP_ENV:-production}
+    environment:
+      <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-production}
+      AUTO_MIGRATE: "false"
+      PROCESS_ROLE: jobs
+      PM2_APP: jobs
+      # Internal Prometheus port (compose network only; never publish it).
+      METRICS_PORT: "9464"
+      HEALTH_PORT: "3003"
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 192M
+          cpus: "0.1"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3003/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ── Temporal worker (opt-in: `--profile temporal`) ─────────────────────────
+  # Not part of the prod/staging profiles, so enabling Temporal is an explicit
+  # step. Needs TEMPORAL_ENABLED=true plus an address and namespace in the env file.
+  temporal-worker-prod:
+    build:
+      context: .
+      dockerfile: ./apps/api/Dockerfile
+      target: runner-temporal
+    image: nuts-api-temporal:latest
+    container_name: nuts_temporal_worker
+    restart: unless-stopped
+    profiles: ["temporal"]
+    env_file:
+      - ./apps/api/.env.${APP_ENV:-production}
+    environment:
+      <<: *api-env
+      APP_ENV: ${APP_ENV:-production}
+      NODE_ENV: ${NODE_ENV:-production}
+      TEMPORAL_ENABLED: "true"
+      HEALTH_PORT: "3004"
+      TEMPORAL_METRICS_PORT: "9465"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3004/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # ── Local monitoring (opt-in: `npm run obs:up`, profile "observability") ───
+  # Prometheus scrapes the programs started by `npm run dev` on the host; Grafana
+  # opens with the NUTS dashboard and the Prometheus data source already set up.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: nuts_prometheus
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    networks:
+      - nuts_net
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: nuts_grafana
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${GRAFANA_PORT:-3030}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/nuts-overview.json:/var/lib/grafana/dashboards/nuts-overview.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - nuts_net
 
   # ── Next.js Client (Development) ───────────────────────────────────────────
   client:
@@ -271,8 +490,8 @@ networks:
     driver: bridge
 
 volumes:
-  rabbitmq_data:
-    name: nuts_app_rabbitmq_data
+  temporal_data:
+    name: nuts_app_temporal_data
 
 # ==============================================================================
 # DOCKER COMMAND REFERENCE CHEAT SHEET

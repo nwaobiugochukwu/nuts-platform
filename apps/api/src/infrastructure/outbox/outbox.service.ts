@@ -1,3 +1,4 @@
+import { currentRequestId } from '@api/common/request-context/request-context';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { OutboxStatus, Prisma } from '@prisma/client';
@@ -23,6 +24,7 @@ export class OutboxService {
     aggregateId: string,
     eventType: string,
     payload: Record<string, unknown>,
+    options: { wakeRelay?: boolean } = {},
   ): Promise<void> {
     const eventId = randomUUID();
     await tx.outboxEvent.create({
@@ -33,11 +35,25 @@ export class OutboxService {
         eventType,
         // Keep the event identity in the message so consumers can safely
         // deduplicate deliveries across retries and broker redeliveries.
-        payload: { ...payload, eventId },
+        // The request that caused this event, so the relay can put it back on the message.
+        payload: {
+          ...payload,
+          eventId,
+          ...(currentRequestId() && !('requestId' in payload)
+            ? { requestId: currentRequestId() }
+            : {}),
+        },
         status: OutboxStatus.PENDING,
       },
     });
 
+    // Callers inside TransactionRunner pass wakeRelay: false and wake the relay
+    // after COMMIT; waking it here would race the commit.
+    if (options.wakeRelay !== false) this.outboxRelay?.notifyNewEvent();
+  }
+
+  /** Wakes the relay now; call after the transaction that appended events committed. */
+  wakeRelay(): void {
     this.outboxRelay?.notifyNewEvent();
   }
 }

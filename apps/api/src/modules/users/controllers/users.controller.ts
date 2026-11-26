@@ -36,16 +36,14 @@ import { OtpRequired } from '@api/common/decorators/otp-required.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { DeactivateAccountResponseDto } from '../dto/deactivate-account-response.dto';
 import { ReactivateAccountDto } from '../dto/reactivate-account.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
 import { UsersService } from '../users.service';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('USERS')
 @Controller('account')
@@ -90,6 +88,7 @@ export class UsersController {
    *
    * IP address and user-agent are passed to the service for audit logging.
    */
+  @Audit({ action: 'UPDATE_PROFILE', entity: 'User' })
   @Patch()
   @Roles(ROLE.USER)
   @ApiBearerAuth('JWT-auth')
@@ -116,14 +115,8 @@ export class UsersController {
   async updateProfile(
     @GetUser('id') userId: string,
     @Body() updateUserDto: UpdateUserDto,
-    @Req() req: Request,
   ): Promise<UserResponseDto> {
-    return this.usersService.update(
-      userId,
-      updateUserDto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.usersService.update(userId, updateUserDto);
   }
 
   /**
@@ -132,6 +125,7 @@ export class UsersController {
    * The service is responsible for verifying the current password,
    * hashing the replacement password, and invalidating refresh sessions.
    */
+  @Audit({ action: 'CHANGE_PASSWORD', entity: 'User' })
   @Patch('password')
   @Roles(ROLE.USER)
   @ApiBearerAuth('JWT-auth')
@@ -158,14 +152,8 @@ export class UsersController {
   async changePassword(
     @GetUser('id') userId: string,
     @Body() changePasswordDto: ChangePasswordDto,
-    @Req() req: Request,
   ): Promise<null> {
-    await this.usersService.changePassword(
-      userId,
-      changePasswordDto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    await this.usersService.changePassword(userId, changePasswordDto);
 
     return null;
   }
@@ -201,6 +189,7 @@ export class UsersController {
    * Clearing cookies is intentionally handled at the controller boundary
    * because cookies are an HTTP concern, not a service/database concern.
    */
+  @Audit({ action: 'SELF_DEACTIVATE_USER', entity: 'User' })
   @Patch('deactivate')
   @Roles(ROLE.USER)
   @OtpRequired('account-deactivation')
@@ -227,11 +216,7 @@ export class UsersController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<DeactivateAccountResponseDto> {
-    const result = await this.usersService.deactivate(
-      userId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const result = await this.usersService.deactivate(userId);
 
     this.authCookies.clearAuthCookies(res);
 
@@ -243,6 +228,7 @@ export class UsersController {
    * cannot authenticate through the normal protected routes.
    */
   @Public()
+  @Audit({ action: 'SELF_REACTIVATE_USER', entity: 'User' })
   @Post('reactivate')
   @HttpCode(HttpStatus.OK)
   @Message('Account reactivated successfully')
@@ -262,14 +248,8 @@ export class UsersController {
   })
   async reactivate(
     @Body() dto: ReactivateAccountDto,
-    @Req() req: Request,
   ): Promise<UserResponseDto> {
-    return this.usersService.reactivate(
-      dto.email,
-      dto.password,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.usersService.reactivate(dto.email, dto.password);
   }
 
   /**
@@ -278,6 +258,7 @@ export class UsersController {
    * Auth cookies are cleared after successful deletion so a browser does not
    * retain stale authentication state.
    */
+  @Audit({ action: 'SELF_PERMANENT_DELETE_USER', entity: 'User' })
   @Delete('delete')
   @Roles(ROLE.USER)
   @HttpCode(HttpStatus.OK)
@@ -306,11 +287,7 @@ export class UsersController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<null> {
-    await this.usersService.permanentDelete(
-      userId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    await this.usersService.permanentDelete(userId);
 
     // Prevent the browser from retaining authentication cookies
     // after the underlying account has been permanently removed.

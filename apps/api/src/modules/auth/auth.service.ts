@@ -12,7 +12,6 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/modules/shared/audit-log/audit-log.service';
 
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -33,6 +32,7 @@ import { RefreshSessionService } from './sessions/refresh-session.service';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import type { AuthenticatedUser } from './types/authenticated-user.type';
 import { parseSuspension } from '@api/modules/users/utils/suspension.util';
+import { auditDetails, auditAlso } from '@api/common/audit-log/audit-details';
 
 @Injectable()
 export class AuthService {
@@ -42,7 +42,6 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly emailService: EmailService,
-    private readonly auditLog: AuditLogService,
     private readonly referralService: ReferralService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
@@ -53,11 +52,7 @@ export class AuthService {
   // REGISTER
   // ---------------------------------------------------------------------------
 
-  async register(
-    dto: RegisterDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<AuthSession> {
+  async register(dto: RegisterDto): Promise<AuthSession> {
     const email = this.normalizeEmail(dto.email);
 
     // If already pre-verified in Step 2, consume verification token.
@@ -156,20 +151,13 @@ export class AuthService {
        */
       const session = await this.refreshSessionService.issueUserSession(user);
 
-      this.fireAndForget(
-        this.auditLog.log({
-          action: 'USER_REGISTER',
-          entity: 'User',
-          entityId: user.id,
-          userId: user.id,
-          payload: {
-            hasReferral: Boolean(referral),
-          },
-          ipAddress,
-          userAgent,
-        }),
-        'registration audit log',
-      );
+      auditDetails({
+        entityId: user.id,
+        userId: user.id,
+        payload: {
+          hasReferral: Boolean(referral),
+        },
+      });
 
       this.fireAndForget(
         this.emailService.sendWelcomeEmail(email, dto.firstName ?? ''),
@@ -194,11 +182,7 @@ export class AuthService {
   // LOGIN
   // ---------------------------------------------------------------------------
 
-  async login(
-    dto: LoginDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<AuthSession> {
+  async login(dto: LoginDto): Promise<AuthSession> {
     const email = this.normalizeEmail(dto.email);
     const identifier = `email:${email}`;
 
@@ -230,17 +214,11 @@ export class AuthService {
         'failed login attempt',
       );
 
-      this.fireAndForget(
-        this.auditLog.log({
-          action: 'USER_LOGIN_FAILED',
-          entity: 'User',
-          entityId: user?.id,
-          payload: { credentialType: 'email' },
-          ipAddress,
-          userAgent,
-        }),
-        'failed-login audit log',
-      );
+      auditDetails({
+        action: 'USER_LOGIN_FAILED',
+        entityId: user?.id,
+        payload: { credentialType: 'email' },
+      });
 
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -265,21 +243,16 @@ export class AuthService {
             },
           });
 
-          this.fireAndForget(
-            this.auditLog.log({
-              action: 'USER_AUTO_UNSUSPEND_EXPIRED',
-              entity: 'User',
-              entityId: user.id,
-              userId: user.id,
-              payload: {
-                reason: suspension.reason,
-                expiredAt: suspension.suspendedUntil?.toISOString() ?? null,
-              },
-              ipAddress,
-              userAgent,
-            }),
-            'auto-unsuspend audit log',
-          );
+          auditAlso({
+            action: 'USER_AUTO_UNSUSPEND_EXPIRED',
+            entity: 'User',
+            entityId: user.id,
+            userId: user.id,
+            payload: {
+              reason: suspension.reason,
+              expiredAt: suspension.suspendedUntil?.toISOString() ?? null,
+            },
+          });
         } else {
           const dateStr = suspension.suspendedUntil
             ? new Date(suspension.suspendedUntil).toLocaleString('en-US', {
@@ -316,18 +289,12 @@ export class AuthService {
 
     const session = await this.refreshSessionService.issueUserSession(user);
 
-    this.fireAndForget(
-      this.auditLog.log({
-        action: 'USER_LOGIN',
-        entity: 'User',
-        entityId: user.id,
-        userId: user.id,
-        payload: { role: user.role },
-        ipAddress,
-        userAgent,
-      }),
-      'login audit log',
-    );
+    auditDetails({
+      action: 'USER_LOGIN',
+      entityId: user.id,
+      userId: user.id,
+      payload: { role: user.role },
+    });
 
     return session;
   }
@@ -369,11 +336,7 @@ export class AuthService {
     }
 
     if (existingByGoogleId) {
-      await this.assertAccountIsActive(
-        existingByGoogleId,
-        ipAddress,
-        userAgent,
-      );
+      await this.assertAccountIsActive(existingByGoogleId);
 
       this.fireAndForget(
         this.accountLockService.resetAttempts(identifier),
@@ -383,18 +346,12 @@ export class AuthService {
       const session =
         await this.refreshSessionService.issueUserSession(existingByGoogleId);
 
-      this.fireAndForget(
-        this.auditLog.log({
-          action: 'USER_GOOGLE_LOGIN',
-          entity: 'User',
-          entityId: existingByGoogleId.id,
-          userId: existingByGoogleId.id,
-          payload: { role: existingByGoogleId.role, authProvider: 'GOOGLE' },
-          ipAddress,
-          userAgent,
-        }),
-        'google login audit log',
-      );
+      auditDetails({
+        action: 'USER_GOOGLE_LOGIN',
+        entityId: existingByGoogleId.id,
+        userId: existingByGoogleId.id,
+        payload: { role: existingByGoogleId.role, authProvider: 'GOOGLE' },
+      });
 
       return session;
     }
@@ -410,7 +367,7 @@ export class AuthService {
     }
 
     if (existingByEmail) {
-      await this.assertAccountIsActive(existingByEmail, ipAddress, userAgent);
+      await this.assertAccountIsActive(existingByEmail);
 
       // Link googleId to existing verified account
       const linkedUser = await this.prisma.user.update({
@@ -431,21 +388,15 @@ export class AuthService {
       const session =
         await this.refreshSessionService.issueUserSession(linkedUser);
 
-      this.fireAndForget(
-        this.auditLog.log({
-          action: 'USER_GOOGLE_ACCOUNT_LINKED',
-          entity: 'User',
-          entityId: linkedUser.id,
-          userId: linkedUser.id,
-          payload: {
-            role: linkedUser.role,
-            previousProvider: existingByEmail.authProvider,
-          },
-          ipAddress,
-          userAgent,
-        }),
-        'google account link audit log',
-      );
+      auditDetails({
+        action: 'USER_GOOGLE_ACCOUNT_LINKED',
+        entityId: linkedUser.id,
+        userId: linkedUser.id,
+        payload: {
+          role: linkedUser.role,
+          previousProvider: existingByEmail.authProvider,
+        },
+      });
 
       return session;
     }
@@ -513,18 +464,12 @@ export class AuthService {
 
     const session = await this.refreshSessionService.issueUserSession(newUser);
 
-    this.fireAndForget(
-      this.auditLog.log({
-        action: 'USER_GOOGLE_REGISTER',
-        entity: 'User',
-        entityId: newUser.id,
-        userId: newUser.id,
-        payload: { authProvider: 'GOOGLE' },
-        ipAddress,
-        userAgent,
-      }),
-      'google registration audit log',
-    );
+    auditDetails({
+      action: 'USER_GOOGLE_REGISTER',
+      entityId: newUser.id,
+      userId: newUser.id,
+      payload: { authProvider: 'GOOGLE' },
+    });
 
     this.fireAndForget(
       this.emailService.sendWelcomeEmail(payload.email, payload.firstName),
@@ -534,17 +479,13 @@ export class AuthService {
     return session;
   }
 
-  private async assertAccountIsActive(
-    user: {
-      id: string;
-      isActive: boolean;
-      deactivatedBy?: string | null;
-      deactivationReason?: string | null;
-      tokenVersion?: number;
-    },
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  private async assertAccountIsActive(user: {
+    id: string;
+    isActive: boolean;
+    deactivatedBy?: string | null;
+    deactivationReason?: string | null;
+    tokenVersion?: number;
+  }): Promise<void> {
     if (user.isActive) return;
 
     if (user.deactivatedBy) {
@@ -565,21 +506,16 @@ export class AuthService {
           },
         });
 
-        this.fireAndForget(
-          this.auditLog.log({
-            action: 'USER_AUTO_UNSUSPEND_EXPIRED',
-            entity: 'User',
-            entityId: user.id,
-            userId: user.id,
-            payload: {
-              reason: suspension.reason,
-              expiredAt: suspension.suspendedUntil?.toISOString() ?? null,
-            },
-            ipAddress,
-            userAgent,
-          }),
-          'auto-unsuspend audit log',
-        );
+        auditAlso({
+          action: 'USER_AUTO_UNSUSPEND_EXPIRED',
+          entity: 'User',
+          entityId: user.id,
+          userId: user.id,
+          payload: {
+            reason: suspension.reason,
+            expiredAt: suspension.suspendedUntil?.toISOString() ?? null,
+          },
+        });
         return;
       }
 
@@ -622,8 +558,6 @@ export class AuthService {
     role: ROLE = ROLE.USER,
     sessionId?: string,
     refreshToken?: string,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<void> {
     if (role === ROLE.USER) {
       if (sessionId) {
@@ -638,37 +572,17 @@ export class AuthService {
       await this.refreshSessionService.revokeSession(userId, role, true);
     }
 
-    this.fireAndForget(
-      this.auditLog.log({
-        action: 'USER_LOGOUT',
-        entity: 'User',
-        entityId: userId,
-        userId,
-        ipAddress,
-        userAgent,
-      }),
-      'logout audit log',
-    );
+    auditDetails({
+      entityId: userId,
+    });
   }
 
-  async logoutAll(
-    userId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async logoutAll(userId: string): Promise<void> {
     await this.refreshSessionService.revokeAllUserSessions(userId);
 
-    this.fireAndForget(
-      this.auditLog.log({
-        action: 'USER_LOGOUT_ALL',
-        entity: 'User',
-        entityId: userId,
-        userId,
-        ipAddress,
-        userAgent,
-      }),
-      'logout-all audit log',
-    );
+    auditDetails({
+      entityId: userId,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -721,11 +635,7 @@ export class AuthService {
   // PASSWORD RESET
   // ---------------------------------------------------------------------------
 
-  async resetPassword(
-    dto: ResetPasswordDto,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<void> {
+  async resetPassword(dto: ResetPasswordDto): Promise<void> {
     const email = this.normalizeEmail(dto.email);
 
     await this.otpService.verifyOtp(email, dto.otpCode, 'password-reset');
@@ -747,17 +657,10 @@ export class AuthService {
       // Revoke ALL sessions atomically (UserAuthSession + account-level tokens + Redis stamp)
       await this.refreshSessionService.revokeAllUserSessions(user.id);
 
-      this.fireAndForget(
-        this.auditLog.log({
-          action: 'USER_RESET_PASSWORD',
-          entity: 'User',
-          entityId: user.id,
-          userId: user.id,
-          ipAddress,
-          userAgent,
-        }),
-        'password-reset audit log',
-      );
+      auditDetails({
+        entityId: user.id,
+        userId: user.id,
+      });
 
       this.fireAndForget(
         this.emailService.sendPasswordResetSuccessEmail(

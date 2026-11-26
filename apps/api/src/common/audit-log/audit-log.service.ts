@@ -1,11 +1,16 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { IncomingMessage } from 'http';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { currentProcessRole } from '@api/infrastructure/configuration/process-role';
+import { currentRequestId } from '@api/common/request-context/request-context';
 import {
   extractIpAddress,
   extractUserAgent,
 } from '@api/common/utils/request.util';
+import { AuditWriter } from './audit-writer';
+import { buildAuditEvent, type AuditEvent } from './audit-event';
 
 export type AuditPayload = Prisma.InputJsonValue | typeof Prisma.JsonNull;
 
@@ -20,21 +25,6 @@ export function toAuditPayload(value: Record<string, unknown>): AuditPayload {
   return value as AuditPayload;
 }
 
-type AuditLogDelegate = {
-  create: (args: {
-    data: {
-      action: string;
-      entity: string;
-      entityId?: string;
-      payload: AuditPayload;
-      adminId?: string;
-      userId?: string;
-      ipAddress?: string;
-      userAgent?: string;
-    };
-  }) => Promise<unknown>;
-};
-
 export interface AuditLogParams {
   action: string;
   entity: string;
@@ -44,34 +34,51 @@ export interface AuditLogParams {
   userId?: string;
   ipAddress?: string;
   userAgent?: string;
+  requestId?: string;
+  outcome?: 'success' | 'failure';
+  statusCode?: number;
+  before?: Prisma.InputJsonValue;
+  after?: Prisma.InputJsonValue;
 }
 
-@Injectable()
-export class AuditLogService {
-  private readonly logger = new Logger(AuditLogService.name);
+/** Events held in memory while the broker is unavailable. */
+export const AUDIT_FALLBACK_LIMIT = 5_000;
+export const AUDIT_FALLBACK_FLUSH_MS = 1_000;
 
-  constructor(private readonly prisma: PrismaService) {}
+/**
+ * Records audit events without making the caller wait.
+ *
+ * `log()` and `record()` return as soon as the event is handed off:
+ *  1. normally it is published to RabbitMQ (persistent, with publisher
+ *     confirms) and a worker writes it in batches;
+ *  2. if the broker is unavailable it is held in a bounded in-memory buffer and
+ *     written straight to the database every second.
+ *
+ * Critical changes (money, permissions, sign-in) should instead use
+ * `TransactionContext.audit(...)`, which writes the event to the outbox inside
+ * the same database transaction as the change, so it cannot be lost.
+ */
+@Injectable()
+export class AuditLogService implements OnModuleDestroy {
+  private readonly logger = new Logger(AuditLogService.name);
+  private fallback: AuditEvent[] = [];
+  private fallbackTimer: NodeJS.Timeout | null = null;
+  private flushing = false;
+
+  constructor(
+    private readonly writer: AuditWriter,
+    @Optional() private readonly rabbitmq?: RabbitMQService,
+  ) {}
 
   async log(params: AuditLogParams): Promise<void> {
-    const auditLog = (this.prisma as unknown as { auditLog: AuditLogDelegate })
-      .auditLog;
-
-    try {
-      await auditLog.create({
-        data: {
-          action: params.action,
-          entity: params.entity,
-          entityId: params.entityId,
-          payload: params.payload ?? Prisma.JsonNull,
-          adminId: params.adminId,
-          userId: params.userId,
-          ipAddress: params.ipAddress,
-          userAgent: params.userAgent,
-        },
-      });
-    } catch (error: unknown) {
-      this.logger.error({ err: error }, 'Audit log creation failed');
-    }
+    this.record(
+      buildAuditEvent({
+        ...params,
+        requestId: params.requestId ?? currentRequestId(),
+        source: currentProcessRole(),
+      }),
+    );
+    return Promise.resolve();
   }
 
   /**
@@ -91,5 +98,75 @@ export class AuditLogService {
       ipAddress: request ? extractIpAddress(request) : undefined,
       userAgent: request ? extractUserAgent(request) : undefined,
     });
+  }
+
+  /** Hands a prepared event to the pipeline. Never throws, never waits. */
+  record(event: AuditEvent): void {
+    void this.deliver(event);
+  }
+
+  private async deliver(event: AuditEvent): Promise<void> {
+    try {
+      if (
+        this.rabbitmq?.isAvailable() &&
+        (await this.rabbitmq.publish(RABBITMQ_ROUTING_KEYS.AUDIT_EVENT, event))
+      ) {
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Audit publish failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    this.buffer(event);
+  }
+
+  private buffer(event: AuditEvent): void {
+    if (this.fallback.length >= AUDIT_FALLBACK_LIMIT) {
+      // Visible loss beats unbounded memory: drop the oldest and say so.
+      this.fallback.shift();
+      this.logger.error(
+        `Audit fallback buffer full (${AUDIT_FALLBACK_LIMIT}); dropped the oldest event.`,
+      );
+    }
+    this.fallback.push(event);
+    this.fallbackTimer ??= setTimeout(() => {
+      this.fallbackTimer = null;
+      void this.flushFallback();
+    }, AUDIT_FALLBACK_FLUSH_MS);
+  }
+
+  async flushFallback(): Promise<void> {
+    if (this.flushing || this.fallback.length === 0) return;
+    this.flushing = true;
+    const batch = this.fallback;
+    this.fallback = [];
+    try {
+      await this.writer.writeBatch(batch);
+    } catch (error) {
+      this.logger.error(
+        `Audit fallback write failed for ${batch.length} event(s): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      // Keep them for the next attempt, within the bound.
+      this.fallback = [...batch, ...this.fallback].slice(-AUDIT_FALLBACK_LIMIT);
+      this.fallbackTimer ??= setTimeout(() => {
+        this.fallbackTimer = null;
+        void this.flushFallback();
+      }, AUDIT_FALLBACK_FLUSH_MS * 5);
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.fallbackTimer) {
+      clearTimeout(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    await this.flushFallback();
   }
 }

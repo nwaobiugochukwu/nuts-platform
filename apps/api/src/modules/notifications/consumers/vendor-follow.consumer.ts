@@ -1,3 +1,4 @@
+import { roleCan } from '@api/infrastructure/configuration/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
@@ -49,6 +50,8 @@ export class VendorFollowConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    // Queue consumers run only in the worker role (or when one process runs everything).
+    if (!roleCan('consumers')) return;
     await this.rabbitmq.consume<unknown>(
       RABBITMQ_QUEUES.VENDOR_EVENTS,
       async (payload, message) => {

@@ -163,6 +163,95 @@ export class EnvironmentVariables {
   @IsOptional()
   RABBITMQ_URL?: string;
 
+  // ─── Process role (see docs/architecture/platform-reliability-plan.md) ──────
+
+  /** all (default) | api | worker | jobs. Unknown values fail startup. */
+  @IsString()
+  @IsOptional()
+  PROCESS_ROLE?: string;
+
+  /** Health port for the worker and jobs roles (they have no HTTP API). */
+  @IsString()
+  @IsOptional()
+  HEALTH_PORT?: string;
+
+  /** Internal Prometheus port; metrics are off when unset. Never expose it publicly. */
+  @IsString()
+  @IsOptional()
+  METRICS_PORT?: string;
+
+  /**
+   * Per-program ports, so one local env file can serve every program. Each falls
+   * back to HEALTH_PORT / METRICS_PORT, then to a default (see `portFor`).
+   */
+  @IsString()
+  @IsOptional()
+  WORKER_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  JOBS_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_WORKER_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  API_METRICS_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  WORKER_METRICS_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  JOBS_METRICS_PORT?: string;
+
+  /** Which program a container runs under PM2: all (default), api, worker or jobs. */
+  @IsString()
+  @IsOptional()
+  PM2_APP?: string;
+
+  /** Optional bearer token Prometheus must send to scrape METRICS_PORT. */
+  @IsString()
+  @IsOptional()
+  METRICS_TOKEN?: string;
+
+  // ─── Temporal (durable workflows) ───────────────────────────────────────────
+
+  /** "true" to connect to Temporal. Default off: workflow starts are logged no-ops. */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_ENABLED?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_ADDRESS?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_NAMESPACE?: string;
+
+  /** Temporal Cloud API key (enables TLS). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_TLS?: string;
+
+  /** Comma-separated task queues the worker polls (default: all). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_TASK_QUEUES?: string;
+
+  /** Prometheus port for the Temporal SDK metrics (worker only; off when unset). */
+  @IsString()
+  @IsOptional()
+  TEMPORAL_METRICS_PORT?: string;
+
   // ─── HTTP / CORS ─────────────────────────────────────────────────────────────
 
   @IsString()

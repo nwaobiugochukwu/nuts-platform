@@ -92,6 +92,17 @@ export function detectPushSupport(env: PushEnvironment): PushSupport {
   };
 }
 
+/**
+ * Failures that come from the browser or network rather than from this app
+ * (permission blocked, push service unreachable). They are shown to the user as
+ * a toast and logged as warnings so they do not raise the development error overlay.
+ */
+export function isExpectedSubscribeError(error: unknown): boolean {
+  const name = (error as { name?: string } | null)?.name ?? "";
+  const message = error instanceof Error ? error.message : "";
+  return name === "NotAllowedError" || name === "AbortError" || /push service/i.test(message);
+}
+
 /** A user-facing explanation for a failed `pushManager.subscribe()`. */
 export function explainSubscribeError(error: unknown, env: Pick<PushEnvironment, "isBrave">): string {
   const name = (error as { name?: string } | null)?.name ?? "";

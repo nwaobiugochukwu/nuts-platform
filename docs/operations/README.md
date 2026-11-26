@@ -4,6 +4,11 @@ This directory documents production operations that can be established from repo
 
 ## Runbooks
 
+- [Running and testing locally](local-development.md) — start the stack, what changed and how to check it, PM2 roles, Temporal, dead letters.
+- [Deploying to Render (staging)](render-deployment.md) — which Render services to create, their environment, the connection budget and the safe transition.
+- [Processes, health and monitoring](processes-and-monitoring.md) — API roles under PM2, health endpoints, Prometheus metrics and alerts.
+- [Temporal (durable workflows)](temporal.md) — client, worker, outbox-started workflows, local setup and production guidance (foundation only).
+- [Audit trail](audit-trail.md) — asynchronous audit pipeline, `@Audit`, critical events in transactions.
 - [Release and recovery](runbooks/release-and-recovery.md) — repository-backed release flow, checks, and recovery boundaries.
 
 ## Current automation and known gaps
