@@ -131,7 +131,7 @@ services:
       rabbitmq:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
     networks:
       - nuts_net
     healthcheck:
@@ -154,8 +154,8 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-      api:
-        condition: service_started
+      worker:
+        condition: service_healthy
     networks:
       - nuts_net
     healthcheck:
