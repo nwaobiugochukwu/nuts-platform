@@ -18,28 +18,54 @@ Requires Docker (databases and broker run in containers) and Node 22. Environmen
 npm run dev
 ```
 
-This starts the databases and broker (`docker-compose.db.yml`), then **four separate programs**, the same shape as staging and production:
+`npm run dev` runs everything with **Docker Compose**, the way most teams run a service together locally. The data services (PostgreSQL, Redis, RabbitMQ) come from `npm run db:up`, which waits until they are healthy. Every program is then its own container (`api`, `worker`, `jobs`, `client` for the web app, plus Temporal), and Compose starts them **in health order**: the api, then the worker, then the jobs, then the web app. Each waits until the previous reports healthy. The command runs in the background (`up -d --wait`), so your terminal shows a short status line per container as it becomes healthy and then a status table. It does **not** stream every service's logs into one terminal.
 
-| Program | What it does | Where |
+To watch one service's logs, open a terminal per service (or use Docker Desktop's Containers view, which has a log tab per container):
+
+| Command | Shows |
+|---|---|
+| `npm run dev:logs:api` | the api's logs |
+| `npm run dev:logs:worker` | the worker's logs |
+| `npm run dev:logs:jobs` | the jobs runner's logs |
+| `npm run dev:logs:web` | the web app's logs |
+| `npm run dev:logs` | all of them together (the mixed view, only if you want it) |
+| `npm run dev:status` | which containers are up and healthy |
+| `docker compose --profile dev restart worker` | restart just one service |
+| `npm run dev:down` | stop the containers (the databases keep running; `npm run db:down` stops them) |
+
+Code edits reload inside the containers because the source folders are mounted into them.
+
+### Running the programs directly on your machine (optional)
+
+`npm run dev:local` is the same ordered start without Docker for the api, worker, jobs and web (the data services still run in Docker). It starts them one after another, each waiting for the previous to be healthy, and writes each service's full output to `.logs/dev/<service>.log`. `npm run dev:local:quiet` shows only the start, ready and failed lines; `npm run dev:local:skip-infra` skips the data services when they are already up. The VS Code task **dev: all (in order)** (`ctrl+shift+B`) does the same with one terminal tab per service. These local options have not been exercised in an editor by the person who wrote them. `npm run dev:parallel` and `npm run dev:plain` start the same programs all at once through Turborepo, kept as options.
+
+| Service | What it does | Where |
 |---|---|---|
-| web | the screens | `http://localhost:5173` |
+| compile | the TypeScript compiler, watching your code | |
 | api | answers requests | `http://localhost:3001/api/v1/health`, metrics `:9464` |
 | worker | emails, notifications, analytics, stock updates, audit writing | health `:3002`, metrics `:9465` |
 | jobs | scheduled jobs (exactly one) | health `:3003`, metrics `:9466` |
+| web | the screens | `http://localhost:5173` |
 
-Ready after about 30 s (the TypeScript compile runs first). Stopping one program leaves the others serving: try stopping the worker and open the site. Ctrl+C stops everything; `npm run db:down` stops the databases. In dev a crashed worker or jobs program does not restart by itself (production restarts them with PM2); it restarts when you change code or run `npm run dev` again.
+The api, worker and jobs only *run* what the compiler builds; they wait for the first build and restart automatically when it rebuilds, and PM2 (the same supervisor staging uses) restarts any of them that crashes. They never depend on each other, only on the databases and broker, so stopping the worker leaves the api and web serving. Ready after roughly 30 to 60 seconds.
 
-Related commands:
+### Starting services separately
 
-| Command | Use |
+Every service also has its own command, for when you want a service in its own terminal or want to run only some:
+
+| Command | Starts |
 |---|---|
-| `npm run dev:api` | only the three backend programs |
-| `npm run dev:web` | only the web app |
-| `npm run dev:docker` | the same four programs as Docker containers (`docker compose --profile dev`): `api`, `worker`, `jobs`, `client` |
-| `npm run dev --prefix apps/api` | same as `dev:api` |
-| `npm run dev:single --prefix apps/api` | one backend program doing everything. For debugging only; it is **not** how staging or production run |
+| `npm run db:up` | PostgreSQL, Redis and RabbitMQ, then waits until healthy |
+| `npm run dev:compile` | the compiler (start this first or alongside; the others wait for its first build) |
+| `npm run dev:api` / `dev:worker` / `dev:jobs` | that program only |
+| `npm run dev:web` | the web app only |
+| `npm run dev:parallel` | everything at once in Turborepo's terminal view |
+| `npm run dev:plain` | the same at once, as one plain name-prefixed stream (no list view) |
+| `npm run dev:backend` | compiler, api, worker and jobs under one PM2 in one terminal |
+| `npm run dev:single` | one backend program doing everything. For debugging only; **not** how staging runs |
+| `npm run dev:docker` | the same programs as Docker containers (`api`, `worker`, `jobs`, `client`), started in the same order by Compose: each waits for the previous to report healthy |
 
-If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
+`npm run db:down` stops the databases. If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
 
 ## Is everything running? `scripts/verify-deploy.sh`
 
@@ -112,6 +138,35 @@ npm run check:architecture
 python3 scripts/check-doc-links.py
 ```
 
-## 8. Seeing metrics and the dashboard
+## 8. Seeing, tracking and tracing locally
 
-`ops/prometheus/prometheus.example.yml` shows how to scrape the roles and load `ops/prometheus/alerts.yml`; `ops/grafana/nuts-overview.json` is a Grafana dashboard (Dashboards, New, Import, upload the file, pick your Prometheus). Both were validated: `promtool` accepts the rules, every dashboard query ran against a live Prometheus scraping a real worker and API, and Grafana imported the dashboard.
+### The monitoring stack
+
+```bash
+npm run obs:up       # starts Prometheus and Grafana (profile "observability")
+npm run obs:down     # stops them
+```
+
+| What | Where | Notes |
+|---|---|---|
+| Grafana | `http://localhost:3030` | login `admin` and `GRAFANA_ADMIN_PASSWORD` from the root `.env` (default `admin`); opens with the **NUTS Platform Overview** dashboard and the Prometheus data source already set up |
+| Prometheus | `http://localhost:9090` | Status, Targets shows each program; Alerts shows the 13 alert rules from `ops/prometheus/alerts.yml` |
+| Raw metrics | `http://localhost:9464/metrics` (api), `:9465` (worker), `:9466` (jobs), `:9467` (temporal worker) | plain text, one line per measurement |
+
+Start `npm run dev` first (or after; a program that is not running shows as down). The temporal worker target stays down until Temporal is turned on. Every port can be changed in `apps/api/.env.development`; see `apps/api/.env.example` ("Programs, ports and monitoring").
+
+What the dashboard answers: *Is it healthy?* (dead-letter queue, oldest pending outbox event, broker up, 5xx rate), *Queues and outbox* (what is waiting, who is consuming), *API* (traffic and the slowest routes), *Database transactions* (timing and conflict retries), *Processes* (memory, event-loop lag, CPU, which programs report in).
+
+### Tracing one request
+
+Every API response carries an `X-Request-Id` header, and the same id is written to every log line produced while handling that request, copied onto the RabbitMQ messages it causes (header `x-request-id`), restored in the worker that handles them, stored in the audit row (`audit_logs.requestId`), and set as a memo on any Temporal workflow it starts. To follow a request end to end:
+
+1. Make the request and note the id: `curl -i http://localhost:3001/api/v1/categories | grep -i x-request-id`.
+2. Search the terminal output of `npm run dev` for that id. You will see lines from the api and, if the request caused background work, from the worker.
+3. Look it up in the database: `select action, entity, "entityId", "requestId" from audit_logs where "requestId" = '<id>';`.
+
+Distributed tracing with spans and a trace viewer (OpenTelemetry) is not built; request ids give you the same "follow one request" answer today, and Sentry already records traces for errors.
+
+### Checking the alerts and dashboard themselves
+
+`ops/prometheus/alerts.yml` is validated with `promtool`, every dashboard query was run against a live Prometheus, and Grafana imports the dashboard; the provisioned stack above loads both automatically.

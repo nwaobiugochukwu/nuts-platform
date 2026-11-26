@@ -13,10 +13,7 @@ import {
   Prisma,
   ROLE,
 } from '@prisma/client';
-import {
-  AuditLogService,
-  toAuditPayload,
-} from '@api/common/audit-log/audit-log.service';
+import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { NotificationsService } from '@api/modules/notifications/notifications.service';
 import {
@@ -26,6 +23,7 @@ import {
   UpdateAdminAnnouncementDto,
   type CampaignAnnouncementAudience,
 } from './dto/admin-announcement.dto';
+import { auditDetails } from '@api/common/audit-log/audit-details';
 
 const DELIVERY_BATCH_SIZE = 200;
 const PUBLISH_LEASE_MS = 15 * 60 * 1000;
@@ -134,12 +132,7 @@ export class AdminAnnouncementsService {
     };
   }
 
-  async createDraft(
-    dto: CreateAdminAnnouncementDto,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async createDraft(dto: CreateAdminAnnouncementDto, adminId: string) {
     this.assertCampaignAudience(dto.audience);
     const link = dto.link?.trim() || null;
     this.assertDestination(dto.audience, link);
@@ -155,28 +148,17 @@ export class AdminAnnouncementsService {
       },
     });
 
-    await this.auditLog.log({
-      action: 'ANNOUNCEMENT_DRAFT_CREATED',
-      entity: 'Announcement',
+    auditDetails({
       entityId: announcement.id,
-      adminId,
-      payload: toAuditPayload({
+      payload: {
         title: announcement.title,
         audience: announcement.audience,
-      }),
-      ipAddress,
-      userAgent,
+      },
     });
     return announcement;
   }
 
-  async updateDraft(
-    id: string,
-    dto: UpdateAdminAnnouncementDto,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async updateDraft(id: string, dto: UpdateAdminAnnouncementDto) {
     const current = await this.getAnnouncementOrThrow(id);
     this.assertEditable(current.status);
     const audience = dto.audience ?? current.audience;
@@ -210,28 +192,17 @@ export class AdminAnnouncementsService {
     }
     const saved = await this.getAnnouncementOrThrow(id);
 
-    await this.auditLog.log({
-      action: 'ANNOUNCEMENT_DRAFT_UPDATED',
-      entity: 'Announcement',
+    auditDetails({
       entityId: saved.id,
-      adminId,
-      payload: toAuditPayload({
+      payload: {
         status: saved.status,
         audience: saved.audience,
-      }),
-      ipAddress,
-      userAgent,
+      },
     });
     return saved;
   }
 
-  async schedule(
-    id: string,
-    dto: ScheduleAdminAnnouncementDto,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async schedule(id: string, dto: ScheduleAdminAnnouncementDto) {
     const scheduledAt = new Date(dto.scheduledAt);
     if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt <= new Date()) {
       throw new BadRequestException(
@@ -265,24 +236,14 @@ export class AdminAnnouncementsService {
     }
     const saved = await this.getAnnouncementOrThrow(id);
 
-    await this.auditLog.log({
-      action: 'ANNOUNCEMENT_SCHEDULED',
-      entity: 'Announcement',
+    auditDetails({
       entityId: id,
-      adminId,
-      payload: toAuditPayload({ scheduledAt: scheduledAt.toISOString() }),
-      ipAddress,
-      userAgent,
+      payload: { scheduledAt: scheduledAt.toISOString() },
     });
     return saved;
   }
 
-  async publishNow(
-    id: string,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async publishNow(id: string) {
     const current = await this.getAnnouncementOrThrow(id);
     this.assertCampaignAudience(current.audience);
     this.assertDestination(current.audience, current.link);
@@ -323,26 +284,16 @@ export class AdminAnnouncementsService {
       );
     }
 
-    await this.auditLog.log({
-      action: 'ANNOUNCEMENT_PUBLISH_STARTED',
-      entity: 'Announcement',
+    auditDetails({
       entityId: id,
-      adminId,
-      payload: toAuditPayload({ audience: current.audience }),
-      ipAddress,
-      userAgent,
+      payload: { audience: current.audience },
     });
 
     this.startDelivery(id);
     return this.getAnnouncementOrThrow(id);
   }
 
-  async archive(
-    id: string,
-    adminId: string,
-    ipAddress?: string,
-    userAgent?: string,
-  ) {
+  async archive(id: string) {
     const current = await this.getAnnouncementOrThrow(id);
     if (
       current.status === AnnouncementStatus.PUBLISHING ||
@@ -376,14 +327,9 @@ export class AdminAnnouncementsService {
       );
     }
     const saved = await this.getAnnouncementOrThrow(id);
-    await this.auditLog.log({
-      action: 'ANNOUNCEMENT_ARCHIVED',
-      entity: 'Announcement',
+    auditDetails({
       entityId: id,
-      adminId,
-      payload: toAuditPayload({ previousStatus: current.status }),
-      ipAddress,
-      userAgent,
+      payload: { previousStatus: current.status },
     });
     return saved;
   }
@@ -529,10 +475,10 @@ export class AdminAnnouncementsService {
           entity: 'Announcement',
           entityId: id,
           adminId: announcement.createdByAdminId ?? undefined,
-          payload: toAuditPayload({
+          payload: {
             audience: announcement.audience,
             recipientCount,
-          }),
+          },
         });
       }
     } catch (error) {
@@ -556,7 +502,7 @@ export class AdminAnnouncementsService {
         action: 'ANNOUNCEMENT_DELIVERY_FAILED',
         entity: 'Announcement',
         entityId: id,
-        payload: toAuditPayload({ error: message.slice(0, 500) }),
+        payload: { error: message.slice(0, 500) },
       });
     }
   }

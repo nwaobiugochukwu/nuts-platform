@@ -12,8 +12,8 @@ import { AdminAuthService } from './admin-auth.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { AdminVendorsService } from '@api/modules/vendors/admin-vendors.service';
+import { captureAudit } from '@api/common/audit-log/audit-testing';
 
 const p2025 = () =>
   new Prisma.PrismaClientKnownRequestError('Record not found', {
@@ -27,7 +27,6 @@ describe('AdminAuthService', () => {
   let service: AdminAuthService;
   let mockPrisma: any;
   let mockConfig: any;
-  let mockAudit: any;
   let mockAccountLock: any;
 
   const baseAdmin = {
@@ -70,7 +69,6 @@ describe('AdminAuthService', () => {
       ),
     };
 
-    mockAudit = { log: jest.fn().mockResolvedValue(undefined) };
     mockAccountLock = {
       recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
       resetAttempts: jest.fn().mockResolvedValue(undefined),
@@ -109,7 +107,6 @@ describe('AdminAuthService', () => {
     service = new AdminAuthService(
       mockPrisma,
       mockConfig,
-      mockAudit,
       mockAccountLock,
       mockRefreshSession as any,
     );
@@ -244,7 +241,6 @@ describe('AdminAuthService', () => {
 describe('AdminVendorsService', () => {
   let service: AdminVendorsService;
   let mockPrisma: any;
-  let mockAudit: any;
   let mockCache: any;
 
   const statusRow = {
@@ -271,7 +267,6 @@ describe('AdminVendorsService', () => {
         count: jest.fn().mockResolvedValue(0),
       },
     };
-    mockAudit = { log: jest.fn().mockResolvedValue(undefined) };
     mockCache = {
       del: jest.fn().mockResolvedValue(undefined),
       delByPattern: jest.fn().mockResolvedValue(undefined),
@@ -280,12 +275,7 @@ describe('AdminVendorsService', () => {
       sendVendorApprovedEmail: jest.fn().mockResolvedValue(undefined),
     };
 
-    service = new AdminVendorsService(
-      mockPrisma,
-      mockAudit,
-      mockCache,
-      mockEmailService,
-    );
+    service = new AdminVendorsService(mockPrisma, mockCache, mockEmailService);
   });
 
   describe('findAll()', () => {
@@ -355,15 +345,15 @@ describe('AdminVendorsService', () => {
       mockPrisma.vendor.findUnique.mockResolvedValue({ isApproved: false });
       mockPrisma.vendor.update.mockResolvedValue(statusRow);
 
-      const result = await service.approve('admin-1', 'vendor-1');
+      const { result, details } = await captureAudit(() =>
+        service.approve('admin-1', 'vendor-1'),
+      );
 
       expect(result.isApproved).toBe(true);
-      expect(mockAudit.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'APPROVE_VENDOR',
-          adminId: 'admin-1',
-        }),
-      );
+      expect(details).toMatchObject({
+        action: 'APPROVE_VENDOR',
+        entityId: 'vendor-1',
+      });
       expect(mockCache.del).toHaveBeenCalledWith('vendor:store:nuts-store:v2');
     });
 
@@ -399,11 +389,13 @@ describe('AdminVendorsService', () => {
     it('returns 404 (not 500) when the vendor does not exist', async () => {
       mockPrisma.vendor.findUnique.mockResolvedValue(null);
 
-      await expect(service.verify('admin-1', 'missing')).rejects.toThrow(
-        NotFoundException,
-      );
+      const { details } = await captureAudit(async () => {
+        await expect(service.verify('admin-1', 'missing')).rejects.toThrow(
+          NotFoundException,
+        );
+      });
       expect(mockPrisma.vendor.update).not.toHaveBeenCalled();
-      expect(mockAudit.log).not.toHaveBeenCalled();
+      expect(details).toBeUndefined();
     });
 
     it('returns 404 when the vendor is deleted between read and write (P2025)', async () => {
@@ -427,10 +419,11 @@ describe('AdminVendorsService', () => {
       });
       mockCache.delByPattern.mockRejectedValue(new Error('redis down'));
 
-      await expect(service.deactivate('admin-1', 'vendor-1')).resolves.toEqual(
-        expect.objectContaining({ isActive: false }),
+      const { result, details } = await captureAudit(() =>
+        service.deactivate('admin-1', 'vendor-1'),
       );
-      expect(mockAudit.log).toHaveBeenCalled();
+      expect(result).toEqual(expect.objectContaining({ isActive: false }));
+      expect(details).toMatchObject({ action: 'DEACTIVATE_VENDOR' });
     });
   });
 
@@ -438,12 +431,12 @@ describe('AdminVendorsService', () => {
     it('evicts caches and audits after a successful delete', async () => {
       mockPrisma.vendor.delete.mockResolvedValue(statusRow);
 
-      await service.delete('admin-1', 'vendor-1');
+      const { details } = await captureAudit(() =>
+        service.delete('admin-1', 'vendor-1'),
+      );
 
       expect(mockCache.del).toHaveBeenCalledWith('vendor:store:nuts-store:v2');
-      expect(mockAudit.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'DELETE_VENDOR' }),
-      );
+      expect(details).toMatchObject({ entityId: 'vendor-1' });
     });
 
     it('maps P2025 to 404', async () => {

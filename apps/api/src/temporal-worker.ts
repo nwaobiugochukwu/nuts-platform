@@ -10,6 +10,7 @@ import {
   Worker,
   bundleWorkflowCode,
 } from '@temporalio/worker';
+import { portFor } from './infrastructure/configuration/process-role';
 import { buildActivities } from './infrastructure/temporal/activities';
 import { SampleActivities } from './infrastructure/temporal/activities/sample.activities';
 import {
@@ -24,13 +25,18 @@ import { TemporalWorkerModule } from './infrastructure/temporal/temporal-worker.
  * musl build), so it ships as its own image target; see docs/operations.
  */
 async function bootstrap() {
+  process.env.LOG_PROGRAM = 'temporal-worker';
   const config = readTemporalConfig();
   if (!config.enabled) {
     throw new Error('Set TEMPORAL_ENABLED=true to run the Temporal worker.');
   }
 
-  const metricsPort = Number(process.env.TEMPORAL_METRICS_PORT);
-  if (Number.isInteger(metricsPort) && metricsPort > 0) {
+  // The Temporal SDK exposes its own Prometheus endpoint; TEMPORAL_METRICS_PORT
+  // keeps its established name and overrides the per-program default.
+  const metricsPort =
+    Number(process.env.TEMPORAL_METRICS_PORT) ||
+    portFor('metrics', 'temporal-worker');
+  if (metricsPort && Number.isInteger(metricsPort) && metricsPort > 0) {
     Runtime.install({
       telemetryOptions: {
         metrics: { prometheus: { bindAddress: `0.0.0.0:${metricsPort}` } },
@@ -71,7 +77,7 @@ async function bootstrap() {
 
   const running = Promise.all(workers.map((worker) => worker.run()));
   const startedAt = new Date();
-  const healthPort = Number(process.env.HEALTH_PORT ?? 3004);
+  const healthPort = portFor('health', 'temporal-worker') ?? 3004;
   const server = createServer((req, res) => {
     if (req.url !== '/health' && req.url !== '/') {
       res.writeHead(404).end();

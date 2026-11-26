@@ -55,7 +55,8 @@ desktop.ini
 
 # Editors and local workspace settings
 .idea/
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 *.swp
 *.swo
 *.sublime-workspace
@@ -73,3 +74,14 @@ gitfix.ps1
 git-diagnose.ps1
 git-diagnose-output.txt
 **/.image-cache.json
+
+# PM2 local state (npm run dev)
+apps/api/.pm2/
+
+# Tool-generated agent notes (written by tooling, not authored here)
+/AGENTS.md
+/apps/web/AGENTS.md
+/apps/web/CLAUDE.md
+
+# Local dev service logs
+.logs/

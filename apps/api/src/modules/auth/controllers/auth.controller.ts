@@ -66,6 +66,7 @@ import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
 import { ROLE } from '@prisma/client';
 import { AUTH_REFRESH_COOKIE } from '../constants/auth-cookies.constants';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 function getCookieValue(cookies: unknown, name: string): string | undefined {
   if (typeof cookies !== 'object' || cookies === null || !(name in cookies)) {
@@ -100,6 +101,7 @@ export class AuthController {
 
   @Public()
   @StrictThrottle()
+  @Audit({ action: 'USER_GOOGLE_LOGIN', entity: 'User' })
   @Post('google')
   @HttpCode(HttpStatus.OK)
   @Message('Google authentication successful')
@@ -146,6 +148,7 @@ export class AuthController {
   @StrictThrottle()
   @UseGuards(RegistrationsGuard)
   @RegistrationType('user')
+  @Audit({ action: 'USER_GOOGLE_LOGIN', entity: 'User' })
   @Post('google/register')
   @HttpCode(HttpStatus.OK)
   @Message('Google registration successful')
@@ -194,6 +197,7 @@ export class AuthController {
   @StrictThrottle()
   @UseGuards(RegistrationsGuard)
   @RegistrationType('user')
+  @Audit({ action: 'USER_REGISTER', entity: 'User' })
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @Message('User registered successfully')
@@ -216,11 +220,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
-    const session = await this.authService.register(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.authService.register(dto);
 
     this.authCookies.setAuthCookies(res, session.tokens);
 
@@ -235,6 +235,12 @@ export class AuthController {
   @Public()
   @StrictThrottle()
   @UseGuards(AccountLockGuard)
+  @Audit({
+    action: 'USER_LOGIN',
+    failureAction: 'USER_LOGIN_FAILED',
+    onFailure: true,
+    entity: 'User',
+  })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @Message('Logged in successfully')
@@ -254,11 +260,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthResponseDto> {
-    const session = await this.authService.login(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    const session = await this.authService.login(dto);
 
     this.authCookies.setAuthCookies(res, session.tokens);
 
@@ -317,6 +319,7 @@ export class AuthController {
     };
   }
 
+  @Audit({ action: 'USER_LOGOUT', entity: 'User' })
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @Message('Logged out successfully')
@@ -344,8 +347,6 @@ export class AuthController {
       user.role,
       user.sessionId,
       refreshToken,
-      extractIpAddress(req),
-      extractUserAgent(req),
     );
 
     this.authCookies.clearAuthCookies(res);
@@ -353,6 +354,7 @@ export class AuthController {
     return null;
   }
 
+  @Audit({ action: 'USER_LOGOUT_ALL', entity: 'User' })
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   @Message('All sessions logged out successfully')
@@ -371,11 +373,7 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<null> {
-    await this.authService.logoutAll(
-      user.id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    await this.authService.logoutAll(user.id);
 
     this.authCookies.clearAuthCookies(res);
 
@@ -463,6 +461,7 @@ export class AuthController {
 
   @Public()
   @PasswordResetThrottle()
+  @Audit({ action: 'USER_RESET_PASSWORD', entity: 'User' })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @Message('Password reset successfully')
@@ -482,15 +481,8 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     description: 'Invalid or expired OTP code',
   })
-  async resetPassword(
-    @Body() dto: ResetPasswordDto,
-    @Req() req: Request,
-  ): Promise<null> {
-    await this.authService.resetPassword(
-      dto,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+  async resetPassword(@Body() dto: ResetPasswordDto): Promise<null> {
+    await this.authService.resetPassword(dto);
     return null;
   }
 }

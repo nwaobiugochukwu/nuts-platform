@@ -6,6 +6,8 @@
  * role never takes down the others; PM2 restarts the process with backoff
  * before the container itself is considered unhealthy.
  *
+ *   all     everything in one process (PROCESS_ROLE=all): the DEFAULT when PM2_APP is unset,
+ *           and the one-service fallback for hosts that run a single container
  *   api     HTTP + SSE (PROCESS_ROLE=api)
  *   worker  RabbitMQ consumers + outbox relay (PROCESS_ROLE=worker)
  *   jobs    scheduled jobs, exactly one instance (PROCESS_ROLE=jobs)
@@ -46,6 +48,16 @@ const common = {
 
 module.exports = {
   apps: [
+    {
+      // Everything in one process, as before the split. The default, so a
+      // service nobody has configured keeps working exactly as it did.
+      ...common,
+      name: 'all',
+      script: 'dist/main.js',
+      exec_mode: 'fork',
+      instances: 1,
+      env: { ...common.env, PROCESS_ROLE: 'all' },
+    },
     {
       ...common,
       name: 'api',

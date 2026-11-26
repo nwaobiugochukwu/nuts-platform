@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { currentProcessRole } from '@api/infrastructure/configuration/process-role';
+import { currentRequestId } from '@api/common/request-context/request-context';
 import {
   extractIpAddress,
   extractUserAgent,
@@ -19,11 +20,21 @@ import {
   type AuditContext,
   type AuditOptions,
 } from './audit.decorator';
+import { currentAuditDetails } from './audit-details';
 import { AuditLogService } from './audit-log.service';
 import { buildAuditEvent } from './audit-event';
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+/** Adds the actor record to an object payload (other payload shapes are left alone). */
+function withActor(payload: unknown, actor: Record<string, unknown>): unknown {
+  if (Object.keys(actor).length === 0) return payload;
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    return { ...(payload as Record<string, unknown>), ...actor };
+  }
+  return payload === undefined ? actor : { value: payload, ...actor };
 }
 
 type AuditedRequest = Request & {
@@ -55,6 +66,7 @@ export class AuditInterceptor implements NestInterceptor {
         next: (result) => {
           if (recorded) return;
           recorded = true;
+          if (options.failureOnly) return;
           this.safeRecord(
             options,
             request,
@@ -90,32 +102,70 @@ export class AuditInterceptor implements NestInterceptor {
         result,
         user: request.user,
       };
+      const details = currentAuditDetails();
       const entityId =
-        typeof options.entityId === 'function'
+        details?.entityId ??
+        (typeof options.entityId === 'function'
           ? options.entityId(ctx)
           : options.entityId
             ? firstValue(ctx.params[options.entityId])
-            : undefined;
-      const isAdmin = request.user?.role === 'ADMIN';
+            : undefined);
+      const role = request.user?.role;
+      const isAdmin = role === 'ADMIN';
+      // audit_logs.userId and adminId reference the User and Admin tables, so a
+      // vendor's id cannot go in either; it is recorded in the payload instead.
+      const adminId =
+        details?.adminId ?? (isAdmin ? request.user?.id : undefined);
+      const userId =
+        details?.userId ?? (role === 'USER' ? request.user?.id : undefined);
+      const actor =
+        role === 'VENDOR' && request.user
+          ? { actor: { role, id: request.user.id } }
+          : {};
       this.audit.record(
         buildAuditEvent({
-          action: options.action,
+          action:
+            details?.action ??
+            (outcome === 'failure' && options.failureAction
+              ? options.failureAction
+              : options.action),
           entity: options.entity,
           entityId,
-          adminId: isAdmin ? request.user?.id : undefined,
-          userId: isAdmin ? undefined : request.user?.id,
+          adminId,
+          userId,
           ipAddress: extractIpAddress(request),
           userAgent: extractUserAgent(request),
-          requestId: request.id ? String(request.id) : undefined,
+          requestId: request.id ? String(request.id) : currentRequestId(),
           outcome,
           statusCode,
           source: currentProcessRole(),
-          payload: options.payload
-            ? options.payload(ctx)
-            : { params: ctx.params, body: ctx.body },
-          after: options.after ? options.after(ctx) : undefined,
+          payload: withActor(
+            details?.payload ??
+              (options.payload
+                ? options.payload(ctx)
+                : { params: ctx.params, body: ctx.body }),
+            actor,
+          ),
+          before: details?.before,
+          after:
+            details?.after ?? (options.after ? options.after(ctx) : undefined),
         }),
       );
+      for (const extra of details?.extra ?? []) {
+        this.audit.record(
+          buildAuditEvent({
+            ...extra,
+            adminId: extra.adminId ?? adminId,
+            userId: extra.userId ?? userId,
+            ipAddress: extractIpAddress(request),
+            userAgent: extractUserAgent(request),
+            requestId: request.id ? String(request.id) : currentRequestId(),
+            outcome,
+            statusCode,
+            source: currentProcessRole(),
+          }),
+        );
+      }
     } catch {
       // Swallowed on purpose; see the method comment.
     }

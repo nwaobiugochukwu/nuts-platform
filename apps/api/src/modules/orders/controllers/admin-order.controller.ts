@@ -31,6 +31,7 @@ import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @Roles(ROLE.ADMIN)
 @ApiBearerAuth('JWT-auth')
@@ -85,6 +86,7 @@ export class AdminOrdersController {
     return this.ordersService.findOneAdmin(id);
   }
 
+  @Audit({ action: 'UPDATE_ORDER_STATUS', entity: 'Order', entityId: 'id' })
   @Patch(':id/status')
   @Message('Order status updated successfully')
   @ApiOperation({

@@ -10,7 +10,6 @@
   Patch,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -23,19 +22,17 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import type { Request } from 'express';
+import type {} from 'express';
 import { VendorProfileDto } from '@api/modules/vendors/dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '@api/modules/vendors/dto/vendor-status-response.dto';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import {} from '@api/common/utils/request.util';
 import { AdminVendorsService } from '../admin-vendors.service';
 import { QueryAdminVendorsDto } from '../dto/query-admin-vendors.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiBearerAuth('JWT-auth')
 @ApiTags('ADMIN - VENDORS')
@@ -88,6 +85,7 @@ export class AdminVendorsController {
     return this.adminVendorsService.findOne(id);
   }
 
+  @Audit({ action: 'APPROVE_VENDOR', entity: 'Vendor', entityId: 'id' })
   @Patch(':id/approve')
   @Message('Vendor approved successfully')
   @ApiOperation({
@@ -103,16 +101,11 @@ export class AdminVendorsController {
   async approve(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<VendorStatusResponseDto> {
-    return this.adminVendorsService.approve(
-      adminId,
-      id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminVendorsService.approve(adminId, id);
   }
 
+  @Audit({ action: 'VERIFY_VENDOR', entity: 'Vendor', entityId: 'id' })
   @Patch(':id/verify')
   @Message('Vendor verified successfully')
   @ApiOperation({
@@ -128,16 +121,11 @@ export class AdminVendorsController {
   async verify(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<VendorStatusResponseDto> {
-    return this.adminVendorsService.verify(
-      adminId,
-      id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminVendorsService.verify(adminId, id);
   }
 
+  @Audit({ action: 'DEACTIVATE_VENDOR', entity: 'Vendor', entityId: 'id' })
   @Patch(':id/deactivate')
   @Message('Vendor deactivated successfully')
   @ApiOperation({
@@ -153,16 +141,11 @@ export class AdminVendorsController {
   async deactivate(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<VendorStatusResponseDto> {
-    return this.adminVendorsService.deactivate(
-      adminId,
-      id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminVendorsService.deactivate(adminId, id);
   }
 
+  @Audit({ action: 'REACTIVATE_VENDOR', entity: 'Vendor', entityId: 'id' })
   @Patch(':id/reactivate')
   @Message('Vendor reactivated successfully')
   @ApiOperation({
@@ -178,16 +161,11 @@ export class AdminVendorsController {
   async reactivate(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<VendorStatusResponseDto> {
-    return this.adminVendorsService.reactivate(
-      adminId,
-      id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminVendorsService.reactivate(adminId, id);
   }
 
+  @Audit({ action: 'DELETE_VENDOR', entity: 'Vendor', entityId: 'id' })
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @Message('Vendor permanently deleted successfully')
@@ -202,13 +180,7 @@ export class AdminVendorsController {
   async delete(
     @GetUser('id') adminId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
   ): Promise<void> {
-    return this.adminVendorsService.delete(
-      adminId,
-      id,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.adminVendorsService.delete(adminId, id);
   }
 }

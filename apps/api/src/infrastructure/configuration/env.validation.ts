@@ -180,6 +180,39 @@ export class EnvironmentVariables {
   @IsOptional()
   METRICS_PORT?: string;
 
+  /**
+   * Per-program ports, so one local env file can serve every program. Each falls
+   * back to HEALTH_PORT / METRICS_PORT, then to a default (see `portFor`).
+   */
+  @IsString()
+  @IsOptional()
+  WORKER_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  JOBS_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  TEMPORAL_WORKER_HEALTH_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  API_METRICS_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  WORKER_METRICS_PORT?: string;
+
+  @IsString()
+  @IsOptional()
+  JOBS_METRICS_PORT?: string;
+
+  /** Which program a container runs under PM2: all (default), api, worker or jobs. */
+  @IsString()
+  @IsOptional()
+  PM2_APP?: string;
+
   /** Optional bearer token Prometheus must send to scrape METRICS_PORT. */
   @IsString()
   @IsOptional()

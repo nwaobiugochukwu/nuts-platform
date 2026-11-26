@@ -1,7 +1,9 @@
 import { HttpException, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { lastValueFrom, of, throwError } from 'rxjs';
+import { lastValueFrom, of, throwError, type Observable } from 'rxjs';
 import { Audit, AUDIT_METADATA, type AuditOptions } from './audit.decorator';
+import { auditAlso, auditDetails } from './audit-details';
+import { runWithRequestId } from '@api/common/request-context/request-context';
 import { AuditInterceptor } from './audit.interceptor';
 
 function contextFor(
@@ -140,6 +142,139 @@ describe('AuditInterceptor', () => {
       lastValueFrom(interceptor.intercept(ctx, { handle: () => of('fine') })),
     ).resolves.toBe('fine');
     expect(audit.record).not.toHaveBeenCalled();
+  });
+
+  describe('details attached by the service (auditDetails)', () => {
+    const run = (
+      options: AuditOptions,
+      handler: () => Observable<unknown>,
+      overrides: Record<string, unknown> = {},
+      statusCode = 200,
+    ) =>
+      runWithRequestId('req-annotated-01', () =>
+        lastValueFrom(
+          interceptor.intercept(
+            contextFor(options, { ...request, ...overrides }, statusCode),
+            { handle: handler as never },
+          ),
+        ).catch(() => undefined),
+      );
+
+    it('merges the entity id, payload, before and after into the event', async () => {
+      await run({ action: 'CATEGORY_UPDATED', entity: 'Category' }, () => {
+        auditDetails({
+          entityId: 'cat-7',
+          before: { name: 'Old' },
+          after: { name: 'New' },
+          payload: { changed: ['name'], password: 'nope' },
+        });
+        return of({ ok: true });
+      });
+      const event = audit.record.mock.calls[0][0];
+      expect(event).toMatchObject({
+        action: 'CATEGORY_UPDATED',
+        entity: 'Category',
+        entityId: 'cat-7',
+        before: { name: 'Old' },
+        after: { name: 'New' },
+      });
+      expect(event.payload).toEqual({
+        changed: ['name'],
+        password: '[REDACTED]',
+      });
+    });
+
+    it('lets the service refine the action (activate or deactivate)', async () => {
+      await run(
+        { action: 'CATEGORY_STATUS_CHANGED', entity: 'Category' },
+        () => {
+          auditDetails({ action: 'CATEGORY_DEACTIVATED', entityId: 'cat-1' });
+          return of(1);
+        },
+      );
+      expect(audit.record.mock.calls[0][0].action).toBe('CATEGORY_DEACTIVATED');
+    });
+
+    it('records a failed sign-in under the failure action, with the actor the service found', async () => {
+      await run(
+        {
+          action: 'USER_LOGIN',
+          failureAction: 'USER_LOGIN_FAILED',
+          onFailure: true,
+          entity: 'User',
+        },
+        () => {
+          auditDetails({ userId: 'u-found', payload: { email: 'a@b.c' } });
+          return throwError(() => new HttpException('bad credentials', 401));
+        },
+        { user: undefined },
+      );
+      expect(audit.record.mock.calls[0][0]).toMatchObject({
+        action: 'USER_LOGIN_FAILED',
+        outcome: 'failure',
+        statusCode: 401,
+        userId: 'u-found',
+        payload: { email: 'a@b.c' },
+      });
+    });
+
+    it('records extra events next to the main one, with the same request details', async () => {
+      await run({ action: 'USER_LOGIN', entity: 'User' }, () => {
+        auditDetails({ entityId: 'u-1' });
+        auditAlso({
+          action: 'USER_AUTO_UNSUSPEND_EXPIRED',
+          entity: 'User',
+          entityId: 'u-1',
+        });
+        return of({ ok: true });
+      });
+      expect(audit.record).toHaveBeenCalledTimes(2);
+      expect(audit.record.mock.calls[1][0]).toMatchObject({
+        action: 'USER_AUTO_UNSUSPEND_EXPIRED',
+        entity: 'User',
+        entityId: 'u-1',
+        userId: 'u-1',
+        requestId: 'req-1',
+        outcome: 'success',
+      });
+    });
+
+    it('records only failures when failureOnly is set', async () => {
+      const options = {
+        action: 'VENDOR_LOGIN',
+        failureAction: 'VENDOR_LOGIN_FAILED',
+        failureOnly: true,
+        onFailure: true,
+        entity: 'Vendor',
+      } as AuditOptions;
+      await run(options, () => of({ token: 'x' }));
+      expect(audit.record).not.toHaveBeenCalled();
+      await run(options, () => throwError(() => new HttpException('no', 401)));
+      expect(audit.record.mock.calls[0][0].action).toBe('VENDOR_LOGIN_FAILED');
+    });
+
+    it('records a vendor as the actor in the payload, not in userId (it is not a user row)', async () => {
+      await run({ action: 'VENDOR_LOGOUT', entity: 'Vendor' }, () => of(1), {
+        user: { id: 'v-1', role: 'VENDOR' },
+      });
+      const event = audit.record.mock.calls[0][0];
+      expect(event.userId).toBeUndefined();
+      expect(event.adminId).toBeUndefined();
+      expect(event.payload.actor).toEqual({ role: 'VENDOR', id: 'v-1' });
+    });
+
+    it('uses the success action when the request succeeds', async () => {
+      await run(
+        {
+          action: 'USER_LOGIN',
+          failureAction: 'USER_LOGIN_FAILED',
+          onFailure: true,
+          entity: 'User',
+        },
+        () => of({ token: 'x' }),
+      );
+      expect(audit.record.mock.calls[0][0].action).toBe('USER_LOGIN');
+    });
   });
 
   it('exposes the decorator as metadata', () => {

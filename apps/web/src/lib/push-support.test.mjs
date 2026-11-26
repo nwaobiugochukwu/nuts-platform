@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectPushSupport, explainSubscribeError, nextPromptDelayMs } from "./push-support.ts";
+import { detectPushSupport, explainSubscribeError, isExpectedSubscribeError, nextPromptDelayMs } from "./push-support.ts";
 
 const base = {
   isSecureContext: true,
@@ -59,4 +59,10 @@ test("the prompt backs off after each dismissal", () => {
   assert.equal(nextPromptDelayMs(1), 3 * day);
   assert.equal(nextPromptDelayMs(2), 14 * day);
   assert.equal(nextPromptDelayMs(9), 60 * day);
+});
+
+test("browser and network push failures are expected, app errors are not", () => {
+  assert.equal(isExpectedSubscribeError(Object.assign(new Error("Registration failed - push service error"), { name: "AbortError" })), true);
+  assert.equal(isExpectedSubscribeError(Object.assign(new Error("denied"), { name: "NotAllowedError" })), true);
+  assert.equal(isExpectedSubscribeError(new TypeError("x is undefined")), false);
 });

@@ -1,0 +1,118 @@
+{
+  // One dedicated terminal tab per service. Ctrl+Shift+B runs "dev: all (in order)".
+  // Each service starts only after the previous one is healthy (the wait-* tasks poll the health URL).
+  // Restart one service alone: Terminal > Restart Running Task.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: data services",
+      "type": "shell",
+      "command": "npm run db:up",
+      "presentation": { "panel": "dedicated", "group": "data", "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: compile",
+      "type": "shell",
+      "command": "npm run dev:compile",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "compile", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "typescript",
+        "fileLocation": ["relative", "${workspaceFolder}/apps/api"],
+        "pattern": { "regexp": "^(.+)\\((\\d+),(\\d+)\\): (error|warning) (TS\\d+): (.*)$", "file": 1, "line": 2, "column": 3, "severity": 4, "code": 5, "message": 6 },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Starting compilation in watch mode|File change detected",
+          "endsPattern": "Found \\d+ errors?\\. Watching for file changes"
+        }
+      },
+      "dependsOn": ["dev: data services"]
+    },
+    {
+      "label": "dev: api",
+      "type": "shell",
+      "command": "npm run dev:api",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "api", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "api",
+        "pattern": { "regexp": "^$" },
+        "background": { "activeOnStart": true, "beginsPattern": "pm2-runtime|PM2", "endsPattern": "." }
+      },
+      "dependsOn": ["dev: compile"]
+    },
+    {
+      "label": "dev: wait api healthy",
+      "type": "shell",
+      "command": "node scripts/wait-healthy.mjs http://localhost:3001/api/v1/health --timeout 120",
+      "presentation": { "panel": "dedicated", "group": "wait", "reveal": "silent", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: worker",
+      "type": "shell",
+      "command": "npm run dev:worker",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "worker", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "worker",
+        "pattern": { "regexp": "^$" },
+        "background": { "activeOnStart": true, "beginsPattern": "pm2-runtime|PM2", "endsPattern": "." }
+      }
+    },
+    {
+      "label": "dev: wait worker healthy",
+      "type": "shell",
+      "command": "node scripts/wait-healthy.mjs http://localhost:3002/health --timeout 120",
+      "presentation": { "panel": "dedicated", "group": "wait", "reveal": "silent", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: jobs",
+      "type": "shell",
+      "command": "npm run dev:jobs",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "jobs", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "jobs",
+        "pattern": { "regexp": "^$" },
+        "background": { "activeOnStart": true, "beginsPattern": "pm2-runtime|PM2", "endsPattern": "." }
+      }
+    },
+    {
+      "label": "dev: wait jobs healthy",
+      "type": "shell",
+      "command": "node scripts/wait-healthy.mjs http://localhost:3003/health --timeout 120",
+      "presentation": { "panel": "dedicated", "group": "wait", "reveal": "silent", "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: web",
+      "type": "shell",
+      "command": "npm run dev:web",
+      "isBackground": true,
+      "presentation": { "panel": "dedicated", "group": "web", "reveal": "always" },
+      "problemMatcher": {
+        "owner": "web",
+        "pattern": { "regexp": "^$" },
+        "background": { "activeOnStart": true, "beginsPattern": "next dev|Starting", "endsPattern": "Ready in|Local:" }
+      }
+    },
+    {
+      "label": "dev: all (in order)",
+      "dependsOn": [
+        "dev: api",
+        "dev: wait api healthy",
+        "dev: worker",
+        "dev: wait worker healthy",
+        "dev: jobs",
+        "dev: wait jobs healthy",
+        "dev: web"
+      ],
+      "dependsOrder": "sequence",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    }
+  ]
+}

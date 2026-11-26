@@ -7,7 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CategoryStatus } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
+import { captureAudit } from '@api/common/audit-log/audit-testing';
 import { CategoriesService } from './categories.service';
 
 describe('CategoriesService (Hierarchical Catalog System)', () => {
@@ -28,7 +28,6 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
     set: AsyncMock;
     delByPattern: AsyncMock;
   };
-  let auditLog: { log: AsyncMock };
 
   const mockCategories: Record<string, unknown>[] = [
     {
@@ -113,16 +112,11 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
       delByPattern: asyncMock().mockResolvedValue(undefined),
     };
 
-    auditLog = {
-      log: asyncMock().mockResolvedValue(undefined),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CategoriesService,
         { provide: PrismaService, useValue: prisma },
         { provide: CacheService, useValue: cacheService },
-        { provide: AuditLogService, useValue: auditLog },
       ],
     }).compile();
 
@@ -147,9 +141,11 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
         updatedAt: new Date(),
       });
 
-      const result = await service.create({
-        name: 'Home & Kitchen',
-      });
+      const { result, details } = await captureAudit(() =>
+        service.create({
+          name: 'Home & Kitchen',
+        }),
+      );
 
       expect(result.id).toBe('new-root-id');
       expect(result.parentId).toBeNull();
@@ -164,9 +160,10 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
           status: CategoryStatus.ACTIVE,
         },
       });
-      expect(auditLog.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'CATEGORY_CREATED' }),
-      );
+      expect(details).toMatchObject({
+        entityId: 'new-root-id',
+        payload: { name: 'Home & Kitchen', slug: 'home-and-kitchen' },
+      });
     });
 
     it('should successfully create a deeply nested child category', async () => {
@@ -289,7 +286,9 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
         isActive: false,
       });
 
-      const res = await service.archiveCategory('electronics');
+      const { result: res, details: archiveDetails } = await captureAudit(() =>
+        service.archiveCategory('electronics'),
+      );
 
       expect(res.status).toBe(CategoryStatus.ARCHIVED);
       expect(prisma.category.updateMany).toHaveBeenCalledWith({
@@ -307,9 +306,12 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
           isActive: false,
         },
       });
-      expect(auditLog.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'CATEGORY_ARCHIVED' }),
-      );
+      expect(archiveDetails).toMatchObject({
+        payload: {
+          slug: expect.any(String),
+          cascadedToCount: expect.any(Number),
+        },
+      });
     });
 
     it('should reject permanent deletion if category contains products', async () => {
@@ -378,7 +380,9 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
         ])
         .mockResolvedValueOnce([]);
 
-      await service.reorderChildren('parent-1', ['child-2', 'child-1']);
+      const { details: reorderDetails } = await captureAudit(() =>
+        service.reorderChildren('parent-1', ['child-2', 'child-1']),
+      );
 
       expect(prisma.category.update).toHaveBeenCalledWith({
         where: { id: 'child-2' },
@@ -388,9 +392,9 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
         where: { id: 'child-1' },
         data: { sortOrder: 1 },
       });
-      expect(auditLog.log).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'CATEGORIES_REORDERED' }),
-      );
+      expect(reorderDetails).toMatchObject({
+        payload: { parentId: 'parent-1', order: ['child-2', 'child-1'] },
+      });
     });
   });
 });

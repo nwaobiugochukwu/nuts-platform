@@ -19,28 +19,32 @@ x-client-env: &client-env
   NODE_ENV: ${NODE_ENV:-development}
   INTERNAL_API_URL: http://api:3001
 
+# ── Shared by the three development backend containers (api, worker, jobs) ──
+x-api-dev-common: &api-dev-common
+  restart: unless-stopped
+  profiles: ["dev"]
+  command: ["npm", "run", "dev:role"]
+  env_file:
+    - ./apps/api/.env.development
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./apps/api/src:/app/apps/api/src
+    - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
+
+x-api-dev-env: &api-dev-env
+  <<: *api-env
+  NODE_ENV: development
+  SWAGGER_ENABLED: "true"
+  RABBITMQ_ENABLED: "true"
+  RABBITMQ_URL: amqp://nuts:nuts_local_dev@host.docker.internal:5672
+  # Postgres/Redis run from docker-compose.db.yml and publish ports on the host.
+  # Inside a container "localhost" is the container itself, so the values in
+  # .env.development (localhost:5433 / :6379) cannot work here.
+  DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
+  REDIS_URL: redis://host.docker.internal:6379
+
 services:
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    restart: unless-stopped
-    profiles: ["dev"]
-    environment:
-      RABBITMQ_DEFAULT_USER: nuts
-      RABBITMQ_DEFAULT_PASS: nuts_local_dev
-    ports:
-      - "15673:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - nuts_net
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-
-
   # ── Temporal dev server + UI (Development) ────────────────────────────────
   # Single-process dev server with file persistence. Web UI on :8233.
   # Production/staging use Temporal Cloud or a separate self-hosted cluster.
@@ -60,44 +64,26 @@ services:
       - nuts_net
 
   # ── Backend programs (Development) ─────────────────────────────────────────
-  # Same shape as staging and production: three separate containers from one
-  # image, each running one role (api, worker, jobs) with a TypeScript watcher.
+  # Same shape as staging: three separate containers from ONE image, each running
+  # one program (api, worker, jobs) with a TypeScript watcher and PM2. The image is
+  # built once by `api`; worker and jobs reuse it (they never build or pull).
   api:
-    &api-dev
+    <<: *api-dev-common
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
       target: dev
+    image: nuts-api-dev:latest
     container_name: nuts_api
-    restart: unless-stopped
-    profiles: ["dev"]
-    command: ["npm", "run", "dev:role"]
     ports:
       - "${API_PORT:-3001}:3001"
-    env_file:
-      - ./apps/api/.env.development
-    environment: &api-dev-env
-      <<: *api-env
-      NODE_ENV: development
-      SWAGGER_ENABLED: "true"
-      RABBITMQ_ENABLED: "true"
-      RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
-      # Postgres/Redis run from docker-compose.db.yml and publish ports on the
-      # host. Inside this container "localhost" is the container itself, so the
-      # values in .env.development (localhost:5433 / :6379) cannot work here.
-      DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
-      REDIS_URL: redis://host.docker.internal:6379
+      # Metrics for the local Prometheus (npm run obs:up), which reads these host ports.
+      - "9464:9464"
+    environment:
+      <<: *api-dev-env
       PROCESS_ROLE: api
       DEV_LABEL: api
       METRICS_PORT: "9464"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./apps/api/src:/app/apps/api/src
-      - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
     networks:
       nuts_net:
         aliases:
@@ -110,15 +96,20 @@ services:
       start_period: 60s
 
   worker:
-    <<: *api-dev
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
     container_name: nuts_worker_dev
-    ports: []
+    ports:
+      - "9465:9465"
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: worker
-      DEV_ENTRY: dist/worker.js
       DEV_LABEL: worker
       HEALTH_PORT: "3002"
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - nuts_net
     healthcheck:
@@ -129,15 +120,20 @@ services:
       start_period: 60s
 
   jobs:
-    <<: *api-dev
+    <<: *api-dev-common
+    image: nuts-api-dev:latest
+    pull_policy: never
     container_name: nuts_jobs_dev
-    ports: []
+    ports:
+      - "9466:9466"
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: jobs
-      DEV_ENTRY: dist/worker.js
       DEV_LABEL: jobs
       HEALTH_PORT: "3003"
+    depends_on:
+      worker:
+        condition: service_healthy
     networks:
       - nuts_net
     healthcheck:
@@ -334,6 +330,42 @@ services:
       retries: 5
       start_period: 60s
 
+  # ── Local monitoring (opt-in: `npm run obs:up`, profile "observability") ───
+  # Prometheus scrapes the programs started by `npm run dev` on the host; Grafana
+  # opens with the NUTS dashboard and the Prometheus data source already set up.
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: nuts_prometheus
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./ops/prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    networks:
+      - nuts_net
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: nuts_grafana
+    restart: unless-stopped
+    profiles: ["observability"]
+    ports:
+      - "${GRAFANA_PORT:-3030}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/nuts-overview.json:/var/lib/grafana/dashboards/nuts-overview.json:ro
+    depends_on:
+      - prometheus
+    networks:
+      - nuts_net
+
   # ── Next.js Client (Development) ───────────────────────────────────────────
   client:
     build:
@@ -458,8 +490,6 @@ networks:
     driver: bridge
 
 volumes:
-  rabbitmq_data:
-    name: nuts_app_rabbitmq_data
   temporal_data:
     name: nuts_app_temporal_data
 

@@ -5,7 +5,6 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { ReferralService } from '@api/modules/referral/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp/otp.service';
 import { RefreshSessionService } from './sessions/refresh-session.service';
@@ -15,7 +14,6 @@ describe('AuthService', () => {
   let mockPrisma: any;
   let mockOtpService: any;
   let mockEmailService: any;
-  let mockAuditLog: any;
   let mockReferralService: any;
   let mockAccountLockService: any;
   let mockRefreshSessionService: any;
@@ -47,9 +45,6 @@ describe('AuthService', () => {
     };
     mockEmailService = {
       sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
-    };
-    mockAuditLog = {
-      log: jest.fn().mockResolvedValue(undefined),
     };
     mockReferralService = {
       validateReferralCode: jest.fn(),
@@ -84,7 +79,6 @@ describe('AuthService', () => {
       mockPrisma,
       mockOtpService,
       mockEmailService,
-      mockAuditLog,
       mockReferralService,
       mockAccountLockService,
       mockRefreshSessionService,

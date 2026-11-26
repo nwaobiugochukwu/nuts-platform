@@ -7,15 +7,11 @@ import {
   Patch,
   Post,
   Query,
-  Req,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import type { Request } from 'express';
-import {
-  extractIpAddress,
-  extractUserAgent,
-} from '@api/common/utils/request.util';
+import type {} from 'express';
+import {} from '@api/common/utils/request.util';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
@@ -26,6 +22,7 @@ import {
   ScheduleAdminAnnouncementDto,
   UpdateAdminAnnouncementDto,
 } from '../dto/admin-announcement.dto';
+import { Audit } from '@api/common/audit-log/audit.decorator';
 
 @ApiTags('ADMIN - ANNOUNCEMENTS')
 @ApiBearerAuth()
@@ -55,89 +52,54 @@ export class AdminAnnouncementsController {
     return this.announcements.getOverview();
   }
 
+  @Audit({ action: 'ANNOUNCEMENT_DRAFT_CREATED', entity: 'Announcement' })
   @Post()
   @ApiOperation({ summary: 'Create an announcement draft' })
   @Message('Announcement draft created successfully')
   create(
     @Body() dto: CreateAdminAnnouncementDto,
     @GetUser('id') adminId: string,
-    @Req() req: Request,
   ) {
-    return this.announcements.createDraft(
-      dto,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.announcements.createDraft(dto, adminId);
   }
 
+  @Audit({ action: 'ANNOUNCEMENT_DRAFT_UPDATED', entity: 'Announcement' })
   @Patch(':id')
   @ApiOperation({ summary: 'Update a draft or scheduled announcement' })
   @Message('Announcement updated successfully')
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAdminAnnouncementDto,
-    @GetUser('id') adminId: string,
-    @Req() req: Request,
   ) {
-    return this.announcements.updateDraft(
-      id,
-      dto,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.announcements.updateDraft(id, dto);
   }
 
+  @Audit({ action: 'ANNOUNCEMENT_PUBLISH_STARTED', entity: 'Announcement' })
   @Post(':id/publish')
   @ApiOperation({ summary: 'Publish an announcement to its selected audience' })
   @Message('Announcement delivery started')
-  publish(
-    @Param('id', ParseUUIDPipe) id: string,
-    @GetUser('id') adminId: string,
-    @Req() req: Request,
-  ) {
-    return this.announcements.publishNow(
-      id,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+  publish(@Param('id', ParseUUIDPipe) id: string) {
+    return this.announcements.publishNow(id);
   }
 
+  @Audit({ action: 'ANNOUNCEMENT_SCHEDULED', entity: 'Announcement' })
   @Post(':id/schedule')
   @ApiOperation({ summary: 'Schedule an announcement for future delivery' })
   @Message('Announcement scheduled successfully')
   schedule(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ScheduleAdminAnnouncementDto,
-    @GetUser('id') adminId: string,
-    @Req() req: Request,
   ) {
-    return this.announcements.schedule(
-      id,
-      dto,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+    return this.announcements.schedule(id, dto);
   }
 
+  @Audit({ action: 'ANNOUNCEMENT_ARCHIVED', entity: 'Announcement' })
   @Post(':id/archive')
   @ApiOperation({
     summary: 'Archive a completed, draft, or failed announcement',
   })
   @Message('Announcement archived successfully')
-  archive(
-    @Param('id', ParseUUIDPipe) id: string,
-    @GetUser('id') adminId: string,
-    @Req() req: Request,
-  ) {
-    return this.announcements.archive(
-      id,
-      adminId,
-      extractIpAddress(req),
-      extractUserAgent(req),
-    );
+  archive(@Param('id', ParseUUIDPipe) id: string) {
+    return this.announcements.archive(id);
   }
 }

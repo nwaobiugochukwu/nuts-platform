@@ -1,3 +1,4 @@
+import { roleCan } from '@api/infrastructure/configuration/process-role';
 import {
   HttpException,
   HttpStatus,
@@ -111,6 +112,10 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     if (!this.redis) return;
+    // Only the program that serves the live notification streams (SSE) listens for
+    // broadcasts. The worker and jobs publish through the main Redis client, so they
+    // skip the second connection (saves 2 Redis connections on a hosted plan).
+    if (!roleCan('http')) return;
 
     try {
       this.subClient = this.redis.duplicate();

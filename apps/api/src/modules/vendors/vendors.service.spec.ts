@@ -11,7 +11,6 @@ import { VendorsService } from './vendors.service';
 describe('VendorsService', () => {
   let service: VendorsService;
   let mockPrisma: any;
-  let mockAudit: any;
   let mockCache: any;
 
   const baseVendorRecord = {
@@ -55,10 +54,6 @@ describe('VendorsService', () => {
       $queryRaw: jest.fn(),
     };
 
-    mockAudit = {
-      log: jest.fn().mockResolvedValue(undefined),
-    };
-
     mockCache = {
       del: jest.fn().mockResolvedValue(undefined),
       get: jest.fn().mockResolvedValue(null),
@@ -68,7 +63,7 @@ describe('VendorsService', () => {
       ),
     };
 
-    service = new VendorsService(mockPrisma, mockAudit, mockCache);
+    service = new VendorsService(mockPrisma, mockCache);
   });
 
   // ===========================================================================

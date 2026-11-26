@@ -42,7 +42,7 @@ check "worker and jobs are running"    /api/v1/health/background
 if [ "$fail" -ne 0 ]; then
   echo
   echo "Deploy check FAILED. If worker or jobs is reported missing, start them:"
-  echo "  docker compose --profile <staging|prod> up -d     (or set PROCESS_ROLE=all on api-prod)"
+  echo "  docker compose --profile <staging|prod> up -d     (or set PM2_APP=all on the api service to run everything in one)"
   exit 1
 fi
 echo "Deploy check passed."
