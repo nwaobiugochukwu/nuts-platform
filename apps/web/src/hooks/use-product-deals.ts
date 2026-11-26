@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   publicDiscountService,
@@ -122,6 +122,11 @@ export function useBatchProductDeals(productIds: string[]) {
       );
     },
     enabled: normalizedIds.length > 0,
+    // The key is the exact set of ids on screen, so dismissing or swapping one
+    // product changes it. Keep showing the previous deals (looked up per product
+    // id) until the new batch arrives, so the other cards' campaign tags do not
+    // vanish and reappear.
+    placeholderData: keepPreviousData,
     staleTime: 180_000,
     gcTime: 300_000,
     // The service already coalesces + caches per product; never re-POST on
