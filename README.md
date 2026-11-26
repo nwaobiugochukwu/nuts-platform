@@ -19,9 +19,9 @@
 
 This README and the documents under [docs/](docs/README.md) are **living documentation**. They are updated as each batch of work lands, so details such as hosting, local start-up and the programs that run can change. The current plan, the order of the remaining batches and what is done are in the [master roadmap](docs/architecture/master-roadmap.md), last updated 2026-11-26.
 
-**Where the project is heading:** every program (web, api, worker, jobs, and later a Temporal worker) runs as its own service from one image; local development runs the same programs in Docker Compose; staging adds monitoring, a post-deploy check and Temporal; then the money code is made safe, long-running processes move onto Temporal, and the delivery operation is built last.
+**Where the project is heading:** staging runs on Render as two services (api, worker and jobs as separate processes in one, and web in the other), each program becoming its own service when the budget allows; local development runs the same programs in Docker Compose; staging adds monitoring, a post-deploy check and Temporal; then the money code is made safe, long-running processes move onto Temporal, and the delivery operation is built last.
 
-**Future directions considered, not adopted for now** (each has a "revisit when" signal in the roadmap): a single container running several programs, free hosting tiers, AWS (ECS), Kubernetes, hosting the web app on Vercel, Tilt for local development, self-hosted Temporal, splitting the worker further, a separate real-time gateway, and a trained recommendation model. See [section 6 of the roadmap](docs/architecture/master-roadmap.md#6-future-directions-considered).
+**Future directions considered, not adopted for now** (each has a "revisit when" signal in the roadmap): splitting every program into its own service now, free hosting tiers, AWS (ECS), Kubernetes, hosting the web app on Vercel, Tilt for local development, self-hosted Temporal, splitting the worker further, a separate real-time gateway, and a trained recommendation model. See [section 6 of the roadmap](docs/architecture/master-roadmap.md#6-future-directions-considered).
 
 ---
 
