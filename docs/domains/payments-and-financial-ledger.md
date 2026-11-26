@@ -103,6 +103,12 @@ Separate user/vendor controllers call shared wallet services; transaction record
 
 Provider retries and duplicate business events must not duplicate a ledger credit. Reconciliation against payments and orders, plus database-enforced idempotency, should remain a release and scale concern.
 
+## Operational notes: programs, transactions and audit
+
+- **Where the timed work runs.** Unpaid-order expiry and the refund reconciler are scheduled jobs, so they run in the single `jobs` program, not in the `api`. Moving them onto durable workflows (payment expiry, refunds) is planned and not built; see the [platform reliability plan](../architecture/platform-reliability-plan.md).
+- **Audit.** Payment and refund changes already write their audit rows inside the same database transaction (`tx.auditLog.create`, six places in `payments.service.ts`), so those events exist if and only if the change committed. The next release moves them to the shared `ctx.audit` helper so they also carry the request id and the same columns as every other event, and extends the same treatment to wallets and orders.
+- **Transactions.** The shared `TransactionRunner` (retry on conflict, hooks after commit, outbox and audit helpers) is used by the cart today; payments, wallets and orders are the first files to move onto it.
+
 ## Scaling and traffic direction
 
 The [Scaling Strategy](../scaling/README.md#payments-and-financial-ledgers) contains the staged concurrency, traffic, and growth recommendations for this domain. Scale provider retries, reconciliation, and wallet processing with durable state, idempotency, and operator recovery.

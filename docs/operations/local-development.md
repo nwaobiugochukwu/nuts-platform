@@ -18,31 +18,56 @@ Requires Docker (databases and broker run in containers) and Node 22. Environmen
 npm run dev
 ```
 
-This starts the databases and broker (`docker-compose.db.yml`), then **four separate programs**, the same shape as staging and production:
+`npm run dev` starts everything **in strict order, one service after another**. Each step waits until the previous one is healthy before the next begins:
 
-| Program | What it does | Where |
+| # | Step | Moves on when |
 |---|---|---|
-| web | the screens | `http://localhost:5173` |
+| 1 | data services (PostgreSQL, Redis, RabbitMQ) | all three report healthy |
+| 2 | compile (TypeScript, watching your code) | its first build finishes |
+| 3 | api | `http://localhost:3001/api/v1/health` answers 200 |
+| 4 | worker | `http://localhost:3002/health` answers 200 |
+| 5 | jobs | `http://localhost:3003/health` answers 200 |
+| 6 | web | Next.js says it is ready |
+
+Every line is prefixed with the service name (`[api    ]`, `[worker ]`, ...) and coloured, and the run ends with a summary showing which services are OK. Press `ctrl+c` once to stop every service (no leftover processes). The data services keep running; stop them with `npm run db:down`.
+
+If a step does not become healthy within its timeout (default 120 seconds, change with `npm run dev -- --timeout 60`), the launcher says so, still starts the remaining services (they do not depend on each other), and lists the failure in the summary. Use `npm run dev:skip-infra` when the data services are already up.
+
+The full output of every service is also written to `.logs/dev/<service>.log` (git-ignored). `npm run dev:quiet` shows only the start, ready and failed lines in the terminal; follow one service with `tail -f .logs/dev/api.log`.
+
+### One VS Code terminal tab per service
+
+Press `ctrl+shift+B` (Terminal > Run Build Task) to run **dev: all (in order)** from [.vscode/tasks.json](../../.vscode/tasks.json). It opens a dedicated terminal tab for each service (data, compile, api, worker, jobs, web) and uses small "wait healthy" tasks between them, so the order is the same as above. To restart one service alone, use Terminal > Restart Running Task and pick it; the others keep running. You can also run a single task (for example `dev: worker`) from Terminal > Run Task. This VS Code setup has not been exercised in an editor by the person who wrote it, so report anything that behaves differently.
+
+Prefer Turborepo's all-at-once view? `npm run dev:parallel` starts everything at the same moment in Turborepo's terminal view (move with the arrow keys, press `m` for the list of keys it offers). It is kept as an option; the ordered start is the default.
+
+| Service | What it does | Where |
+|---|---|---|
+| compile | the TypeScript compiler, watching your code | |
 | api | answers requests | `http://localhost:3001/api/v1/health`, metrics `:9464` |
 | worker | emails, notifications, analytics, stock updates, audit writing | health `:3002`, metrics `:9465` |
 | jobs | scheduled jobs (exactly one) | health `:3003`, metrics `:9466` |
+| web | the screens | `http://localhost:5173` |
 
-Ready after about 30 s (the TypeScript compile runs first). The programs run under **PM2**, the same supervisor staging uses: a program that crashes is restarted automatically, a change to the source recompiles and restarts the programs, and every log line starts with its program name (`[api]`, `[worker]`, `[jobs]`). Stopping one program leaves the others serving. Ctrl+C stops everything; `npm run db:down` stops the databases.
+The api, worker and jobs only *run* what the compiler builds; they wait for the first build and restart automatically when it rebuilds, and PM2 (the same supervisor staging uses) restarts any of them that crashes. They never depend on each other, only on the databases and broker, so stopping the worker leaves the api and web serving. Ready after roughly 30 to 60 seconds.
 
-Related commands:
+### Starting services separately
 
-| Command | Use |
+Every service also has its own command, for when you want a service in its own terminal or want to run only some:
+
+| Command | Starts |
 |---|---|
-| `npm run dev:backend` | the three backend programs (api, worker, jobs) without web |
-| `npm run dev:api` | only the api program (start `dev:worker` and `dev:jobs` in other terminals, or emails and scheduled jobs will not run) |
-| `npm run dev:web` | only the web app |
-| `npm run dev:docker` | the same four programs as Docker containers (`docker compose --profile dev`): `api`, `worker`, `jobs`, `client` |
-| `npm run dev:worker`, `npm run dev:jobs` | one program each, in its own terminal (each keeps its PM2 state under `apps/api/.pm2/`) |
-| `npm run dev --prefix apps/api` | same as `dev:backend` |
-| `npm run dev:single` | one backend program doing everything (`all`). For debugging only; it is **not** how staging or production run |
-| `npm run start:debug --prefix apps/api` | like `dev:single` with the Node inspector on port 9229 |
+| `npm run db:up` | PostgreSQL, Redis and RabbitMQ, then waits until healthy |
+| `npm run dev:compile` | the compiler (start this first or alongside; the others wait for its first build) |
+| `npm run dev:api` / `dev:worker` / `dev:jobs` | that program only |
+| `npm run dev:web` | the web app only |
+| `npm run dev:parallel` | everything at once in Turborepo's terminal view |
+| `npm run dev:plain` | the same at once, as one plain name-prefixed stream (no list view) |
+| `npm run dev:backend` | compiler, api, worker and jobs under one PM2 in one terminal |
+| `npm run dev:single` | one backend program doing everything. For debugging only; **not** how staging runs |
+| `npm run dev:docker` | the same programs as Docker containers (`api`, `worker`, `jobs`, `client`), started in the same order by Compose: each waits for the previous to report healthy |
 
-If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
+`npm run db:down` stops the databases. If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
 
 ## Is everything running? `scripts/verify-deploy.sh`
 

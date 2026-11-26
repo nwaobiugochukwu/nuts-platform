@@ -121,6 +121,10 @@ Shared guards, account-lock and token services, CSRF/origin middleware, rate lim
 
 Redis-backed throttling falls back to volatile per-process counters during outages, so cross-replica limits weaken. Trusted forwarded headers must match the actual proxy chain. Alert on fallback and keep privacy-sensitive data out of logs.
 
+## Operational notes: how sign-in events are audited
+
+Sign-in, registration, logout and password-reset events are declared with `@Audit` on the controller method; the service adds the account it found with `auditDetails`. Failed sign-ins are recorded as failures under their own action (`USER_LOGIN_FAILED`, `VENDOR_LOGIN_FAILED`, `ADMIN_LOGIN_FAILED`) with the account the service identified (if any). An automatic unsuspend during sign-in is recorded as a second event in the same request. A vendor is recorded in the event's payload as `actor: { role: 'VENDOR', id }`, because `audit_logs.userId` and `adminId` reference the user and admin tables. See [Audit trail](../operations/audit-trail.md).
+
 ## Scaling and traffic direction
 
 The [Scaling Strategy](../scaling/README.md#identity-and-security-traffic) contains the staged concurrency, traffic, and growth recommendations for this domain. Scale identity and security traffic through shared rate limits, safe session concurrency, and explicit Redis-outage behavior.
