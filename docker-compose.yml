@@ -37,7 +37,7 @@ x-api-dev-env: &api-dev-env
   NODE_ENV: development
   SWAGGER_ENABLED: "true"
   RABBITMQ_ENABLED: "true"
-  RABBITMQ_URL: amqp://nuts:nuts_local_dev@rabbitmq:5672
+  RABBITMQ_URL: amqp://nuts:nuts_local_dev@host.docker.internal:5672
   # Postgres/Redis run from docker-compose.db.yml and publish ports on the host.
   # Inside a container "localhost" is the container itself, so the values in
   # .env.development (localhost:5433 / :6379) cannot work here.
@@ -45,27 +45,6 @@ x-api-dev-env: &api-dev-env
   REDIS_URL: redis://host.docker.internal:6379
 
 services:
-  rabbitmq:
-    image: rabbitmq:3-management-alpine
-    restart: unless-stopped
-    profiles: ["dev"]
-    environment:
-      RABBITMQ_DEFAULT_USER: nuts
-      RABBITMQ_DEFAULT_PASS: nuts_local_dev
-    ports:
-      - "15673:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - nuts_net
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-
-
   # ── Temporal dev server + UI (Development) ────────────────────────────────
   # Single-process dev server with file persistence. Web UI on :8233.
   # Production/staging use Temporal Cloud or a separate self-hosted cluster.
@@ -98,14 +77,13 @@ services:
     container_name: nuts_api
     ports:
       - "${API_PORT:-3001}:3001"
+      # Metrics for the local Prometheus (npm run obs:up), which reads these host ports.
+      - "9464:9464"
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: api
       DEV_LABEL: api
       METRICS_PORT: "9464"
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
     networks:
       nuts_net:
         aliases:
@@ -122,14 +100,14 @@ services:
     image: nuts-api-dev:latest
     pull_policy: never
     container_name: nuts_worker_dev
+    ports:
+      - "9465:9465"
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: worker
       DEV_LABEL: worker
       HEALTH_PORT: "3002"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       api:
         condition: service_healthy
     networks:
@@ -146,14 +124,14 @@ services:
     image: nuts-api-dev:latest
     pull_policy: never
     container_name: nuts_jobs_dev
+    ports:
+      - "9466:9466"
     environment:
       <<: *api-dev-env
       PROCESS_ROLE: jobs
       DEV_LABEL: jobs
       HEALTH_PORT: "3003"
     depends_on:
-      rabbitmq:
-        condition: service_healthy
       worker:
         condition: service_healthy
     networks:
@@ -512,8 +490,6 @@ networks:
     driver: bridge
 
 volumes:
-  rabbitmq_data:
-    name: nuts_app_rabbitmq_data
   temporal_data:
     name: nuts_app_temporal_data
 
