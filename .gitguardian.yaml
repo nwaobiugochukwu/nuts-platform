@@ -1,0 +1,8 @@
+# Secret-scanning exceptions, kept in the repository so every exception is reviewed.
+# Only placeholders that are published on purpose belong here; a real secret is never
+# listed: it is rotated instead.
+version: 2
+secret:
+  ignored-matches:
+    - name: Placeholder Grafana admin password in .env.example (early commit; since blanked, never a real credential)
+      match: change-me-local-grafana-password
