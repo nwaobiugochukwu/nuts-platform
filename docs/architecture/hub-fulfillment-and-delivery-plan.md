@@ -126,13 +126,39 @@ Backfill: one parcel and one handover per vendor for every existing order, copyi
 
 | Phase | Scope | Size | Exit criteria |
 |---|---|---|---|
-| **0. Hotfix** | Block vendor SHIPPED/DELIVERED on multi-vendor orders; settle only delivered vendors' earnings; tests | S | No payout can be released by another vendor's action |
+| **0. Hotfix** | (a) Block vendor SHIPPED/DELIVERED on multi-vendor orders; settle only delivered vendors' earnings; tests. (b) Scroll behaviour: a new visit starts at the top; only Back/Forward restores position (see [Phase 0b](#phase-0b-scroll-restoration)). (c) Home personalisation: "Not interested" and exploration slots now, the rest in 0c-2 (see [Phase 0c](#phase-0c-home-personalisation-and-shelves)) | M | No payout can be released by another vendor's action; opening a page from a link, logo or menu always starts at the top; Back returns to the saved spot only where that helps; shoppers can dismiss a pick and it stays gone |
 | **1. Fulfillment core** | Data model A (parcel, handover), module B, per-vendor payout C, SLA jobs, hub scan-in and vendor handover screens, customer timeline (no map), backfill | XL | A multi-vendor order moves through handover, check-in, pack and delivery with a correct derived status and correct per-vendor payout |
 | **2. Geo and pricing** | Address with pin, geofence, quote service, ETA windows, checkout integration, cost controls | L | Fee and window shown before payment; quote stored on the order; map spend within budget in a load test |
 | **3. Dispatch and live tracking** | `DispatchProvider` interface, internal rider accounts and **rider portal**, auto-drive and demo control panel, tracking page and live map, delivery code, failed-delivery flow; a third-party provider later behind the same interface | L | You sign in as a rider, accept the task, and the customer sees the rider move on the map (phone GPS or auto-drive at 1x and 60x); delivery cannot complete without the code; scenario triggers behave; delivery events idempotent |
 | **4. Experience and scale** | Delivery slots and economy option, SMS/WhatsApp, reschedule, ETA tuning from history, vendor reliability effects, analytics, margin dashboard | L | KPI targets below met for four consecutive weeks |
 
 Phases 1 and 2 can overlap after the Phase 1 data model is merged. Each phase ships behind feature flags and is released by internal pilot, then a few Lagos zones, then all of Lagos.
+
+### Phase 0b: scroll restoration
+Problem: the home page saves its scroll offset in `sessionStorage` (`use-scroll-restoration.ts`) and restores it **every time it mounts**, not only on Back/Forward. Opening Home from the logo or a menu, or reloading, can therefore jump the user to an old position and make them scroll up first. Other routes rely on the framework default.
+
+Fix:
+- Restore a saved position **only** on a history traversal (Back/Forward); a fresh navigation (link, logo, menu, reload, new tab) clears the saved offset and starts at the top.
+- Restore on list-style pages where it helps (home shelves, product lists, order lists) and start detail, checkout, form and tracking pages at the top.
+- Keep the saved offset per history entry rather than per path, so two visits to the same path do not share a position; expire it with the session.
+- Wait for the content to be tall enough before restoring, and give up quietly if it is not, so the user is never stranded mid-page.
+- Pure helper in `lib/` with `node:test` tests; verify at phone and desktop widths.
+
+### Phase 0c: home personalisation and shelves
+**Already in place (verified in code, not rebuilt):** signals are weighted by type (purchase, cart, wishlist, click, view, search) with exponential time decay; candidates come from category and vendor affinity, search terms and co-purchase; results are diversified (4 per category, 3 per vendor) and recently shown items are penalised for 14 days; every card already carries a `recommendationReason` that the card displays; the shelf stays hidden until the shopper has produced a real signal; "A good place to start" is a per-shopper daily seeded rotation (one product per vendor, category spread, freshness boost, image and stock required).
+
+**Delivered in Phase 0:**
+1. **"Not interested"** on each card of "Picked based on your activity": `POST /recommendations/not-interested` stores a `NOT_INTERESTED` event (no migration, the event type is a free string). A dismissed product never returns, its category's affinity is lowered, the cached shelf is dropped, and the card disappears immediately in the browser.
+2. **Exploration slots:** two places mid-shelf are reserved for the best candidates from stores the shopper has shown no interest in yet (one per store), so the shelf does not become an echo chamber.
+3. Unit tests for the dismissal penalty, the exploration swap and the exclusion rules.
+
+**Deferred to a follow-up (Phase 0c-2), not started:**
+- Quality-weighted fair rotation for "A good place to start" (rating, stock depth) and a capped new-vendor boost.
+- "Why am I seeing this" sheet and "Clear my activity".
+- Tiered cold start that blends popular and personal picks while the signal is light.
+- Per-shelf polish: hide purchased items in "Continue where you left off", affinity-ordered "Shop by interest", per-vendor cap and "new" markers on followed-store products, "Vendors to explore" ranking.
+- One batched home-feed request instead of six queries.
+- Per-shelf metrics (click-through, add-to-cart, coverage, vendor-exposure spread), an offline evaluation script and a flag to compare rankers.
 
 ## 6. How we build and verify it
 

@@ -21,6 +21,8 @@ interface TrendingCarouselProps {
   headerAction?: ReactNode;
   recommendationSurface?: RecommendationSurface;
   recommendationSessionId?: string;
+  /** When set, each card gets a "Not interested" action that calls this. */
+  onDismiss?: (product: ProductCardDto) => void;
 }
 
 export function TrendingCarousel({
@@ -33,6 +35,7 @@ export function TrendingCarousel({
   headerAction,
   recommendationSurface,
   recommendationSessionId = "",
+  onDismiss,
 }: TrendingCarouselProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [requestId, setRequestId] = useState("");
@@ -131,6 +134,15 @@ export function TrendingCarousel({
                   size="lg"
                   priority={index < 2}
                 />
+              )}
+              {onDismiss && (
+                <button
+                  type="button"
+                  onClick={() => onDismiss(product)}
+                  className="mt-1.5 w-full rounded-lg px-2 py-1 text-center text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  Not interested
+                </button>
               )}
             </div>
           ))
