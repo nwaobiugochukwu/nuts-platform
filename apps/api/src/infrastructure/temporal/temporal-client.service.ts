@@ -4,6 +4,7 @@ import {
   Connection,
   WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
+import { currentRequestId } from '@api/common/request-context/request-context';
 import { readTemporalConfig, type TemporalConfig } from './temporal.config';
 
 export interface StartWorkflowInput {
@@ -60,6 +61,10 @@ export class TemporalClientService implements OnModuleDestroy {
         workflowId: input.workflowId,
         taskQueue: input.taskQueue,
         args: input.args ?? [],
+        // Visible in the Temporal UI, so a workflow can be traced to its request.
+        memo: currentRequestId()
+          ? { requestId: currentRequestId() }
+          : undefined,
       });
       return {
         started: true,

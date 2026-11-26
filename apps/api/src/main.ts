@@ -22,6 +22,7 @@ import { currentProcessRole } from './infrastructure/configuration/process-role'
 import { stopCronsUnlessJobsRole } from './infrastructure/configuration/role-runtime';
 import { MetricsService } from './infrastructure/metrics/metrics.service';
 import { startMetricsServer } from './infrastructure/metrics/metrics-server';
+import { createHttpMetricsMiddleware } from './infrastructure/metrics/http-metrics.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -30,6 +31,9 @@ async function bootstrap() {
     bodyParser: false,
   });
   app.useLogger(app.get(Logger));
+  // Install the HTTP metrics middleware first so it sees every response,
+  // including those rejected by later middleware and guards.
+  app.use(createHttpMetricsMiddleware(app.get(MetricsService)));
 
   const config = app.get(ConfigService);
   const logger = app.get(Logger);

@@ -59,8 +59,11 @@ services:
     networks:
       - nuts_net
 
-  # ── NestJS API (Development) ───────────────────────────────────────────────
+  # ── Backend programs (Development) ─────────────────────────────────────────
+  # Same shape as staging and production: three separate containers from one
+  # image, each running one role (api, worker, jobs) with a TypeScript watcher.
   api:
+    &api-dev
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
@@ -68,11 +71,12 @@ services:
     container_name: nuts_api
     restart: unless-stopped
     profiles: ["dev"]
+    command: ["npm", "run", "dev:role"]
     ports:
       - "${API_PORT:-3001}:3001"
     env_file:
       - ./apps/api/.env.development
-    environment:
+    environment: &api-dev-env
       <<: *api-env
       NODE_ENV: development
       SWAGGER_ENABLED: "true"
@@ -83,6 +87,9 @@ services:
       # values in .env.development (localhost:5433 / :6379) cannot work here.
       DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:${DB_PORT:-5433}/nuts_dev?schema=public
       REDIS_URL: redis://host.docker.internal:6379
+      PROCESS_ROLE: api
+      DEV_LABEL: api
+      METRICS_PORT: "9464"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -97,6 +104,44 @@ services:
           - api
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:3001/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  worker:
+    <<: *api-dev
+    container_name: nuts_worker_dev
+    ports: []
+    environment:
+      <<: *api-dev-env
+      PROCESS_ROLE: worker
+      DEV_ENTRY: dist/worker.js
+      DEV_LABEL: worker
+      HEALTH_PORT: "3002"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  jobs:
+    <<: *api-dev
+    container_name: nuts_jobs_dev
+    ports: []
+    environment:
+      <<: *api-dev-env
+      PROCESS_ROLE: jobs
+      DEV_ENTRY: dist/worker.js
+      DEV_LABEL: jobs
+      HEALTH_PORT: "3003"
+    networks:
+      - nuts_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3003/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 12

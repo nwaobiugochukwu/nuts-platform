@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { OutboxStatus } from '@prisma/client';
 import {
   Counter,
@@ -9,6 +9,7 @@ import {
 } from 'prom-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
+import { HeartbeatService, stateFromAge } from '../health/heartbeat.service';
 import { currentProcessRole } from '../configuration/process-role';
 
 /** Request and transaction latency buckets, in seconds. */
@@ -20,20 +21,6 @@ export const LATENCY_BUCKETS = [
 export function statusClass(status: number): string {
   if (!Number.isFinite(status) || status < 100) return 'unknown';
   return `${Math.floor(status / 100)}xx`;
-}
-
-/**
- * Collapses ids so one route is one label value. Used only when the framework
- * gives no matched route (404s and similar).
- */
-export function normalizePath(path: string): string {
-  return path
-    .replace(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-      ':id',
-    )
-    .replace(/\/\d+(?=\/|$)/g, '/:n')
-    .split('?')[0];
 }
 
 @Injectable()
@@ -48,6 +35,7 @@ export class MetricsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rabbitmq: RabbitMQService,
+    @Optional() private readonly heartbeat?: HeartbeatService,
   ) {
     this.registry.setDefaultLabels({ role: currentProcessRole() });
     collectDefaultMetrics({ register: this.registry, prefix: 'nuts_' });
@@ -150,6 +138,20 @@ export class MetricsService {
       },
     });
 
+    const background = new Gauge({
+      name: 'nuts_background_up',
+      help: '1 when the worker or jobs program has a fresh heartbeat; 0 when it is stale or missing',
+      labelNames: ['target'],
+      registers,
+      collect: async () => {
+        if (!this.heartbeat) return;
+        for (const target of ['worker', 'jobs'] as const) {
+          const age = await this.heartbeat.age(target);
+          background.set({ target }, stateFromAge(age) === 'up' ? 1 : 0);
+        }
+      },
+    });
+
     const up = new Gauge({
       name: 'nuts_rabbitmq_up',
       help: '1 when the broker channel is available',
@@ -158,26 +160,36 @@ export class MetricsService {
         up.set(this.rabbitmq.isAvailable() ? 1 : 0);
       },
     });
-    const consumers = new Gauge({
+    // Both queue gauges are filled from one broker read, shared by whichever
+    // gauge is collected first, so neither can come back empty.
+    let pending: Promise<void> | null = null;
+    const refreshQueues = (): Promise<void> => {
+      pending ??= (async () => {
+        const stats = await this.rabbitmq.getQueueStats();
+        messages.reset();
+        consumers.reset();
+        for (const stat of stats) {
+          messages.set({ queue: stat.queue }, stat.messages);
+          consumers.set({ queue: stat.queue }, stat.consumers);
+        }
+      })().finally(() => {
+        pending = null;
+      });
+      return pending;
+    };
+    const consumers: Gauge<'queue'> = new Gauge({
       name: 'nuts_rabbitmq_queue_consumers',
       help: 'Active consumers on a queue',
       labelNames: ['queue'],
       registers,
+      collect: () => refreshQueues(),
     });
-
-    const messages = new Gauge({
+    const messages: Gauge<'queue'> = new Gauge({
       name: 'nuts_rabbitmq_queue_messages',
       help: 'Messages ready in a queue (the dead-letter queue should stay at 0)',
       labelNames: ['queue'],
       registers,
-      collect: async () => {
-        messages.reset();
-        consumers.reset();
-        for (const stat of await this.rabbitmq.getQueueStats()) {
-          messages.set({ queue: stat.queue }, stat.messages);
-          consumers.set({ queue: stat.queue }, stat.consumers);
-        }
-      },
+      collect: () => refreshQueues(),
     });
   }
 

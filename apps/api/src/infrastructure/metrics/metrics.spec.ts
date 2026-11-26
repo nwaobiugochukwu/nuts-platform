@@ -1,4 +1,4 @@
-import { MetricsService, normalizePath, statusClass } from './metrics.service';
+import { MetricsService, statusClass } from './metrics.service';
 import { tokenMatches } from './metrics-server';
 
 describe('metrics helpers', () => {
@@ -7,16 +7,6 @@ describe('metrics helpers', () => {
     expect(statusClass(404)).toBe('4xx');
     expect(statusClass(503)).toBe('5xx');
     expect(statusClass(0)).toBe('unknown');
-  });
-
-  it('collapses ids so routes stay low-cardinality', () => {
-    expect(
-      normalizePath(
-        '/api/v1/orders/3f2b8a52-1c4d-4e7a-9a3b-0c1d2e3f4a5b/items',
-      ),
-    ).toBe('/api/v1/orders/:id/items');
-    expect(normalizePath('/api/v1/products/12345')).toBe('/api/v1/products/:n');
-    expect(normalizePath('/api/v1/search?q=shoes')).toBe('/api/v1/search');
   });
 
   it('compares the scrape token without accepting near matches', () => {
@@ -72,6 +62,9 @@ describe('MetricsService', () => {
     );
     expect(text).toMatch(
       /nuts_rabbitmq_queue_messages\{[^}]*queue="q\.nuts\.dlq"[^}]*\} 3/,
+    );
+    expect(text).toMatch(
+      /nuts_rabbitmq_queue_consumers\{[^}]*queue="q\.nuts\.emails"[^}]*\} 1/,
     );
     expect(text).toContain('nuts_rabbitmq_up');
     expect(text).toContain('nuts_process_cpu_user_seconds_total');

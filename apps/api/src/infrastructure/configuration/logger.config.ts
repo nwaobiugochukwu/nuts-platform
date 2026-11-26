@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Params } from 'nestjs-pino';
+import { currentRequestId } from '@api/common/request-context/request-context';
 
 export const pinoLoggerConfig = (): Params => {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -17,6 +18,12 @@ export const pinoLoggerConfig = (): Params => {
               options: { singleLine: true, colorize: true },
             },
           }),
+      // Every log line written while a request (or a message it caused) is being
+      // handled carries its id, including logs from consumers and workers.
+      mixin: () => {
+        const requestId = currentRequestId();
+        return requestId ? { requestId } : {};
+      },
       genReqId: (req: IncomingMessage, res: ServerResponse) => {
         const header = req.headers['x-request-id'];
         const candidate = Array.isArray(header) ? header[0] : header;

@@ -1,4 +1,8 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+﻿import {
+  REQUEST_ID_HEADER,
+  sanitizeRequestId,
+} from '@api/common/request-context/request-context';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, Interval } from '@nestjs/schedule';
 import { OutboxStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -100,9 +104,16 @@ export class OutboxRelay {
 
       await Promise.all(
         pendingEvents.map(async (event) => {
+          // Put the originating request id back on the message header.
+          const requestId = sanitizeRequestId(
+            (event.payload as { requestId?: unknown } | null)?.requestId,
+          );
           const success = await this.rabbitmq.publish(
             event.eventType,
             event.payload,
+            requestId
+              ? { headers: { [REQUEST_ID_HEADER]: requestId } }
+              : undefined,
           );
           if (success) {
             publishedIds.push(event.id);
