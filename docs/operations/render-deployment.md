@@ -2,7 +2,7 @@
 
 Staging runs on Render. Today it has two services, **web** and **api**, both built from the repository's Dockerfiles with the Docker runtime. After the platform changes, the API image can run as several independent programs, and on Render each program is its own service. This page says what to create, what to set, and in which order, so staging keeps working throughout.
 
-Why this exists: a crash or slow task in one program must not stop the others, and the background work (emails, notifications, scheduled jobs) must keep running.
+Why this exists: a crash or slow task in one program must not stop the others, and the background work (emails, notifications, scheduled jobs) must keep running. See [How the system works](../architecture/how-it-works.md) and [ADR 0004](../architecture/adr/0004-operational-safety-and-environment-parity.md).
 
 ## 1. What runs where
 

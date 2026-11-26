@@ -1,113 +1,101 @@
-# Master roadmap: from today to the big operation
+# Master roadmap: the final plan
 
-This is the single ordered plan. It explains how the application runs in each environment, what has to happen on the server for staging, and the order of the remaining work, finishing with the large rebuild (Temporal workflows and delivery) last.
+Last updated: 2026-11-26. This is a living document. It is revised as each batch lands, and the status column in section 4 is the place to look for what is done.
 
-Related: [platform reliability plan](platform-reliability-plan.md) (design), [hub fulfillment and delivery plan](hub-fulfillment-and-delivery-plan.md) (the big operation's content), [Running and testing locally](../operations/local-development.md).
+**The rule behind every decision below: do what production teams do.** A decision that exists only to fit a free tier or a shortcut is recorded in section 6 (considered and not adopted), not adopted.
 
-## 1. How the application runs
+Related: [how the system works](how-it-works.md), [how production teams run services](how-production-teams-run-services.md), [platform reliability plan](platform-reliability-plan.md) (design), [hub fulfillment and delivery plan](hub-fulfillment-and-delivery-plan.md) (the big operation's content), [Running and testing locally](../operations/local-development.md), [ADR 0004](adr/0004-operational-safety-and-environment-parity.md).
 
-The application is made of independent programs. A crash in one does not stop the others.
+## 1. Final decisions
+
+| Area | Decision | Why |
+|---|---|---|
+| Programs | web, api, worker, jobs and (later) temporal-worker each run as **their own service**. Programs are never combined on purpose. | A crash, deploy or memory problem in one cannot take down another; each scales and restarts on its own. |
+| One image | One image per commit, started in different roles (`PM2_APP`); the Temporal worker has its own image because its native library needs a different base. | Build once, run the same thing everywhere. |
+| Supervisor | PM2 stays inside each container in every environment. | Same restart behaviour in development and on the platform. |
+| Environments | Development and staging only until launch. | There is no production yet. |
+| Local development | **Docker Compose** is the standard way: one container per program, started in health order, a log view and a restart per service. | It is the most common practice and the closest to staging. |
+| Hosting | Staging needs a plan that allows **at least six services** (web, api, worker, jobs, the Temporal worker, and a metrics collector). | Separate services is the decision; the hosting plan follows it, not the other way round. |
+| Data | Managed Postgres (Supabase), Redis (Redis Cloud), hosted RabbitMQ, Temporal Cloud for staging and production. | Teams do not run their own data stores at this size. |
+| Observability | Metrics, dashboard and alerts locally; Grafana Cloud on staging; an uptime monitor; Sentry alerts. | Silent failure is the worst failure. |
+
+**Open decisions that need an answer from you** (marked in the batches where they matter): which hosting plan runs the six services (Render paid is the smallest change; AWS later, see section 6); whether to keep the custom ordered launcher once Compose is the main command.
+
+## 2. How the application runs
 
 | Program | What it does | Runs as |
 |---|---|---|
-| **web** | The storefront, vendor and admin screens (Next.js) | its own program |
-| **api** | Answers requests: pages' data, checkout, login | its own program |
-| **worker** | Background tasks: emails, notifications, analytics, stock updates, audit writing | its own program |
-| **jobs** | Scheduled jobs: cancel unpaid orders, abandoned-cart reminders, cleanups. Exactly one copy | its own program |
-| temporal-worker | Long-running workflows (later; only when Temporal is turned on) | its own program |
+| **web** | The storefront, vendor and admin screens (Next.js) | its own service |
+| **api** | Answers requests: data for pages, checkout, login | its own service |
+| **worker** | Emails, notifications, analytics, stock updates, audit writing | its own service |
+| **jobs** | Scheduled jobs. Exactly one copy | its own service |
+| temporal-worker | Long-running workflows, when Temporal is on | its own service, own image |
 
-Plus shared services: PostgreSQL, Redis, RabbitMQ (and Temporal later).
+Plus PostgreSQL, Redis, RabbitMQ (and Temporal). All environments run the same programs from the same code and differ only in configuration. The one-process setting (`PM2_APP=all`, the current default) exists only as an emergency rollback; staging services set `PM2_APP` explicitly.
 
-| Environment | How it starts | Programs |
-|---|---|---|
-| **Local** | `npm run dev` | web, api, worker and jobs as four separate programs, the same shape as staging and production. Health on `:3001` (api), `:3002` (worker), `:3003` (jobs); web on `:5173`. |
-| **Local, in Docker** | `npm run dev:docker` | The same four programs as containers (`api`, `worker`, `jobs`, `client`). |
-| **Staging / production** | Docker Compose on the server | The same four programs, each in its own container, with PM2 restarting a crashed one. |
+## 3. What is in the push you are about to make (Batch 0)
 
-All environments run the same programs from the same code and differ only in configuration (env files, hosts, secrets). `npm run dev` starts the database, Redis and RabbitMQ first. A one-program mode (`npm run dev:single --prefix apps/api`) exists only for debugging and is not used anywhere else.
+Everything on `feat/release1-hardening`:
 
-### Should there be more than four programs?
+- Platform foundation: transaction runner, PM2 roles, metrics, alerts and dashboard, asynchronous audit pipeline (60 endpoints declare `@Audit`), Temporal foundation, request ids, the dead-letter queue tool.
+- Per-program ports and env examples, the Redis connection budget, the Render guide and template, local Prometheus and Grafana.
+- Local development: `npm run dev` starts the data services, compiler, api, worker, jobs and web in order, each waiting for the previous to be healthy, with per-service log files (`npm run dev:quiet`); one VS Code tab per service from `.vscode/tasks.json`; Compose dev services also start in health order.
+- Fixes: the "Not interested" save failed because the database rule did not allow that event type (new migration); the discount tags on cards no longer vanish when a product is dismissed.
+- Docs: how it works, ADR 0004, how production teams run services, this roadmap.
 
-Four is the right number today. More would add cost without a problem to solve:
+Not verified: the VS Code tabs and the full Docker dev profile. Nothing in this batch changes behaviour on staging beyond the migration and the audit pipeline.
 
-- **temporal-worker** is the fifth program, added only when Temporal is turned on (step 6).
-- **Database migration** is a one-off job that runs before a deploy, not a running program.
-- **Splitting the worker further** (for example analytics apart from emails and notifications) is what larger companies do when one kind of work starts delaying another. The signal is in the metrics: a growing queue or rising event-loop lag on the worker. If that happens, the worker gets a setting that selects which queues it consumes, and a second worker container is added. No code rewrite is needed.
-- **A separate real-time (SSE) gateway** is common at much larger scale, when thousands of open streams compete with normal requests. Not needed now.
-- **A separate admin or vendor API** only makes sense with separate teams or scaling needs.
+## 4. The batches
 
-Rule of thumb used here: split a program out when a measured problem (a slow queue, a noisy workload, a different scaling or security need) justifies it, not before.
+Who acts: **you** create accounts, keys and click in the hosting dashboard; **I** write the files.
 
-## 2. What "staging needs one thing from you" means
+| # | Batch | What happens | Status |
+|---|---|---|---|
+| 0 | Foundation and local parity | Section 3 | pushed with this change |
+| 1 | Development like production | Verify the Compose dev profile for real; make it the main dev command (one container per program, health order, per-service logs and restart); add Temporal as a service in it; decide what to retire (the custom launcher, the VS Code tasks) once Compose is proven | next |
+| 2 | Review and merge | You merge #155, #156 to #161 and the release branch into `development`, one at a time, CI green between. Do not merge `development` into `staging` before this | after push |
+| 3 | Staging as separate services | You choose the hosting plan, create worker and jobs services (plus an environment group, `PM2_APP`, `DB_CONNECTION_LIMIT` api 10 / worker 5 / jobs 3, `AUTO_MIGRATE=false` on worker and jobs), run `scripts/verify-deploy.sh`, set the api to `PM2_APP=api`. If the host's background workers cannot take inbound traffic, use private services | after merge |
+| 4 | Watching staging | You create Grafana Cloud, an uptime monitor, a Sentry alert, a log destination and `METRICS_TOKEN`. I write the collector config and its service template and the alert import steps | after batch 3 |
+| 5 | A gate on every deploy | I add a GitHub Action that runs `verify-deploy.sh` after a merge to `staging` and fails loudly, plus a dependency scan and Dependabot; one image per commit. You add the secrets | after batch 3 |
+| 6 | Temporal on staging | You create the Temporal Cloud namespace and API key. I add the dedicated worker Dockerfile, its service entry, env wiring and a smoke check. Done when a sample workflow started inside a transaction runs and survives a worker restart | after batch 4 |
+| 7 | Money code made safe | One reviewed PR per slice: payments, then wallets and payouts, then orders and refunds, then the remaining files; unify audit with `ctx.audit`; remove the legacy allowlist in the architecture check | after batch 5 |
+| 8 | Processes move to Temporal | Behind flags, each beside its old job for a week: order payment expiry (W1), refunds (W2), announcements (W6), abandoned carts (W7), account deletion (W8) | after batches 6 and 7 |
+| 9 | Delivery | The delivery plan's phases 1 to 4: parcels, hub, Lagos pricing and ETA, rider tracking, proof of delivery | after batch 8 |
+| 10 | Polish | Personalisation polish (quality-weighted starter shelf, "Why am I seeing this", cold start), plus the backlog | last |
 
-The deploy pipeline works like this:
+Each batch ends with something you can see and a check that must pass before the next one starts.
 
-1. You merge to `staging`. CI runs the checks.
-2. The CD workflow **builds the Docker images and uploads them to GitHub's registry**. That is all it does. It does not log in to your server and does not start anything.
-3. On the server, someone runs Docker Compose to pull the new images and start the containers.
-
-Step 3 is the one thing that is yours. Before this work, the server only needed to start the API and the web app, because the API did everything. Now the API only answers requests, and the background tasks and scheduled jobs live in two **extra** containers (`worker-prod` and `jobs-prod`).
-
-So when you deploy staging, the command that starts it must start all of them. The repository's `docker-compose.yml` already defines them, so running it unchanged (`docker compose --profile staging up -d`) does the right thing. The risk is a server that still runs an older copy of the compose file, or starts only specific services by name. In that case the site still loads, but **no emails or notifications are sent and no scheduled job runs**, and nothing shows an error.
-
-Is that how production-grade companies work? Splitting into web, API, worker and scheduler programs is standard. Failing silently is not: mature teams (a) deploy all programs together from one definition so none can be forgotten, (b) alert when a queue has no consumer or a scheduler stops, and (c) run an automatic post-deploy check that fails the release. Here: (a) is the compose file, (b) is the heartbeat metric and alerts, and (c) is `scripts/verify-deploy.sh`, which checks that the API is up, the database and cache are reachable, and that the worker and jobs are running, and reports in plain language what is missing. The API also logs an error 90 seconds after start if the worker or jobs are absent.
-
-How to check after every deploy: run `scripts/verify-deploy.sh https://<your-staging-url>`, and `docker compose --profile staging ps` should list `api-prod`, `worker-prod`, `jobs-prod`, `client-prod` and `nginx` as running (and `api-migrate` as exited successfully). Safety net if you cannot update the server's compose file yet: set `PM2_APP=all` on `api-prod` (this is also the default), which makes it do everything as before.
-
-## 3. The order of work
-
-Each step ends with something you can see, and the next step starts only when it holds. The big operation is last on purpose: it rewrites payment, refund and delivery logic, so it should start from a foundation that has been running and tested.
-
-### Step 1. Local parity (done)
-`npm run dev` starts the four programs locally (and `npm run dev:docker` as containers). Verified: all four healthy; stopping the worker leaves the API, jobs and web serving, and `scripts/verify-deploy.sh` reports the stopped worker.
-**Done when:** `npm run dev` runs the four programs on your machine.
-
-### Step 2. Ship what is built to `development`
-Merge #155 (Phase 0), then #156 to #161 in order (they are stacked, so each later one contains the earlier ones). One merge at a time; wait for CI between them.
-**Done when:** `development` contains everything and its CI is green. Local setup on `development` is then `npm install`, `npm run db:generate`, `npm run migrate:deploy`, `npm run dev`.
-
-### Step 3. Roll out to staging
-1. Make sure the server runs the repo's compose file (section 2) and its env files contain the required variables (see the environment checklist in the final message of the platform work, or `.env.example`).
-2. Deploy. The `api-migrate` container applies the new audit columns before the api starts.
-3. Run `scripts/verify-deploy.sh https://<staging-url>` (it must pass), check the five containers, and `docker compose logs worker-prod jobs-prod` for startup lines.
-4. Optional but recommended: point Prometheus (or Grafana Cloud) at the metrics ports, load `ops/prometheus/alerts.yml` and import `ops/grafana/nuts-overview.json`.
-**Done when:** staging serves traffic with api, worker and jobs running separately, and the dead-letter queue is empty or understood.
-
-### Step 4. Test period (you)
-Run through the checklist in the local-development guide on staging: the multi-vendor guard, scroll behaviour, "Not interested", audit rows with request ids, an email and a notification being delivered by the worker, a scheduled job running in `jobs-prod`. Restart `worker-prod` on purpose and confirm checkout keeps working.
-**Done when:** no surprises for a few days of normal use. Anything found is fixed before step 5.
-
-### Step 5. Hardening, in small pull requests
-These make the money code safer and are done one slice at a time, each deployed to staging before the next:
-1. **Payments**: move its transactions to the transaction helper and record critical audit events inside them (payment confirmed, refund requested).
-2. **Wallets and vendor payouts**: same, including settlement.
-3. **Orders and refunds**: same.
-4. **The remaining files** (auth, categories, products, vendors, notifications and others, 12 files): mechanical conversion, then remove the legacy allowlist in the architecture check.
-5. **Personalisation polish (0c-2)**: quality-weighted starter shelf, "Why am I seeing this", tiered cold start, shelf cleanups.
-**Done when:** the architecture check's legacy list is empty and payments, wallets and refunds write critical audit events atomically.
-
-### Step 6. Turn Temporal on in staging
-Decide hosting (recommendation: Temporal Cloud for production; self-hosted for staging), run the Temporal worker container, start the sample workflow, and add the Temporal metrics to the dashboard.
-**Done when:** a sample workflow started from a database transaction runs end to end in staging and survives a worker restart.
-
-### Step 7. The big operation
-Only now:
-1. **W1 order payment** (replaces the unpaid-orders job) behind a flag, running next to the old job for a week and compared, then the job is removed.
-2. **W2 refunds**, **W6 announcements**, **W7 abandoned carts**, **W8 account deletion**, each the same way.
-3. **Fulfillment on Temporal** and the delivery plan's Phases 1 to 4 (parcels, hub, Lagos pricing and ETA, rider tracking, proof of delivery).
-**Done when:** each old cron is gone and each process can be inspected in the Temporal UI.
-
-## 4. Switches that undo things quickly
+## 5. Switches that undo things quickly
 
 | If this goes wrong | Do this |
 |---|---|
-| Roles cause trouble on a server | `PM2_APP=all` on the api service (one program does everything again; this is also the default) |
+| Roles cause trouble on a server | `PM2_APP=all` on the api service (one program does everything again) |
 | PM2 causes trouble | `PM2_ENABLED=false` (plain Node process) |
 | Temporal causes trouble | `TEMPORAL_ENABLED=false` (workflow starts become logged no-ops) |
-| A bad deploy | Redeploy the previous image tag; the migrations are additive, so the old version still runs |
+| A bad deploy | Redeploy the previous image tag; migrations are additive, so the old version still runs |
 
-## 5. What I need from you
+## 6. Future directions considered
 
-1. How staging is deployed today: which compose file or command runs on the server, and where it lives. That decides whether step 3 needs changes there.
-2. Which logs and metrics place to use (self-hosted or a hosted free tier).
-3. Temporal in production: Cloud or self-hosted.
+Each was weighed and **not adopted for now**. The last column is the signal that would make us look again.
+
+| Direction | Why not now | Revisit when |
+|---|---|---|
+| **One container running api, worker and jobs** (as a way to fit a small plan) | Not what production teams do: one container failure stops all three, and they share memory | Never as a target. Only as a temporary staging fallback if a hosting limit forces it |
+| **Free hosting tiers** (Render free, others) | Free services sleep when idle, background workers are not part of Render's free plan, and instance hours run out. A sleeping worker does no work | Only for throwaway demos |
+| **AWS (ECS on Fargate or EC2)** | New accounts get credits and a six-month plan, then it is paid; the setup work (networking, load balancer, registry) is large for a team this size | When staging outgrows the first host, or a requirement (region, compliance, private networking) demands it |
+| **Kubernetes** | Operational weight far beyond the need | Many services, many teams, or autoscaling needs |
+| **Web on Vercel** | Puts web and api on different domains, which can break login cookies and CSRF protection; needs those settings re-checked first | A measured need for its edge network, after the cookie and CSRF design is verified |
+| **Tilt for local development** | Compose is the common standard and is already in the repo | If Compose logs and restarts prove too clumsy |
+| **Self-hosted Temporal** | You would run and upgrade a cluster | Cost or data-residency needs outweigh the work |
+| **Splitting the worker further** (analytics apart from email) | No measured problem | A growing queue or rising event-loop lag on the worker |
+| **A separate real-time (SSE) gateway** | Thousands of open streams are not yet competing with normal requests | Stream count starts to hurt request latency |
+| **Separate admin or vendor API** | No separate teams or scaling needs | Different scaling or security requirements per audience |
+| **A trained recommendation model** | The deterministic ranker is explainable and enough | Enough data and a measured ceiling in the current ranker |
+
+Rule used throughout: split or add something when a measured problem justifies it, not before.
+
+## 7. What I need from you
+
+1. The hosting plan for staging (six services). This decides how batch 3 is written.
+2. Say "go" for batch 1 when you want it.
+3. After batch 3: the monitoring accounts and keys listed in batch 4.

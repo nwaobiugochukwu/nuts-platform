@@ -6,9 +6,11 @@
 
 ## Implementation status (2026-11-25)
 
-Built and verified locally: **P1** transaction runner (cart converted; 16 other files are on a shrink-only list), **P2** `api` / `worker` / `jobs` roles under PM2, **P3** Prometheus metrics, alert rules (checked with `promtool`) and a Grafana dashboard, **P4** audit pipeline with `@Audit` and `ctx.audit`, **P5** Temporal foundation (client, worker, outbox-started workflows, glibc image), plus request ids through the outbox and RabbitMQ and a dead-letter replay tool. See [Running and testing locally](../operations/local-development.md).
+Built and verified locally: **P1** transaction runner (cart converted; the other files are on a shrink-only list), **P2** `api` / `worker` / `jobs` programs under PM2, **P3** Prometheus metrics, alert rules (checked with `promtool`) and a Grafana dashboard, **P4** the audit pipeline, **P5** the Temporal foundation, request ids end to end, the dead-letter tool, heartbeats and the deploy check.
 
-Not started: **P6** (W1-W8 workflows), **P7** (fulfillment on Temporal), moving the remaining raw `$transaction` sites and the critical audit call sites to the runner, and the delivery plan's Phases 1-4.
+Release 1 (on the `feat/release1-hardening` branch, not yet merged) adds: `PM2_APP` defaulting to `all` (the earlier safety net did not work under PM2), per-program ports and documented env files, the Redis connection budget, the Render guide and template, a local Prometheus and Grafana stack, PM2 for development with an `npm run dev` that shows every service independently, and audit declared with `@Audit` on 60 endpoints instead of written inline in services.
+
+Not started: **P6** (W1-W8 workflows), **P7** (fulfillment on Temporal), moving the remaining raw `$transaction` sites and the critical audit events to the runner, and the delivery plan's Phases 1-4. Not verified here: anything needing Docker (the Docker development profile, the full `npm run dev` start, live-service checks), because Docker was unavailable in the environment used for the last part of this work.
 
 ## 1. Goals
 
