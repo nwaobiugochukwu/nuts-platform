@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -54,7 +55,9 @@ import {
 import {
   assertValidOrderTransition,
   generateStatusNote,
+  MULTI_VENDOR_STATUS_MESSAGE,
   shouldRestoreStock,
+  vendorMayChangeOrderStatus,
 } from './constants/order-status.constants';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
@@ -1096,6 +1099,17 @@ export class OrdersService {
       throw new BadRequestException(
         `Vendors can only transition orders to: ${allowedStatuses.join(', ')}`,
       );
+    }
+
+    const vendorsOnOrder = await this.prisma.orderItem.findMany({
+      where: { orderId },
+      distinct: ['vendorId'],
+      select: { vendorId: true },
+    });
+    if (
+      !vendorMayChangeOrderStatus(vendorsOnOrder.map((row) => row.vendorId))
+    ) {
+      throw new ForbiddenException(MULTI_VENDOR_STATUS_MESSAGE);
     }
 
     await this.transitionOrderStatus({
@@ -2653,6 +2667,10 @@ export class OrdersService {
       shippingAddress: order.shippingAddress,
 
       stockRestored: order.stockRestored,
+
+      isMultiVendor: !vendorMayChangeOrderStatus(
+        order.orderItems.map((item) => item.vendorId),
+      ),
 
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,

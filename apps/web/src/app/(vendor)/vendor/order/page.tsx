@@ -24,7 +24,12 @@ import { toast } from "sonner";
 
 type DashboardOrder = VendorOrderResponseDto;
 
-const getVendorNextStatus = (status: OrderStatus): OrderStatus | null => {
+const getVendorNextStatus = (
+  status: OrderStatus,
+  isMultiVendor = false,
+): OrderStatus | null => {
+  // On a multi-vendor order the platform hub, not one vendor, ships and delivers.
+  if (isMultiVendor) return null;
   if (status === "PROCESSING") return "SHIPPED";
   if (status === "SHIPPED") return "DELIVERED";
   return null;
@@ -123,7 +128,7 @@ export default function DashboardOrderPage() {
       key: "actions",
       header: "Fulfilment Actions",
       render: (r) => {
-        const next = getVendorNextStatus(r.status);
+        const next = getVendorNextStatus(r.status, r.isMultiVendor);
         return (
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <Button
@@ -152,7 +157,9 @@ export default function DashboardOrderPage() {
     },
   ];
 
-  const allowedNext = selectedOrder ? getVendorNextStatus(selectedOrder.status) : null;
+  const allowedNext = selectedOrder
+    ? getVendorNextStatus(selectedOrder.status, selectedOrder.isMultiVendor)
+    : null;
 
   const orderList = data?.data ?? (Array.isArray(data) ? data : []);
   const meta = data?.meta;

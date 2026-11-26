@@ -1,5 +1,10 @@
 /** "For you", recently viewed, claimed history and followed-store feeds. */
-import { Injectable, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { ProductsService } from '@api/modules/products/products.service';
@@ -12,11 +17,16 @@ import {
   HISTORY_DAYS,
   EXPOSURE_SUPPRESSION_DAYS,
   AVAILABLE_PRODUCT,
+  EXPLORATION_SLOTS,
   addWeight,
+  applyDismissalPenalty,
   searchTokens,
   scoreAndDiversify,
   explainRecommendation,
 } from './recommendation.shared';
+
+/** Event type stored when a shopper dismisses a recommendation. */
+export const NOT_INTERESTED_EVENT = 'NOT_INTERESTED';
 
 @Injectable()
 export class PersonalizedFeedService {
@@ -71,6 +81,7 @@ export class PersonalizedFeedService {
         follows,
         categoryViews,
         vendorClicks,
+        dismissals,
       ] = await Promise.all([
         this.prisma.productView.findMany({
           where: { ...activityActor, createdAt: { gte: historyStart } },
@@ -190,7 +201,21 @@ export class PersonalizedFeedService {
           take: 40,
           select: { vendorId: true, createdAt: true },
         }),
+        // "Not interested" never expires: a dismissed product stays hidden.
+        this.prisma.recommendationEvent.findMany({
+          where: {
+            ...activityActor,
+            eventType: NOT_INTERESTED_EVENT,
+            productId: { not: null },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+          select: { productId: true },
+        }),
       ]);
+      const dismissedIds = new Set(
+        dismissals.flatMap(({ productId }) => (productId ? [productId] : [])),
+      );
 
       // The durable recent-view record is written before the analytics buffer is
       // flushed. Merge it with legacy ProductView rows so fresh browsing affects
@@ -260,7 +285,9 @@ export class PersonalizedFeedService {
           productId ? [productId] : [],
         ),
       );
-      const suppressedIds = [...new Set([...seedIds, ...recentImpressionIds])];
+      const suppressedIds = [
+        ...new Set([...seedIds, ...recentImpressionIds, ...dismissedIds]),
+      ];
       const searchWeights = searchTokens(searches.map(({ query }) => query));
       if (
         seedIds.length === 0 &&
@@ -295,6 +322,16 @@ export class PersonalizedFeedService {
           categoryWeights,
           event.categoryId,
           Math.max(1, 4 * Math.exp(-ageDays / 45)) * Math.pow(0.96, index),
+        );
+      }
+      if (dismissedIds.size > 0) {
+        const dismissedProducts = await this.prisma.product.findMany({
+          where: { id: { in: [...dismissedIds] } },
+          select: { categoryId: true },
+        });
+        applyDismissalPenalty(
+          categoryWeights,
+          dismissedProducts.map(({ categoryId }) => categoryId),
         );
       }
       for (const follow of follows)
@@ -472,18 +509,24 @@ export class PersonalizedFeedService {
 
       const freshRecommendationIds = scoreAndDiversify(
         recommendationCandidates,
-        new Set([...viewedSeedIds, ...recentImpressionIds]),
+        new Set([...viewedSeedIds, ...recentImpressionIds, ...dismissedIds]),
         categoryWeights,
         vendorWeights,
         searchWeights,
         coPurchaseScores,
         PERSONALIZED_RECOMMENDATION_POOL_LIMIT,
+        new Set(),
+        EXPLORATION_SLOTS,
       );
       const fallbackRecommendationIds =
         freshRecommendationIds.length < PERSONALIZED_RECOMMENDATION_POOL_LIMIT
           ? scoreAndDiversify(
               recommendationCandidates,
-              new Set([...viewedSeedIds, ...freshRecommendationIds]),
+              new Set([
+                ...viewedSeedIds,
+                ...freshRecommendationIds,
+                ...dismissedIds,
+              ]),
               categoryWeights,
               vendorWeights,
               searchWeights,
@@ -534,6 +577,7 @@ export class PersonalizedFeedService {
       const taken = new Set([
         ...personalized.map(({ id }) => id),
         ...viewedSeedIds,
+        ...dismissedIds,
       ]);
       const popular = await this.popular.discoverPool();
       const filled = [
@@ -547,7 +591,10 @@ export class PersonalizedFeedService {
       // already viewed most products must still get a shelf. Unseen items
       // always rank first; re-showing a viewed product beats an empty row.
       if (filled.length < RECOMMENDATION_LIMIT) {
-        const used = new Set(filled.map((card) => card.id));
+        const used = new Set([
+          ...filled.map((card) => card.id),
+          ...dismissedIds,
+        ]);
         filled.push(
           ...popular
             .filter((card) => !used.has(card.id))
@@ -564,6 +611,59 @@ export class PersonalizedFeedService {
           fetcher,
         )
       : fetcher();
+  }
+
+  /**
+   * Records "Not interested" for a product so it stops appearing on the
+   * personalised shelf. Safe to repeat. The cached shelf is dropped so the
+   * next read reflects it immediately.
+   */
+  async dismissProduct(input: {
+    productId: string;
+    userId?: string;
+    sessionId?: string;
+    visitorId?: string;
+  }): Promise<{ dismissed: true }> {
+    const { productId, userId, sessionId, visitorId } = input;
+    if (!userId && !sessionId && !visitorId) {
+      throw new BadRequestException('A session or sign-in is required.');
+    }
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true, vendorId: true, categoryId: true },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+
+    const actor = userId
+      ? { userId }
+      : { userId: null, sessionId: sessionId ?? visitorId ?? null };
+    const already = await this.prisma.recommendationEvent.findFirst({
+      where: {
+        ...actor,
+        eventType: NOT_INTERESTED_EVENT,
+        productId,
+      },
+      select: { id: true },
+    });
+    if (!already) {
+      await this.prisma.recommendationEvent.create({
+        data: {
+          eventType: NOT_INTERESTED_EVENT,
+          surface: 'HOME_FOR_YOU',
+          productId,
+          vendorId: product.vendorId,
+          categoryId: product.categoryId,
+          userId: userId ?? null,
+          sessionId: sessionId ?? visitorId ?? null,
+        },
+      });
+    }
+    await this.cacheService?.invalidateRecommendations(
+      userId,
+      sessionId,
+      visitorId,
+    );
+    return { dismissed: true };
   }
 
   async recentlyViewed(

@@ -126,3 +126,19 @@ export function generateStatusNote(params: {
 
   return note;
 }
+
+/**
+ * A vendor may only move an order to SHIPPED or DELIVERED on its own when it is
+ * the only vendor on the order. On a multi-vendor order one vendor's action
+ * would otherwise mark every other vendor's items shipped or delivered and
+ * release their earnings, so only platform staff (admin) may do it until the
+ * fulfillment module moves each vendor's items through the hub separately.
+ */
+export function vendorMayChangeOrderStatus(
+  vendorIdsOnOrder: readonly string[],
+): boolean {
+  return new Set(vendorIdsOnOrder).size <= 1;
+}
+
+export const MULTI_VENDOR_STATUS_MESSAGE =
+  'This order contains items from more than one vendor, so its shipping status is managed by the platform. Hand your items over for fulfilment and the platform will update the order.';

@@ -1,6 +1,7 @@
 ﻿import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -36,6 +37,8 @@ describe('OrdersService', () => {
       },
       orderItem: {
         createMany: jest.fn(),
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
       },
       orderStatusHistory: {
         create: jest.fn(),
@@ -289,6 +292,28 @@ describe('OrdersService', () => {
           data: { status: PaymentStatus.FAILED },
         }),
       );
+    });
+  });
+
+  describe('updateStatusForVendor (multi-vendor guard)', () => {
+    it('refuses to ship or deliver when another vendor has items on the order', async () => {
+      mockPrisma.orderItem.findFirst.mockResolvedValue({ orderId: 'o-1' });
+      mockPrisma.orderItem.findMany.mockResolvedValue([
+        { vendorId: 'v-1' },
+        { vendorId: 'v-2' },
+      ]);
+
+      await expect(
+        service.updateStatusForVendor('v-1', 'o-1', OrderStatus.DELIVERED),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('still rejects a vendor that has no items on the order', async () => {
+      mockPrisma.orderItem.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatusForVendor('v-9', 'o-1', OrderStatus.SHIPPED),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });
