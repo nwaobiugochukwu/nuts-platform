@@ -20,6 +20,8 @@ import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
 import { setupSwagger } from './swagger.setup';
 import { currentProcessRole } from './infrastructure/configuration/process-role';
 import { stopCronsUnlessJobsRole } from './infrastructure/configuration/role-runtime';
+import { MetricsService } from './infrastructure/metrics/metrics.service';
+import { startMetricsServer } from './infrastructure/metrics/metrics-server';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -201,6 +203,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
   const port = config.get<number>('PORT') || 3001;
   await app.listen(port, '0.0.0.0');
+  startMetricsServer(app.get(MetricsService));
   const role = currentProcessRole();
   const stoppedCrons = stopCronsUnlessJobsRole(app);
   if (stoppedCrons > 0) {

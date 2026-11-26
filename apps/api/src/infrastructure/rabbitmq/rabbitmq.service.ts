@@ -361,6 +361,38 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Message and consumer counts for every queue we declare, for monitoring.
+   * Returns an empty list when the broker is unavailable. Queues are asserted at
+   * connect time, so `checkQueue` cannot hit a missing queue (which would close
+   * the channel).
+   */
+  public async getQueueStats(): Promise<
+    Array<{ queue: string; messages: number; consumers: number }>
+  > {
+    if (!this.isAvailable() || !this.channel) return [];
+    const stats: Array<{ queue: string; messages: number; consumers: number }> =
+      [];
+    for (const queue of Object.values(RABBITMQ_QUEUES)) {
+      try {
+        const info = await this.channel.checkQueue(queue);
+        stats.push({
+          queue,
+          messages: info.messageCount,
+          consumers: info.consumerCount,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Could not read stats for queue ${queue}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        break;
+      }
+    }
+    return stats;
+  }
+
+  /**
    * Registers a consumer for a specific queue. If RabbitMQ is connected,
    * binds immediately; otherwise registers to auto-bind as soon as connection is established.
    */

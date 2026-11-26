@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 export type TransactionPreset = 'default' | 'short' | 'critical';
 
@@ -184,6 +185,7 @@ export class TransactionRunner {
   constructor(
     private readonly prisma: PrismaService,
     private readonly outbox: OutboxService,
+    @Optional() private readonly metrics?: MetricsService,
   ) {}
 
   async run<T>(
@@ -214,6 +216,11 @@ export class TransactionRunner {
           },
         );
         this.reportDuration(options.name, startedAt, attempt);
+        this.metrics?.observeTransaction(
+          options.name,
+          'commit',
+          (Date.now() - startedAt) / 1000,
+        );
         await runHooks(hooks.commit, options.name, this.logger, 'afterCommit');
         return result;
       } catch (error) {
@@ -225,9 +232,15 @@ export class TransactionRunner {
               attempt + 1
             }/${resolved.retries + 1}`,
           );
+          this.metrics?.countTransactionRetry(options.name);
           await sleep(transactionBackoffMs(attempt));
           continue;
         }
+        this.metrics?.observeTransaction(
+          options.name,
+          'rollback',
+          (Date.now() - startedAt) / 1000,
+        );
         await runHooks(
           hooks.rollback,
           options.name,

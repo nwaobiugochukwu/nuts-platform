@@ -175,6 +175,16 @@ export class EnvironmentVariables {
   @IsOptional()
   HEALTH_PORT?: string;
 
+  /** Internal Prometheus port; metrics are off when unset. Never expose it publicly. */
+  @IsString()
+  @IsOptional()
+  METRICS_PORT?: string;
+
+  /** Optional bearer token Prometheus must send to scrape METRICS_PORT. */
+  @IsString()
+  @IsOptional()
+  METRICS_TOKEN?: string;
+
   // ─── HTTP / CORS ─────────────────────────────────────────────────────────────
 
   @IsString()
