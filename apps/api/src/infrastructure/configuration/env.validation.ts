@@ -163,6 +163,18 @@ export class EnvironmentVariables {
   @IsOptional()
   RABBITMQ_URL?: string;
 
+  // ─── Process role (see docs/architecture/platform-reliability-plan.md) ──────
+
+  /** all (default) | api | worker | jobs. Unknown values fail startup. */
+  @IsString()
+  @IsOptional()
+  PROCESS_ROLE?: string;
+
+  /** Health port for the worker and jobs roles (they have no HTTP API). */
+  @IsString()
+  @IsOptional()
+  HEALTH_PORT?: string;
+
   // ─── HTTP / CORS ─────────────────────────────────────────────────────────────
 
   @IsString()

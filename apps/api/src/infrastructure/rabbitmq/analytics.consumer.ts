@@ -1,3 +1,4 @@
+import { roleCan } from '@api/infrastructure/configuration/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,6 +32,8 @@ export class AnalyticsConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Queue consumers run only in the worker role (or when one process runs everything).
+    if (!roleCan('consumers')) return;
     await this.rabbitmq.consume<AnalyticsQueuePayload>(
       RABBITMQ_QUEUES.ANALYTICS,
       async (payload) => {
