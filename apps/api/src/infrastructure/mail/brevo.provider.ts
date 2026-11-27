@@ -1,5 +1,6 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { withUpstreamStatus } from '../resilience/dependency-failure.util';
 import {
   EmailProvider,
   SendEmailOptions,
@@ -104,8 +105,11 @@ export class BrevoProvider implements EmailProvider {
 
     if (!response.ok) {
       const details = (await response.text()).slice(0, 500);
-      throw new Error(
-        `Brevo API request failed with status ${response.status}${details ? `: ${details}` : ''}`,
+      throw withUpstreamStatus(
+        new Error(
+          `Brevo API request failed with status ${response.status}${details ? `: ${details}` : ''}`,
+        ),
+        response.status,
       );
     }
   }

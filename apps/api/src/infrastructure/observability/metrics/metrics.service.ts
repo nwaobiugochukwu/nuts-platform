@@ -9,6 +9,7 @@ import {
 } from 'prom-client';
 import { PrismaService } from '../../database/prisma.service';
 import { onConsumerOutcome } from '../../messaging/rabbitmq/consumer-outcome.util';
+import { CircuitBreakerService } from '../../resilience/circuit-breaker.service';
 import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { HeartbeatService, stateFromAge } from '../health/heartbeat.service';
 import { currentProcessRole } from '../../../config/process-role.config';
@@ -40,6 +41,7 @@ export class MetricsService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly rabbitmq: RabbitMQService,
     @Optional() private readonly heartbeat?: HeartbeatService,
+    @Optional() private readonly breakers?: CircuitBreakerService,
   ) {
     this.registry.setDefaultLabels({ role: currentProcessRole() });
     collectDefaultMetrics({ register: this.registry, prefix: 'nuts_' });
@@ -163,6 +165,23 @@ export class MetricsService implements OnModuleDestroy {
           );
         } catch (error) {
           this.logSoft('outbox dead count', error);
+        }
+      },
+    });
+    const breakerState = new Gauge({
+      name: 'nuts_circuit_breaker_state',
+      help: 'Circuit breaker per external dependency: 0 closed, 1 half-open (probing), 2 open (failing fast)',
+      labelNames: ['dependency'],
+      registers,
+      collect: () => {
+        if (!this.breakers) return;
+        for (const [dependency, state] of Object.entries(
+          this.breakers.getStates(),
+        )) {
+          breakerState.set(
+            { dependency },
+            state === 'CLOSED' ? 0 : state === 'HALF_OPEN' ? 1 : 2,
+          );
         }
       },
     });

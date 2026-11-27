@@ -1,96 +1,128 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   circuitBreaker,
+  CircuitBreakerPolicy,
   CircuitState,
   ConsecutiveBreaker,
-  handleAll,
+  ExponentialBackoff,
+  handleWhen,
+  IPolicy,
+  retry,
   timeout,
   TimeoutStrategy,
   wrap,
 } from 'cockatiel';
+import { isDependencyFailure } from './dependency-failure.util';
 
+export type Dependency = 'paystack' | 'email' | 'cloudinary';
+export type BreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+
+interface Guard {
+  circuit: CircuitBreakerPolicy;
+  /** timeout inside the breaker, so a timeout counts as a failure of the dependency */
+  policy: IPolicy;
+  /** the same, plus retries with backoff and jitter, for calls that are safe to repeat */
+  repeatablePolicy: IPolicy;
+}
+
+/**
+ * One circuit breaker per external dependency.
+ *
+ * - Only timeouts, network errors, HTTP 5xx and 429 count towards tripping a breaker; a
+ *   bad request or wrong credentials (4xx) does not ([[isDependencyFailure]]).
+ * - The timeout sits inside the breaker, so a call that times out is a recorded failure.
+ * - `execute*Repeatable` also retries (3 tries, exponential backoff with jitter) and is only for
+ *   calls that are safe to repeat: reads, and deletes of a named object. Never use it for
+ *   something that creates or charges.
+ * - An open breaker fails fast with `BrokenCircuitError`; queue consumers treat that as "wait
+ *   and try again", not as a failed message.
+ */
 @Injectable()
 export class CircuitBreakerService {
   private readonly logger = new Logger(CircuitBreakerService.name);
 
-  // Paystack Policy: 3 consecutive failures trips the breaker, reset after 10s
-  private readonly paystackCircuit = circuitBreaker(handleAll, {
-    halfOpenAfter: 10_000,
-    breaker: new ConsecutiveBreaker(3),
-  });
-  private readonly paystackTimeout = timeout(8_000, TimeoutStrategy.Aggressive);
-  private readonly paystackPolicy = wrap(
-    this.paystackTimeout,
-    this.paystackCircuit,
-  );
+  private readonly guards: Record<Dependency, Guard> = {
+    paystack: this.buildGuard('Paystack', 10_000, 8_000),
+    email: this.buildGuard('Email', 30_000, 10_000),
+    cloudinary: this.buildGuard('Cloudinary', 15_000, 15_000),
+  };
 
-  // Email API policy: 3 consecutive failures trips the breaker, reset after 30s
-  private readonly emailCircuit = circuitBreaker(handleAll, {
-    halfOpenAfter: 30_000,
-    breaker: new ConsecutiveBreaker(3),
-  });
-  private readonly emailTimeout = timeout(10_000, TimeoutStrategy.Aggressive);
-  private readonly emailPolicy = wrap(this.emailTimeout, this.emailCircuit);
-
-  // Cloudinary Policy: 3 consecutive failures trips the breaker, reset after 15s
-  private readonly cloudinaryCircuit = circuitBreaker(handleAll, {
-    halfOpenAfter: 15_000,
-    breaker: new ConsecutiveBreaker(3),
-  });
-  private readonly cloudinaryTimeout = timeout(
-    15_000,
-    TimeoutStrategy.Aggressive,
-  );
-  private readonly cloudinaryPolicy = wrap(
-    this.cloudinaryTimeout,
-    this.cloudinaryCircuit,
-  );
-
-  constructor() {
-    this.paystackCircuit.onBreak(() =>
-      this.logger.error('CRITICAL: Paystack Circuit Breaker tripped OPEN!'),
+  private buildGuard(
+    label: string,
+    halfOpenAfterMs: number,
+    timeoutMs: number,
+  ): Guard {
+    const circuit = circuitBreaker(handleWhen(isDependencyFailure), {
+      halfOpenAfter: halfOpenAfterMs,
+      breaker: new ConsecutiveBreaker(3),
+    });
+    circuit.onBreak(() =>
+      this.logger.error(`CRITICAL: ${label} circuit breaker tripped OPEN!`),
     );
-    this.paystackCircuit.onReset(() =>
-      this.logger.log('Paystack Circuit Breaker RESET to CLOSED.'),
+    circuit.onReset(() =>
+      this.logger.log(`${label} circuit breaker RESET to CLOSED.`),
     );
-
-    this.emailCircuit.onBreak(() =>
-      this.logger.error('CRITICAL: Email Circuit Breaker tripped OPEN!'),
+    const policy = wrap(
+      circuit,
+      timeout(timeoutMs, TimeoutStrategy.Aggressive),
     );
-    this.emailCircuit.onReset(() =>
-      this.logger.log('Email Circuit Breaker RESET to CLOSED.'),
-    );
-
-    this.cloudinaryCircuit.onBreak(() =>
-      this.logger.error('CRITICAL: Cloudinary Circuit Breaker tripped OPEN!'),
-    );
-    this.cloudinaryCircuit.onReset(() =>
-      this.logger.log('Cloudinary Circuit Breaker RESET to CLOSED.'),
-    );
+    const retries = retry(handleWhen(isDependencyFailure), {
+      maxAttempts: 2,
+      backoff: new ExponentialBackoff({ initialDelay: 200, maxDelay: 2_000 }),
+    });
+    return { circuit, policy, repeatablePolicy: wrap(retries, policy) };
   }
 
-  public async executePaystack<T>(fn: () => Promise<T>): Promise<T> {
-    return this.paystackPolicy.execute(fn);
+  public executePaystack<T>(fn: () => Promise<T>): Promise<T> {
+    return this.guards.paystack.policy.execute(fn);
   }
 
-  public async executeEmail<T>(fn: () => Promise<T>): Promise<T> {
-    return this.emailPolicy.execute(fn);
+  /** For Paystack reads (verify, lookups): retried with backoff. */
+  public executePaystackRepeatable<T>(fn: () => Promise<T>): Promise<T> {
+    return this.guards.paystack.repeatablePolicy.execute(fn);
   }
 
-  public async executeCloudinary<T>(fn: () => Promise<T>): Promise<T> {
-    return this.cloudinaryPolicy.execute(fn);
+  public executeEmail<T>(fn: () => Promise<T>): Promise<T> {
+    return this.guards.email.policy.execute(fn);
   }
 
+  public executeCloudinary<T>(fn: () => Promise<T>): Promise<T> {
+    return this.guards.cloudinary.policy.execute(fn);
+  }
+
+  /** For Cloudinary calls safe to repeat (deleting a named image): retried with backoff. */
+  public executeCloudinaryRepeatable<T>(fn: () => Promise<T>): Promise<T> {
+    return this.guards.cloudinary.repeatablePolicy.execute(fn);
+  }
+
+  private stateOf(dependency: Dependency): BreakerState {
+    switch (this.guards[dependency].circuit.state) {
+      case CircuitState.Closed:
+        return 'CLOSED';
+      case CircuitState.HalfOpen:
+        return 'HALF_OPEN';
+      default:
+        return 'OPEN';
+    }
+  }
+
+  /** CLOSED or OPEN per dependency (a half-open breaker reports OPEN, as before). */
   public getStatus() {
+    const open = (dependency: Dependency) =>
+      this.stateOf(dependency) === 'CLOSED' ? 'CLOSED' : 'OPEN';
     return {
-      paystack:
-        this.paystackCircuit.state === CircuitState.Closed ? 'CLOSED' : 'OPEN',
-      email:
-        this.emailCircuit.state === CircuitState.Closed ? 'CLOSED' : 'OPEN',
-      cloudinary:
-        this.cloudinaryCircuit.state === CircuitState.Closed
-          ? 'CLOSED'
-          : 'OPEN',
+      paystack: open('paystack'),
+      email: open('email'),
+      cloudinary: open('cloudinary'),
+    };
+  }
+
+  /** The exact state per dependency, for metrics. */
+  public getStates(): Record<Dependency, BreakerState> {
+    return {
+      paystack: this.stateOf('paystack'),
+      email: this.stateOf('email'),
+      cloudinary: this.stateOf('cloudinary'),
     };
   }
 }

@@ -32,6 +32,7 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { withUpstreamStatus } from '@api/infrastructure/resilience/dependency-failure.util';
 import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
@@ -1848,7 +1849,8 @@ export class PaymentsService {
   }
 
   private async paystackGet<T>(url: string): Promise<T> {
-    return this.circuitBreaker.executePaystack(async () => {
+    // A read: safe to repeat, so a flaky Paystack is retried with backoff before giving up.
+    return this.circuitBreaker.executePaystackRepeatable(async () => {
       const response = await fetch(url, {
         method: 'GET',
         headers: this.paystackHeaders(),
@@ -1913,12 +1915,19 @@ export class PaymentsService {
       if (authenticationError) {
         this.logger.error('Paystack authentication failed.');
 
-        throw new ServiceUnavailableException(
-          'Paystack authentication failed. Check PAYSTACK_SECRET_KEY.',
+        throw withUpstreamStatus(
+          new ServiceUnavailableException(
+            'Paystack authentication failed. Check PAYSTACK_SECRET_KEY.',
+          ),
+          response.status,
         );
       }
 
-      throw new ServiceUnavailableException(rawMessage);
+      // The caller still gets a 503; the breaker sees the status Paystack really returned.
+      throw withUpstreamStatus(
+        new ServiceUnavailableException(rawMessage),
+        response.status,
+      );
     }
 
     return data;
