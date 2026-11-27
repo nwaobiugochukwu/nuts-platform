@@ -53,6 +53,18 @@ describe('OutboxRelay under failure', () => {
     expect(sql).toContain('LIMIT 50');
   });
 
+  it('publishes each event with its outbox row id as the message id, so consumers can ignore a redelivery', async () => {
+    prisma.$queryRaw.mockResolvedValue([event('row-1')]);
+
+    await relay.processOutboxEvents();
+
+    expect(rabbit.publish).toHaveBeenCalledWith(
+      'order.shipped',
+      expect.anything(),
+      expect.objectContaining({ messageId: 'row-1' }),
+    );
+  });
+
   it('settles a mixed batch per event: published ones PUBLISHED, refused ones FAILED', async () => {
     prisma.$queryRaw.mockResolvedValue([event('a'), event('b'), event('c')]);
     rabbit.publish.mockImplementation(

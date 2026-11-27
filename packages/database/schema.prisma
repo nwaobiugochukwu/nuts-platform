@@ -1287,3 +1287,18 @@ model OutboxEvent {
   @@index([aggregateType, aggregateId])
   @@map("outbox_events")
 }
+
+/// Which queue messages each consumer has already handled (see ProcessedEventService).
+model ProcessedEvent {
+  id          String    @id @default(uuid())
+  consumer    String
+  messageId   String    @map("message_id")
+  /// PROCESSING while a delivery is handling it, DONE once it finished.
+  status      String    @default("PROCESSING")
+  claimedAt   DateTime  @default(now()) @map("claimed_at")
+  completedAt DateTime? @map("completed_at")
+
+  @@unique([consumer, messageId])
+  @@index([status, completedAt])
+  @@map("processed_events")
+}

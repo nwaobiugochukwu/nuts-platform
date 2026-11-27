@@ -9,6 +9,7 @@ import {
   RABBITMQ_QUEUES,
   RABBITMQ_ROUTING_KEYS,
 } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { PermanentConsumerError } from '../../../infrastructure/messaging/rabbitmq/consumer-retry.util';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../services/notifications.service';
 
@@ -62,7 +63,7 @@ export class VendorFollowConsumer implements OnModuleInit {
             routingKey === RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED ||
             routingKey === RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED;
           if (!event || !isSupportedRoutingKey) {
-            throw new Error('Malformed vendor follow event');
+            throw new PermanentConsumerError('Malformed vendor follow event');
           }
 
           // Unfollows are durably recorded for analytics but do not create a

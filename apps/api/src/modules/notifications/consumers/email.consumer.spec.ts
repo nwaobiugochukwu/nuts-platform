@@ -1,6 +1,7 @@
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { EmailConsumer } from './email.consumer';
 import {
+  fakeProcessed,
   fakeRabbit,
   withRole,
 } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
@@ -9,11 +10,16 @@ describe('EmailConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;
   let emailService: { sendEmail: jest.Mock };
   let consumer: EmailConsumer;
+  let idempotency: ReturnType<typeof fakeProcessed>;
 
   beforeEach(() => {
     harness = fakeRabbit();
     emailService = { sendEmail: jest.fn().mockResolvedValue(undefined) };
-    consumer = new EmailConsumer(harness.rabbit, emailService as never);
+    consumer = new EmailConsumer(
+      harness.rabbit,
+      emailService as never,
+      (idempotency = fakeProcessed()).processed,
+    );
     jest
       .spyOn((consumer as any).logger, 'log')
       .mockImplementation(() => undefined);
@@ -25,9 +31,11 @@ describe('EmailConsumer', () => {
       .mockImplementation(() => undefined);
   });
 
-  async function handle(payload: unknown) {
+  async function handle(payload: unknown, messageId?: string) {
     await consumer.onModuleInit();
-    return harness.handlerFor(RABBITMQ_QUEUES.EMAILS)(payload);
+    return harness.handlerFor(RABBITMQ_QUEUES.EMAILS)(payload, {
+      properties: { messageId },
+    });
   }
 
   it('consumes the emails queue', async () => {
@@ -54,12 +62,33 @@ describe('EmailConsumer', () => {
     ['no recipient', { subject: 'Hi', html: 'x' }],
     ['no subject', { to: 'a@b.com', html: 'x' }],
   ])(
-    'skips a message with %s without sending or failing',
+    'rejects a message with %s as permanently bad, without sending',
     async (_label, payload) => {
-      await expect(handle(payload)).resolves.toBeUndefined();
+      await expect(handle(payload)).rejects.toMatchObject({
+        name: 'PermanentConsumerError',
+      });
       expect(emailService.sendEmail).not.toHaveBeenCalled();
     },
   );
+
+  it('does not send the same message twice when the broker redelivers it', async () => {
+    idempotency.runOnce.mockImplementation(
+      async (_c: string, id: string | undefined, work: () => Promise<void>) => {
+        if (id === 'm-1') return 'duplicate' as const;
+        await work();
+        return 'ran' as const;
+      },
+    );
+
+    await handle({ to: 'a@b.com', subject: 'Hi' }, 'm-1');
+
+    expect(idempotency.runOnce).toHaveBeenCalledWith(
+      'email',
+      'm-1',
+      expect.any(Function),
+    );
+    expect(emailService.sendEmail).not.toHaveBeenCalled();
+  });
 
   it('rethrows a delivery failure so the broker can retry or dead-letter it', async () => {
     emailService.sendEmail.mockRejectedValue(new Error('provider down'));

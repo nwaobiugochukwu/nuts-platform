@@ -117,9 +117,13 @@ export class OutboxRelay {
           const success = await this.rabbitmq.publish(
             event.eventType,
             event.payload,
-            requestId
-              ? { headers: { [REQUEST_ID_HEADER]: requestId } }
-              : undefined,
+            // The outbox row id is the message id: consumers use it to ignore a redelivery.
+            {
+              messageId: event.id,
+              ...(requestId
+                ? { headers: { [REQUEST_ID_HEADER]: requestId } }
+                : {}),
+            },
           );
           if (success) {
             publishedIds.push(event.id);

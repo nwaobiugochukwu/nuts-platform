@@ -1,4 +1,4 @@
-﻿import { OutboxStatus } from '@prisma/client';
+import { OutboxStatus } from '@prisma/client';
 import { OutboxRelay } from './outbox.relay';
 
 describe('OutboxRelay', () => {
@@ -63,7 +63,7 @@ describe('OutboxRelay', () => {
     expect(mockRabbitMQ.publish).toHaveBeenCalledWith(
       'order.created',
       { orderId: 'ord-123' },
-      undefined,
+      { messageId: 'evt-1' },
     );
 
     // 3. Batch marked as PUBLISHED in a single query
@@ -93,7 +93,10 @@ describe('OutboxRelay', () => {
     expect(mockRabbitMQ.publish).toHaveBeenCalledWith(
       'order.created',
       expect.objectContaining({ orderId: 'o9' }),
-      { headers: { 'x-request-id': 'req-from-outbox-9' } },
+      {
+        messageId: expect.any(String),
+        headers: { 'x-request-id': 'req-from-outbox-9' },
+      },
     );
   });
 

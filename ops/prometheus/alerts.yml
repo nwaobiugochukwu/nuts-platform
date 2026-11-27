@@ -12,6 +12,28 @@ groups:
           summary: Messages are sitting in the dead-letter queue
           description: Inspect and replay or discard them; each one is a failed side effect (email, notification, analytics, inventory).
 
+      - alert: ConsumerDeadLettering
+        expr: sum by (queue) (increase(nuts_consumer_messages_total{outcome="dead-lettered"}[15m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: A consumer is sending messages to the dead-letter queue
+          description: The queue label says which one. Permanent failures (bad messages) and messages that failed after all retries both land here; inspect with `npm run dlq -- list`.
+
+      - alert: DeadLetterQueueOldMessage
+        expr: max(nuts_rabbitmq_dlq_oldest_age_seconds) > 3600
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: The oldest dead-lettered message is over an hour old
+          description: Nobody has handled the dead letters. Replay or discard them (docs/operations/runbooks/dead-letters.md).
+
+      - alert: ConsumerRetriesHigh
+        expr: sum by (queue) (increase(nuts_consumer_messages_total{outcome="retried"}[10m])) > 20
+        labels: { severity: warning }
+        annotations:
+          summary: A consumer is retrying many messages
+          description: A dependency (database, email provider, Paystack) is probably failing. Messages are not lost; they wait 10 s, 1 min or 10 min and try again.
+
       - alert: QueueBacklog
         expr: max by (queue) (nuts_rabbitmq_queue_messages{queue!="q.nuts.dlq"}) > 500
         for: 10m

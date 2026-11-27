@@ -1,3 +1,4 @@
+import { recordConsumerOutcome } from '../../messaging/rabbitmq/consumer-outcome.util';
 import { MetricsService, statusClass } from './metrics.service';
 import { tokenMatches } from './metrics-server.util';
 
@@ -31,6 +32,7 @@ describe('MetricsService', () => {
     };
     const rabbit = {
       isAvailable: jest.fn().mockReturnValue(true),
+      getDeadLetterOldestAgeSeconds: jest.fn().mockResolvedValue(0),
       getQueueStats: jest.fn().mockResolvedValue([
         { queue: 'q.nuts.dlq', messages: 3, consumers: 0 },
         { queue: 'q.nuts.emails', messages: 0, consumers: 1 },
@@ -73,5 +75,25 @@ describe('MetricsService', () => {
   it('reports zero oldest age when nothing is pending', async () => {
     const text = await build({ pending: 0, oldest: null }).render();
     expect(text).toMatch(/nuts_outbox_oldest_pending_age_seconds\{[^}]*\} 0/);
+  });
+
+  it('counts consumer outcomes per queue and times the successful ones', async () => {
+    const metrics = build({ pending: 0, oldest: null });
+    recordConsumerOutcome('q.nuts.emails', 'ok', 0.2);
+    recordConsumerOutcome('q.nuts.emails', 'retried');
+    recordConsumerOutcome('q.nuts.emails', 'dead-lettered');
+
+    const text = await metrics.render();
+    expect(text).toContain(
+      'nuts_consumer_messages_total{queue="q.nuts.emails",outcome="ok"',
+    );
+    expect(text).toMatch(
+      /nuts_consumer_messages_total\{[^}]*outcome="dead-lettered"[^}]*\} 1/,
+    );
+    expect(text).toMatch(
+      /nuts_consumer_duration_seconds_count\{[^}]*queue="q\.nuts\.emails"[^}]*\} 1/,
+    );
+    expect(text).toContain('nuts_rabbitmq_dlq_oldest_age_seconds');
+    metrics.onModuleDestroy();
   });
 });

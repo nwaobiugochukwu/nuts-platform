@@ -24,6 +24,22 @@ export function fakeRabbit() {
   };
 }
 
+/** Stands in for ProcessedEventService: runs the work, or skips it for ids in `handled`. */
+export function fakeProcessed(handled: string[] = []) {
+  const runOnce = jest.fn(
+    async (
+      _consumer: string,
+      id: string | undefined,
+      work: () => Promise<void>,
+    ) => {
+      if (id && handled.includes(id)) return 'duplicate' as const;
+      await work();
+      return 'ran' as const;
+    },
+  );
+  return { processed: { runOnce } as never, runOnce };
+}
+
 /** Runs `fn` with PROCESS_ROLE set (or unset), then restores the previous value. */
 export async function withRole<T>(
   role: string | undefined,
