@@ -11,13 +11,13 @@
     "db:seed": "node --experimental-strip-types scripts/seed.ts"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0"
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "prisma": "^7.8.0",
+    "prisma": "^7.10.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "prisma": {

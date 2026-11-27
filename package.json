@@ -74,6 +74,20 @@
     "turbo": "^2.11.5"
   },
   "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=22.12.0 <23"
+  },
+  "overrides": {
+    "proxy-addr": "^2.0.8",
+    "body-parser": "^2.4.0",
+    "postcss": "^8.5.33",
+    "sharp": "^0.35.5",
+    "effect": "^3.22.5",
+    "brace-expansion@^5.0.0": "^5.1.0",
+    "@nestjs/swagger": {
+      "js-yaml": "^4.3.2"
+    }
+  },
   "prisma": {
     "schema": "packages/database/schema.prisma"
   },

@@ -153,10 +153,6 @@ export class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  BULLMQ_PREFIX = '{nuts}';
-
-  @IsString()
-  @IsOptional()
   RABBITMQ_ENABLED = 'true';
 
   @IsString()
