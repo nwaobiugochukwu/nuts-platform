@@ -10,10 +10,10 @@ import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import { VendorAnalyticsQueryDto } from '../vendors/dto/vendor-analytics-query.dto';
-import { VendorAnalyticsSummaryDto } from '../vendors/dto/vendor-analytics-summary.dto';
+import { VendorAnalyticsQueryDto } from '../dto/vendor-analytics-query.dto';
+import { VendorAnalyticsSummaryDto } from '../dto/vendor-analytics-summary.dto';
 import { VendorAnalyticsService } from '../services/vendor-analytics.service';
-import { VendorProductAnalyticsQueryDto } from '../vendors/dto/vendor-product-analytics-query.dto';
+import { VendorProductAnalyticsQueryDto } from '../dto/vendor-product-analytics-query.dto';
 import { VendorProductPerformancePageDto } from '../dto/marketplace-analytics.dto';
 
 @ApiTags('VENDOR - ANALYTICS')

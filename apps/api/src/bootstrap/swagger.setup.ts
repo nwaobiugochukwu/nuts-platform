@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Express } from 'express';
 import { Logger } from 'nestjs-pino';
-import { removeDuplicateAdminCategoryPaths } from './common/utils/swagger-paths.util';
+import { removeDuplicateAdminCategoryPaths } from '../common/utils/swagger-paths.util';
 
 /**
  * Enterprise OpenAPI 3.0 / Swagger Setup for NUTS Platform.

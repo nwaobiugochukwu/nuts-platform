@@ -15,8 +15,8 @@ import {
 import { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.types';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { NotificationPreferencesService } from '../services/preferences.service';
-import { UpdateNotificationPreferencesDto } from '../preferences/dto/update-preferences.dto';
+import { NotificationPreferencesService } from '../services/notification-preferences.service';
+import { UpdateNotificationPreferencesDto } from '../dto/update-preferences.dto';
 
 @ApiTags('NOTIFICATIONS - PREFERENCES')
 @ApiBearerAuth('JWT-auth')

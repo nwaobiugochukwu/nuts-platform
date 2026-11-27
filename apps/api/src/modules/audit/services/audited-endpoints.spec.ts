@@ -8,10 +8,10 @@ import { AdminStaffController } from '../../staff/controllers/admin-staff.contro
 import { AdminAuthController } from '../../auth/controllers/admin-auth.controller';
 import { AuthController } from '../../auth/controllers/auth.controller';
 import { AdminCategoryController } from '../../categories/controllers/admin-category.controller';
-import { AdminOrdersController } from '../../orders/controllers/admin-order.controller';
-import { AdminProductsController } from '../../products/controllers/admin-product.controller';
+import { AdminOrdersController } from '../../orders/controllers/admin-orders.controller';
+import { AdminProductsController } from '../../products/controllers/admin-products.controller';
 import { VendorProductsController } from '../../products/controllers/vendor-products.controller';
-import { AdminUsersController } from '../../users/controllers/admin-user.controller';
+import { AdminUsersController } from '../../users/controllers/admin-users.controller';
 import { UsersController } from '../../users/controllers/users.controller';
 import { AdminVendorsController } from '../../vendors/controllers/admin-vendors.controller';
 import { VendorAccountController } from '../../vendors/controllers/vendor-account.controller';

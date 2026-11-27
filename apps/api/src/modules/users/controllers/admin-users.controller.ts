@@ -30,7 +30,7 @@ import type {} from 'express';
 import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { OtpRequired } from '@api/common/decorators/otp-required.decorator';
+import { OtpRequired } from '@api/modules/auth/decorators/otp-required.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';

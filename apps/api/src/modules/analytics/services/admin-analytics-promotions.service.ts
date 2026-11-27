@@ -5,7 +5,7 @@ import {
   DiscountAnalyticsDto,
   PaymentAnalyticsDto,
   ReferralAnalyticsDto,
-} from '../admin/dto/admin-analytics-summary.dto';
+} from '../dto/admin-analytics-summary.dto';
 
 @Injectable()
 export class AdminAnalyticsPromotionsService {

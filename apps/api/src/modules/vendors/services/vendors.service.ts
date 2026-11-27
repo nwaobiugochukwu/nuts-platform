@@ -23,7 +23,7 @@ import {
   VENDOR_STORE,
   VENDOR_STORE_PRODUCTS,
   VENDOR_STORE_TTL,
-} from '@api/common/constants/cache.constant';
+} from '@api/common/constants/cache.constants';
 import { generateSlug } from '@api/common/utils/slug.util';
 import { getStockStatus } from '@api/common/utils/stock-status.util';
 

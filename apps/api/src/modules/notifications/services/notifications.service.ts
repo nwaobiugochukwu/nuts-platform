@@ -40,11 +40,11 @@ import { AuthSessionService } from '../../auth/services/auth-session.service';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 
 import { randomUUID } from 'node:crypto';
-import { WebPushService } from './push.service';
+import { WebPushService } from './web-push.service';
 import {
   NotificationPreferencesService,
   NotificationCategory,
-} from './preferences.service';
+} from './notification-preferences.service';
 
 export interface CreateNotificationDto {
   userId: string;

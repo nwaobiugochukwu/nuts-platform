@@ -12,7 +12,7 @@ import {
   PRODUCT_BY_SLUG,
   PRODUCT_TTL,
   VENDOR_STORE_PRODUCTS,
-} from '@api/common/constants/cache.constant';
+} from '@api/common/constants/cache.constants';
 
 import { resolveCategoryIdFromPath } from '@api/common/utils/category-path.util';
 import { mapPrismaError } from '@api/common/utils/prisma-error.util';

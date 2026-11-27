@@ -1,5 +1,5 @@
 ﻿import 'reflect-metadata';
-import './instrument';
+import './bootstrap/instrument';
 
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,7 +17,7 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { NormalizeInputPipe } from './common/pipes/normalize-input.pipe';
 import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
-import { setupSwagger } from './swagger.setup';
+import { setupSwagger } from './bootstrap/swagger.setup';
 import { currentProcessRole } from './config/process-role.config';
 import { stopCronsUnlessJobsRole } from './config/role-runtime.util';
 import { MetricsService } from './infrastructure/observability/metrics/metrics.service';

@@ -2,14 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { parseDateRange } from '@api/common/utils/date-range.util';
-import { RANGE_DAYS } from '../vendors/dto/vendor-analytics-query.dto';
+import { RANGE_DAYS } from '../dto/vendor-analytics-query.dto';
 import { AdminAnalyticsAuditService } from './admin-analytics-audit.service';
 import { AdminAnalyticsProductsService } from './admin-analytics-products.service';
 import { AdminAnalyticsPromotionsService } from './admin-analytics-promotions.service';
 import { AdminAnalyticsRevenueService } from './admin-analytics-revenue.service';
 import { AdminAnalyticsUsersService } from './admin-analytics-users.service';
-import { AdminAnalyticsQueryDto } from '../admin/dto/admin-analytics-query.dto';
-import { AdminAnalyticsSummaryDto } from '../admin/dto/admin-analytics-summary.dto';
+import { AdminAnalyticsQueryDto } from '../dto/admin-analytics-query.dto';
+import { AdminAnalyticsSummaryDto } from '../dto/admin-analytics-summary.dto';
 import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
 
 const ANALYTICS_CACHE_PREFIX = 'admin:analytics:summary:';

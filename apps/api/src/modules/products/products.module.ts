@@ -6,13 +6,13 @@ import { SearchModule } from '@api/modules/search/search.module';
 import { NotificationsModule } from '@api/modules/notifications/notifications.module';
 import { ProductController } from './controllers/product.controller';
 import { DiscoverController } from './controllers/discover.controller';
-import { AdminProductsController } from './controllers/admin-product.controller';
+import { AdminProductsController } from './controllers/admin-products.controller';
 import { VendorProductsController } from './controllers/vendor-products.controller';
 import { ProductVariantsController } from './controllers/product-variants.controller';
 import {
   AdminProductVariantsCanonicalController,
   AdminProductVariantsController,
-} from './controllers/admin-product-variant.controller';
+} from './controllers/admin-product-variants.controller';
 import {
   VendorProductVariantsCanonicalController,
   VendorProductVariantsController,

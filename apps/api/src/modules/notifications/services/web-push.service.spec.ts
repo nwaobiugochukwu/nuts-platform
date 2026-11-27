@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { ROLE } from '@prisma/client';
-import { WebPushService } from './push.service';
+import { WebPushService } from './web-push.service';
 
 describe('WebPushService', () => {
   let service: WebPushService;

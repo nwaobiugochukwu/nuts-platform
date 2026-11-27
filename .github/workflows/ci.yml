@@ -121,6 +121,9 @@ jobs:
       - name: Architecture guardrails (layering & module boundaries)
         run: npm run check:architecture
 
+      - name: Script tests (layout rules, launcher, smoke script)
+        run: npm run test:scripts
+
   # ── 2. Static Analysis & Type Checking ─────────────────────────
   typecheck:
     name: Typecheck & Static Analysis
