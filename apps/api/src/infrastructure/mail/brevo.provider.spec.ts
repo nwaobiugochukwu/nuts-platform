@@ -1,4 +1,8 @@
 import { ConfigService } from '@nestjs/config';
+import {
+  isDependencyFailure,
+  upstreamStatusOf,
+} from '../resilience/dependency-failure.util';
 import { BrevoProvider } from './brevo.provider';
 
 describe('BrevoProvider', () => {
@@ -116,4 +120,31 @@ describe('BrevoProvider', () => {
     ).rejects.toThrow('Brevo transactional emails require HTML content.');
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [400, false],
+    [401, false],
+    [429, true],
+    [503, true],
+  ])(
+    'tags a Brevo HTTP %i error so the circuit breaker only counts it when the provider is at fault (%s)',
+    async (status, countsAsProviderFailure) => {
+      fetchMock.mockResolvedValue(new Response('nope', { status }));
+      const provider = createProvider({
+        BREVO_API_KEY: 'brevo-test-key',
+        EMAIL_FROM: 'sender@example.com',
+      });
+
+      const error = await provider
+        .send({
+          to: 'customer@example.com',
+          subject: 'Test',
+          html: '<p>x</p>',
+        })
+        .catch((e: unknown) => e);
+
+      expect(upstreamStatusOf(error)).toBe(status);
+      expect(isDependencyFailure(error)).toBe(countsAsProviderFailure);
+    },
+  );
 });

@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, type UploadApiErrorResponse } from 'cloudinary';
+import { CircuitBreakerService } from '../resilience/circuit-breaker.service';
+import { withUpstreamStatus } from '../resilience/dependency-failure.util';
 
 export interface ImageUploadResult {
   url: string;
@@ -44,7 +46,10 @@ export class CloudinaryService {
   private readonly isConfigured: boolean;
   private readonly folder: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly circuitBreaker: CircuitBreakerService,
+  ) {
     const cloudName = this.configService.get<string>('CLOUDINARY_CLOUD_NAME');
     const apiKey = this.configService.get<string>('CLOUDINARY_API_KEY');
     const apiSecret = this.configService.get<string>('CLOUDINARY_API_SECRET');
@@ -88,72 +93,95 @@ export class CloudinaryService {
       throw new BadRequestException('Invalid or empty image file');
     }
 
-    return new Promise<ImageUploadResult>((resolve, reject) => {
-      const isSvg = file.mimetype === 'image/svg+xml';
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          ...(isSvg
-            ? { resource_type: 'image' as const }
-            : {
-                transformation: [
-                  { width: 1200, height: 1200, crop: 'limit', quality: 'auto' },
-                  { fetch_format: 'auto' },
-                ],
-              }),
-        },
-        (error: UploadApiErrorResponse | undefined, result) => {
-          if (error || !result) {
-            const message = error?.message ?? 'Cloudinary upload failed';
-            const httpStatus = error?.http_code;
+    // Not repeatable (an upload creates an asset), but guarded: a failing Cloudinary opens the
+    // breaker and uploads fail fast instead of each waiting out the timeout.
+    return this.circuitBreaker.executeCloudinary(
+      () =>
+        new Promise<ImageUploadResult>((resolve, reject) => {
+          const isSvg = file.mimetype === 'image/svg+xml';
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              folder,
+              ...(isSvg
+                ? { resource_type: 'image' as const }
+                : {
+                    transformation: [
+                      {
+                        width: 1200,
+                        height: 1200,
+                        crop: 'limit',
+                        quality: 'auto',
+                      },
+                      { fetch_format: 'auto' },
+                    ],
+                  }),
+            },
+            (error: UploadApiErrorResponse | undefined, result) => {
+              if (error || !result) {
+                const message = error?.message ?? 'Cloudinary upload failed';
+                const httpStatus = error?.http_code;
 
+                this.logger.error(
+                  `Cloudinary upload error [${httpStatus ?? 'unknown'}]: ${message}`,
+                );
+
+                // Surface meaningful errors instead of a raw 500
+                if (httpStatus === 400) {
+                  reject(
+                    new BadRequestException(`Upload rejected: ${message}`),
+                  );
+                } else if (httpStatus === 401) {
+                  reject(
+                    withUpstreamStatus(
+                      new ServiceUnavailableException(
+                        'Cloudinary credentials are invalid — check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET',
+                      ),
+                      401,
+                    ),
+                  );
+                } else {
+                  reject(
+                    withUpstreamStatus(
+                      new BadGatewayException(
+                        `Image upload failed: ${message}`,
+                      ),
+                      httpStatus ?? 502,
+                    ),
+                  );
+                }
+                return;
+              }
+
+              const rawUrl = result.secure_url;
+              const optimizedUrl =
+                isSvg || !rawUrl.includes('/upload/')
+                  ? rawUrl
+                  : rawUrl.includes('/upload/f_auto,q_auto/')
+                    ? rawUrl
+                    : rawUrl.replace('/upload/', '/upload/f_auto,q_auto/');
+
+              resolve({
+                url: optimizedUrl,
+                publicId: result.public_id,
+                width: result.width ?? 0,
+                height: result.height ?? 0,
+                format: result.format ?? 'jpg',
+                bytes: result.bytes ?? 0,
+              });
+            },
+          );
+
+          try {
+            uploadStream.end(file.buffer);
+          } catch (error) {
             this.logger.error(
-              `Cloudinary upload error [${httpStatus ?? 'unknown'}]: ${message}`,
+              'Unable to write image data to Cloudinary',
+              error,
             );
-
-            // Surface meaningful errors instead of a raw 500
-            if (httpStatus === 400) {
-              reject(new BadRequestException(`Upload rejected: ${message}`));
-            } else if (httpStatus === 401) {
-              reject(
-                new ServiceUnavailableException(
-                  'Cloudinary credentials are invalid — check CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET',
-                ),
-              );
-            } else {
-              reject(
-                new BadGatewayException(`Image upload failed: ${message}`),
-              );
-            }
-            return;
+            reject(new BadRequestException('Invalid image upload data'));
           }
-
-          const rawUrl = result.secure_url;
-          const optimizedUrl =
-            isSvg || !rawUrl.includes('/upload/')
-              ? rawUrl
-              : rawUrl.includes('/upload/f_auto,q_auto/')
-                ? rawUrl
-                : rawUrl.replace('/upload/', '/upload/f_auto,q_auto/');
-
-          resolve({
-            url: optimizedUrl,
-            publicId: result.public_id,
-            width: result.width ?? 0,
-            height: result.height ?? 0,
-            format: result.format ?? 'jpg',
-            bytes: result.bytes ?? 0,
-          });
-        },
-      );
-
-      try {
-        uploadStream.end(file.buffer);
-      } catch (error) {
-        this.logger.error('Unable to write image data to Cloudinary', error);
-        reject(new BadRequestException('Invalid image upload data'));
-      }
-    });
+        }),
+    );
   }
 
   /**
@@ -188,7 +216,10 @@ export class CloudinaryService {
     }
 
     try {
-      await cloudinary.uploader.destroy(publicId);
+      // Deleting a named image is safe to repeat, so it is retried with backoff.
+      await this.circuitBreaker.executeCloudinaryRepeatable(() =>
+        cloudinary.uploader.destroy(publicId),
+      );
       this.logger.log(`Image deleted successfully: ${publicId}`);
     } catch (error) {
       this.logger.error('Failed to delete image from Cloudinary', error);

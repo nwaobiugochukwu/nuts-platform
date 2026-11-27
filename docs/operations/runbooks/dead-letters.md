@@ -21,6 +21,7 @@ How failed background work is handled, and what to do when it needs a person. Tw
 | `ConsumerDeadLettering` | A consumer dead-lettered messages in the last 15 minutes; the `queue` label says which | Worker logs for that queue |
 | `DeadLetterQueueOldMessage` | The oldest dead letter is over an hour old | Nobody has handled it; follow below |
 | `ConsumerRetriesHigh` | Many retries on a queue | A dependency is failing; nothing is lost yet |
+| `CircuitBreakerOpen` | The breaker for `paystack`, `email` or `cloudinary` has been open for 2 minutes | The provider's status page, then the API logs ("circuit breaker tripped OPEN") |
 
 ## Dead outbox events
 
@@ -50,3 +51,7 @@ npm run dlq -- purge --queue q.nuts.emails --yes
 ## Checks after replay
 
 `nuts_outbox_dead_events` and the DLQ depth return to 0, and `nuts_consumer_messages_total{outcome="dead-lettered"}` stops rising.
+
+## Circuit breakers
+
+Each external dependency (Paystack, the email provider, Cloudinary) has a breaker per process. Three timeouts, network errors, 5xx or 429 answers in a row open it; a bad request or wrong credentials (4xx) does not, so one bad email address cannot take email down. While open, calls fail fast; it probes again after 10 s (Paystack), 30 s (email) or 15 s (Cloudinary). Queue messages that hit an open breaker wait a minute and retry without using a retry, so an outage does not fill the dead-letter queue. `nuts_circuit_breaker_state` is 0 closed, 1 probing, 2 open.

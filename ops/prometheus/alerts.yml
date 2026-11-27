@@ -34,6 +34,14 @@ groups:
           summary: A consumer is retrying many messages
           description: A dependency (database, email provider, Paystack) is probably failing. Messages are not lost; they wait 10 s, 1 min or 10 min and try again.
 
+      - alert: CircuitBreakerOpen
+        expr: max by (dependency) (nuts_circuit_breaker_state) == 2
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: The circuit breaker for {{ $labels.dependency }} has been open for 2 minutes
+          description: Calls to that dependency (paystack, email or cloudinary) are failing fast. Queue messages wait and retry; user-facing calls return an error. Check the provider's status page, then the API logs.
+
       - alert: QueueBacklog
         expr: max by (queue) (nuts_rabbitmq_queue_messages{queue!="q.nuts.dlq"}) > 500
         for: 10m

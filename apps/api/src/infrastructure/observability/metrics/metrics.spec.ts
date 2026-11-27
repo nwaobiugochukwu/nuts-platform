@@ -96,4 +96,38 @@ describe('MetricsService', () => {
     expect(text).toContain('nuts_rabbitmq_dlq_oldest_age_seconds');
     metrics.onModuleDestroy();
   });
+
+  it('reports each circuit breaker as closed, half-open or open', async () => {
+    const breakers = {
+      getStates: () => ({
+        paystack: 'CLOSED',
+        email: 'OPEN',
+        cloudinary: 'HALF_OPEN',
+      }),
+    };
+    const prisma = { outboxEvent: { count: jest.fn(), findFirst: jest.fn() } };
+    const rabbit = {
+      isAvailable: () => true,
+      getQueueStats: jest.fn().mockResolvedValue([]),
+      getDeadLetterOldestAgeSeconds: jest.fn().mockResolvedValue(0),
+    };
+    const metrics = new MetricsService(
+      prisma as never,
+      rabbit as never,
+      undefined,
+      breakers as never,
+    );
+
+    const text = await metrics.render();
+    expect(text).toMatch(
+      /nuts_circuit_breaker_state\{[^}]*dependency="paystack"[^}]*\} 0/,
+    );
+    expect(text).toMatch(
+      /nuts_circuit_breaker_state\{[^}]*dependency="email"[^}]*\} 2/,
+    );
+    expect(text).toMatch(
+      /nuts_circuit_breaker_state\{[^}]*dependency="cloudinary"[^}]*\} 1/,
+    );
+    metrics.onModuleDestroy();
+  });
 });
