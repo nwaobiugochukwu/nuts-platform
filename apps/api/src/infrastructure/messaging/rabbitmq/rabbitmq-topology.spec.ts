@@ -139,6 +139,9 @@ describe('queue bindings as a design rule', () => {
         Q.ORDER_EVENTS,
       ].sort(),
       [DomainEvents.PAYMENT_FAILED]: [Q.ORDER_EVENTS],
+      [DomainEvents.REVIEW_CREATED]: [Q.REVIEW_AGGREGATES],
+      [DomainEvents.REVIEW_UPDATED]: [Q.REVIEW_AGGREGATES],
+      [DomainEvents.REVIEW_DELETED]: [Q.REVIEW_AGGREGATES],
       [DomainEvents.REFERRAL_REWARD_CREDITED]: [Q.ORDER_EVENTS],
     });
   });

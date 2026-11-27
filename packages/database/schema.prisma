@@ -324,6 +324,11 @@ model Product {
   deletedAt         DateTime?
   categoryId        String
   vendorId          String
+  /// Summary of the active reviews, kept up to date by review events (see ReviewAggregateService).
+  ratingCount       Int       @default(0) @map("rating_count")
+  ratingAverage     Float     @default(0) @map("rating_average")
+  /// {"1": n, ... "5": n}; null until the first review.
+  ratingBreakdown   Json?     @map("rating_breakdown")
 
   cartItems     CartItem[]
   orderItems    OrderItem[]

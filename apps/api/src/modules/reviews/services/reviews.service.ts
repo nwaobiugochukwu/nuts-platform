@@ -10,6 +10,12 @@ import { OrderStatus, Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import {
+  PRODUCT_REVIEWS_CACHE_PREFIX,
+  productReviewsCacheKeys,
+} from '../constants/review-cache.constants';
 import {
   getErrorCode,
   getErrorMessage,
@@ -19,8 +25,6 @@ import {
   ProductReviewsResponseDto,
   ReviewResponseDto,
 } from '../dto/create-review.dto';
-
-const PRODUCT_REVIEWS_CACHE_PREFIX = 'product:reviews:';
 
 // Prevent a single product from returning an unbounded response.
 const MAX_REVIEWS_PER_PRODUCT = 100;
@@ -45,6 +49,7 @@ export class ReviewsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly transactions: TransactionRunnerService,
   ) {}
 
   async create(
@@ -98,17 +103,36 @@ export class ReviewsService {
        * The database UNIQUE(userId, productId) constraint is the
        * authoritative concurrency guard.
        */
-      review = await this.prisma.review.create({
-        data: {
-          rating: dto.rating,
-          comment: dto.comment,
-          userId,
-          productId: dto.productId,
+      review = await this.transactions.run(
+        async (ctx) => {
+          const created = await ctx.tx.review.create({
+            data: {
+              rating: dto.rating,
+              comment: dto.comment,
+              userId,
+              productId: dto.productId,
+            },
+            include: {
+              user: REVIEW_USER_SELECT,
+            },
+          });
+          // The rating summary on the product is refreshed by a consumer of this event; it
+          // exists if and only if the review does.
+          await ctx.publish({
+            type: DomainEvents.REVIEW_CREATED,
+            aggregate: { type: 'review', id: created.id },
+            actor: { type: 'user', id: userId },
+            payload: {
+              reviewId: created.id,
+              productId: dto.productId,
+              userId,
+              rating: created.rating,
+            },
+          });
+          return created;
         },
-        include: {
-          user: REVIEW_USER_SELECT,
-        },
-      });
+        { name: 'review.create', preset: 'short' },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -154,9 +178,19 @@ export class ReviewsService {
         });
 
         const items = reviews.map((review) => this.toResponseDto(review));
-        const total = items.length;
 
-        const ratingBreakdown: Record<number, number> = {
+        // The summary is stored on the product and kept current by review events, so it counts
+        // every review, not just the page returned here, and costs one row read.
+        const summary = await this.prisma.product.findUnique({
+          where: { id: productId },
+          select: {
+            ratingCount: true,
+            ratingAverage: true,
+            ratingBreakdown: true,
+          },
+        });
+
+        const emptyBreakdown: Record<number, number> = {
           1: 0,
           2: 0,
           3: 0,
@@ -164,22 +198,14 @@ export class ReviewsService {
           5: 0,
         };
 
-        let ratingSum = 0;
-        for (const item of items) {
-          const star = Math.min(5, Math.max(1, Math.round(item.rating)));
-          ratingBreakdown[star] = (ratingBreakdown[star] || 0) + 1;
-          ratingSum += item.rating;
-        }
-
-        const averageRating =
-          total > 0 ? Number((ratingSum / total).toFixed(1)) : 0;
-
         return {
           data: items,
           meta: {
-            total,
-            averageRating,
-            ratingBreakdown,
+            total: summary?.ratingCount ?? items.length,
+            averageRating: summary?.ratingAverage ?? 0,
+            ratingBreakdown:
+              (summary?.ratingBreakdown as Record<number, number> | null) ??
+              emptyBreakdown,
           },
         };
       } catch (error: unknown) {
@@ -241,14 +267,25 @@ export class ReviewsService {
      * This preserves the historical record while keeping the review
      * invisible to customers.
      */
-    await this.prisma.review.update({
-      where: {
-        id: reviewId,
+    await this.transactions.run(
+      async (ctx) => {
+        await ctx.tx.review.update({
+          where: {
+            id: reviewId,
+          },
+          data: {
+            isActive: false,
+          },
+        });
+        await ctx.publish({
+          type: DomainEvents.REVIEW_DELETED,
+          aggregate: { type: 'review', id: reviewId },
+          actor: { type: 'user', id: userId },
+          payload: { reviewId, productId: review.productId, userId },
+        });
       },
-      data: {
-        isActive: false,
-      },
-    });
+      { name: 'review.delete', preset: 'short' },
+    );
 
     await this.invalidateProductReviewsCache(review.productId);
   }
@@ -256,10 +293,11 @@ export class ReviewsService {
   private async invalidateProductReviewsCache(
     productId: string,
   ): Promise<void> {
-    await Promise.all([
-      this.cacheService.del(`${PRODUCT_REVIEWS_CACHE_PREFIX}${productId}`),
-      this.cacheService.del(`${PRODUCT_REVIEWS_CACHE_PREFIX}${productId}:v2`),
-    ]);
+    await Promise.all(
+      productReviewsCacheKeys(productId).map((key) =>
+        this.cacheService.del(key),
+      ),
+    );
   }
 
   private toResponseDto(review: ReviewWithUser): ReviewResponseDto {
