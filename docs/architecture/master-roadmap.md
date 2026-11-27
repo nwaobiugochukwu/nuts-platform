@@ -154,7 +154,7 @@ Read-only audit of fault isolation, independent scaling, database connections, m
 
 | ID | Item | Status |
 |---|---|---|
-| 5.1 | Backbone: one envelope, `<aggregate>.<fact>` naming, versioning, publishing through the transaction runner, a queue per consumer, delete the dead routing keys [R19, R20] | todo |
+| 5.1 | Backbone: one envelope, `<aggregate>.<fact>` naming, versioning, publishing through the transaction runner, a queue per consumer, delete the dead routing keys [R19, R20] | done ([ADR 0007](adr/0007-event-backbone-envelope-naming-and-queues.md)): `EventEnvelope` and `parseEnvelope`, the full catalog in `DomainEvents` (naming enforced by a test), `ctx.publish`, queue bindings by exact key (wildcards removed, obsolete bindings unbound at connect), the four dead routing keys deleted |
 | 5.2 | Move the 8 in-process events onto the backbone with their existing consumers [R19] | todo |
 | 5.3 | Webhook inbox: verify, store the raw event once, answer 200, process through the queue [E13] | todo |
 | 5.4 | Emails through the queue: OTP, welcome, password reset, password changed, order confirmation with PDF, new-device login [E1, E2, E3] | todo |

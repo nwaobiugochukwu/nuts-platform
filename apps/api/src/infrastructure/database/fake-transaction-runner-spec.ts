@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { PublishEventInput } from '../messaging/events/event-envelope.types';
 import type { StartWorkflowInput } from '../workflows/temporal-client.service';
 import type {
   TransactionContext,
@@ -23,6 +24,8 @@ export class FakeTransactionRunner implements Pick<
     payload: Record<string, unknown>;
   }> = [];
 
+  /** Domain events published with `ctx.publish`, as given (not yet wrapped in an envelope). */
+  readonly published: PublishEventInput[] = [];
   readonly audited: Array<Record<string, unknown>> = [];
   readonly workflows: StartWorkflowInput[] = [];
 
@@ -39,6 +42,10 @@ export class FakeTransactionRunner implements Pick<
       tx: (options.parent ?? this.tx) as Prisma.TransactionClient,
       emit: (aggregateType, aggregateId, eventType, payload) => {
         this.emitted.push({ aggregateType, aggregateId, eventType, payload });
+        return Promise.resolve();
+      },
+      publish: (input) => {
+        this.published.push(input as PublishEventInput);
         return Promise.resolve();
       },
       audit: (input) => {
