@@ -7,7 +7,7 @@ import {
   type AuditOptions,
 } from '../decorators/audit.decorator';
 import { auditAlso, auditDetails } from '../utils/audit-details.util';
-import { runWithRequestId } from '@api/common/request-context/request-context';
+import { runWithRequestId } from '@api/common/request-context/request-context.util';
 import { AuditInterceptor } from './audit.interceptor';
 
 function contextFor(

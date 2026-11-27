@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
 import {
   currentTimings,
   type RequestTimings,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 import { tap } from 'rxjs/operators';
 
 @Injectable()

@@ -10,7 +10,7 @@ import {
   Worker,
   bundleWorkflowCode,
 } from '@temporalio/worker';
-import { portFor } from './config/process-role';
+import { portFor } from './config/process-role.config';
 import { buildActivities } from './infrastructure/workflows/activities';
 import { SampleActivities } from './infrastructure/workflows/activities/sample.activities';
 import {

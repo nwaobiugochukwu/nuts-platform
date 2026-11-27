@@ -21,10 +21,10 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { ROLE } from '@prisma/client';
-import { AuthCookieService } from '@api/modules/auth/cookies/auth-cookie.service';
+import { AuthCookieService } from '@api/modules/auth/services/auth-cookie.service';
 import { RequestOtpDto } from '@api/modules/auth/dto/request-otp.dto';
-import { OtpService } from '@api/modules/auth/otp/otp.service';
-import type { RefreshJwtPayload } from '@api/modules/auth/types/refresh-jwt-payload.type';
+import { OtpService } from '@api/modules/auth/services/otp.service';
+import type { RefreshJwtPayload } from '@api/modules/auth/types/refresh-jwt-payload.types';
 import { AccountLockGuard } from '@api/modules/security/guards/account-lock.guard';
 import {
   RefreshTokenThrottle,

@@ -30,7 +30,7 @@ import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 import {} from '@api/common/utils/request.util';
-import { AdminVendorsService } from '../admin-vendors.service';
+import { AdminVendorsService } from '../services/admin-vendors.service';
 import { QueryAdminVendorsDto } from '../dto/query-admin-vendors.dto';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 

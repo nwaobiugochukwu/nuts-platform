@@ -8,8 +8,8 @@ import {
   authCookieRoleForPath,
   type AuthCookieRole,
 } from '../../constants/auth-cookies.constants';
-import { AuthSessionService } from '../../sessions/auth-session.service';
-import type { JwtPayload } from '../../types/jwt-payload.type';
+import { AuthSessionService } from '../../services/auth-session.service';
+import type { JwtPayload } from '../../types/jwt-payload.types';
 import { jwtFromCookie } from '../../utils/jwt-cookie.extractor';
 
 function extractAccessToken(req: Request): string | null {

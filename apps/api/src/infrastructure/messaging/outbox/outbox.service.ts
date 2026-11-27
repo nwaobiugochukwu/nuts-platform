@@ -1,4 +1,4 @@
-import { currentRequestId } from '@api/common/request-context/request-context';
+import { currentRequestId } from '@api/common/request-context/request-context.util';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { OutboxStatus, Prisma } from '@prisma/client';
@@ -47,7 +47,7 @@ export class OutboxService {
       },
     });
 
-    // Callers inside TransactionRunner pass wakeRelay: false and wake the relay
+    // Callers inside TransactionRunnerService pass wakeRelay: false and wake the relay
     // after COMMIT; waking it here would race the commit.
     if (options.wakeRelay !== false) this.outboxRelay?.notifyNewEvent();
   }

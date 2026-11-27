@@ -20,7 +20,7 @@ NUTS currently assembles personalized and discovery results with deterministic a
 
 A **ranker** orders candidates using signals and constraints. A **re-ranker** can then enforce product availability, freshness, vendor/category diversity, or other marketplace rules.
 
-The current ranker is deterministic code in the [`recommendations` API module](../../../apps/api/src/modules/recommendations/recommendations.service.ts). It uses available behavior and catalog signals; it is not a trained AI model. The future scaling plan proposes a bounded model score followed by business-rule re-ranking, with the current logic retained as a fallback.
+The current ranker is deterministic code in the [`recommendations` API module](../../../apps/api/src/modules/recommendations/services/recommendations.service.ts). It uses available behavior and catalog signals; it is not a trained AI model. The future scaling plan proposes a bounded model score followed by business-rule re-ranking, with the current logic retained as a fallback.
 
 ### Cold start and implicit feedback
 

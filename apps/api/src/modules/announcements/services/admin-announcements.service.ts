@@ -15,7 +15,7 @@ import {
 } from '@prisma/client';
 import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { NotificationsService } from '@api/modules/notifications/notifications.service';
+import { NotificationsService } from '@api/modules/notifications/services/notifications.service';
 import {
   CreateAdminAnnouncementDto,
   QueryAdminAnnouncementsDto,

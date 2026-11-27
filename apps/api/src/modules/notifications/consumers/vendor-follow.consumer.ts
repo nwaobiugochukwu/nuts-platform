@@ -1,4 +1,4 @@
-import { roleCan } from '@api/config/process-role';
+import { roleCan } from '@api/config/process-role.config';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
@@ -10,7 +10,7 @@ import {
   RABBITMQ_ROUTING_KEYS,
 } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
-import { NotificationsService } from '../notifications.service';
+import { NotificationsService } from '../services/notifications.service';
 
 interface VendorFollowedEvent {
   eventId: string;

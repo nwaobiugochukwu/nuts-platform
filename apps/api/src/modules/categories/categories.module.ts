@@ -3,7 +3,7 @@ import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { CategoriesController } from './controllers/categories.controller';
 import { AdminCategoryController } from './controllers/admin-category.controller';
-import { CategoriesService } from './categories.service';
+import { CategoriesService } from './services/categories.service';
 
 @Module({
   imports: [PrismaModule, RedisModule],

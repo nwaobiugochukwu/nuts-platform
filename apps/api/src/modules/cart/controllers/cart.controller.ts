@@ -31,18 +31,18 @@ import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 
-import { CartService } from '../cart.service';
+import { CartService } from '../services/cart.service';
 
 import { AddToCartQuantityDto } from '../dto/add-to-cart-quantity.dto';
 import { UpdateCartItemDto } from '../dto/update-cart-item.dto';
 
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { AddToCartResponseDto } from '../dto/responses/add-to-cart.response';
-import { ClearCartResponseDto } from '../dto/responses/clear-cart.response';
-import { GetCartResponseDto } from '../dto/responses/get-cart.response';
-import { RemoveCartItemResponseDto } from '../dto/responses/remove-cart-item.response';
-import { UpdateCartItemResponseDto } from '../dto/responses/update-cart-item.response';
+import { AddToCartResponseDto } from '../dto/responses/add-to-cart.dto';
+import { ClearCartResponseDto } from '../dto/responses/clear-cart.dto';
+import { GetCartResponseDto } from '../dto/responses/get-cart.dto';
+import { RemoveCartItemResponseDto } from '../dto/responses/remove-cart-item.dto';
+import { UpdateCartItemResponseDto } from '../dto/responses/update-cart-item.dto';
 
 @ApiTags('CART')
 @ApiBearerAuth('JWT-auth')

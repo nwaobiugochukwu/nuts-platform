@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RabbitMQService } from '../messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '../messaging/rabbitmq/rabbitmq.constants';
-import { roleCan } from '../../config/process-role';
+import { roleCan } from '../../config/process-role.config';
 import {
   TemporalClientService,
   type StartWorkflowInput,

@@ -27,7 +27,7 @@ import { ApiBearerAuth } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
 import { Public } from '@api/common/decorators/public.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { ProductVariantsService } from '../product-variants.service';
+import { ProductVariantsService } from '../services/product-variants.service';
 
 import { CreateVariantDto } from '../dto/create-variant.dto';
 import { QueryVariantDto } from '../dto/query-variant.dto';

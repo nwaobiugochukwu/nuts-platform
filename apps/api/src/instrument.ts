@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nestjs';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import './load-env';
-import { installProcessErrorHandlers } from './bootstrap/process-handlers';
+import { installProcessErrorHandlers } from './bootstrap/process-handlers.util';
 
 const dsn = process.env.SENTRY_DSN;
 

@@ -8,7 +8,7 @@ import {
   AUTH_REFRESH_COOKIE,
   authCookieRoleForPath,
 } from '../../constants/auth-cookies.constants';
-import type { RefreshJwtPayload } from '../../types/refresh-jwt-payload.type';
+import type { RefreshJwtPayload } from '../../types/refresh-jwt-payload.types';
 import { jwtFromCookie } from '../../utils/jwt-cookie.extractor';
 import type { Request } from 'express';
 

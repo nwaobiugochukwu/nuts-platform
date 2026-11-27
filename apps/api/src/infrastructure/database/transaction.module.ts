@@ -1,9 +1,9 @@
 import { Global, Module } from '@nestjs/common';
-import { TransactionRunner } from './transaction-runner';
+import { TransactionRunnerService } from './transaction-runner.service';
 
 @Global()
 @Module({
-  providers: [TransactionRunner],
-  exports: [TransactionRunner],
+  providers: [TransactionRunnerService],
+  exports: [TransactionRunnerService],
 })
 export class TransactionModule {}

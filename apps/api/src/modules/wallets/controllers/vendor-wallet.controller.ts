@@ -19,7 +19,7 @@ import {
   PaginationMetaDto,
 } from '@api/common/dto/api-response.dto';
 import { WalletTransactionResponseDto } from '@api/modules/wallets/dto/wallet-transaction-response.dto';
-import { WalletService } from '@api/modules/wallets/wallet.service';
+import { WalletService } from '@api/modules/wallets/services/wallet.service';
 import { VendorWalletResponseDto } from '../dto/vendor-wallet-response.dto';
 
 @ApiTags('VENDOR - WALLET')

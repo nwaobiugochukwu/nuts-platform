@@ -12,7 +12,7 @@ import {
   StorageStrategy,
   UploadableFile,
   UploadedFile,
-} from '../upload.interface';
+} from '../types/upload.types';
 
 @Injectable()
 export class LocalStorageStrategy extends StorageStrategy {

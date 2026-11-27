@@ -14,14 +14,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.type';
+import { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.types';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
-import { WebPushService } from '../push/push.service';
+import { WebPushService } from '../services/push.service';
 import { SubscribePushDto } from '../push/dto/subscribe-push.dto';
 import { UnsubscribePushDto } from '../push/dto/unsubscribe-push.dto';
-import { NotificationPreferencesService } from '../preferences/preferences.service';
+import { NotificationPreferencesService } from '../services/preferences.service';
 
 @ApiTags('NOTIFICATIONS - PUSH')
 @Controller('notifications/push')

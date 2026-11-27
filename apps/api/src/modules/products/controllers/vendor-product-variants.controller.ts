@@ -35,7 +35,7 @@ import { UpdateVariantDto } from '@api/modules/products/dto/update-variant.dto';
 import { ProductVariantListResponseDto } from '@api/modules/products/dto/variant-response.dto';
 import { VariantStockUpdateResponseDto } from '@api/modules/products/dto/variant-stock-update-response.dto';
 import { VendorVariantResponseDto } from '@api/modules/products/dto/vendor-variant-response.dto';
-import { ProductVariantsService } from '@api/modules/products/product-variants.service';
+import { ProductVariantsService } from '@api/modules/products/services/product-variants.service';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';

@@ -35,7 +35,7 @@ import { ProductCardDto } from '../dto/product-card.dto';
 import { PublicProductResponseDto } from '../dto/public-product-response.dto';
 import { QueryProductDto } from '../dto/query-product.dto';
 import { QueryProductsBodyDto } from '../dto/query-products-body.dto';
-import { ProductsService } from '../products.service';
+import { ProductsService } from '../services/products.service';
 
 @ApiTags('PRODUCTS')
 @ApiExtraModels(

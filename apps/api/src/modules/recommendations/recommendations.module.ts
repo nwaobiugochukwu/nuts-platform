@@ -2,13 +2,13 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { ProductsModule } from '@api/modules/products/products.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
-import { RecommendationsController } from './recommendations.controller';
-import { PersonalizedFeedService } from './personalized-feed.service';
-import { PopularProductsService } from './popular-products.service';
-import { RecommendationsService } from './recommendations.service';
-import { RelatedProductsService } from './related-products.service';
-import { SearchDiscoveryService } from './search-discovery.service';
-import { StoreDiscoveryService } from './store-discovery.service';
+import { RecommendationsController } from './controllers/recommendations.controller';
+import { PersonalizedFeedService } from './services/personalized-feed.service';
+import { PopularProductsService } from './services/popular-products.service';
+import { RecommendationsService } from './services/recommendations.service';
+import { RelatedProductsService } from './services/related-products.service';
+import { SearchDiscoveryService } from './services/search-discovery.service';
+import { StoreDiscoveryService } from './services/store-discovery.service';
 
 @Module({
   imports: [PrismaModule, ProductsModule, CacheModule],

@@ -186,12 +186,12 @@ This is the target. It follows the common NestJS and domain-module convention: *
 | Thing | Rule | Example |
 |---|---|---|
 | Files and folders | `kebab-case`; file name is `<name>.<kind>.ts` | `order-status-history.service.ts` |
-| Allowed kinds | `module`, `controller`, `service`, `consumer`, `listener`, `job`, `guard`, `interceptor`, `pipe`, `filter`, `middleware`, `decorator`, `dto`, `enum`, `constants`, `types`, `mapper`, `util`, `spec` | |
+| Allowed kinds | `module`, `controller`, `service`, `consumer`, `job`, `listener`, `guard`, `interceptor`, `pipe`, `filter`, `middleware`, `decorator`, `dto`, `enum`, `constants`, `types`, `mapper`, `util`, plus the technical roles already in use: `config`, `strategy`, `provider`, `validator`, `validation`, `exception`, `storage`, `throttler`, `relay`, `health`, `workflow`, `activities`, `templates`, `extractor`, `setup`. Entry points (`main.ts`, `worker.ts`, `temporal-worker.ts`, `instrument.ts`, `load-env.ts`) and `index.ts` barrels have no kind. Test helpers end in `-spec.ts` (built out, not run). | |
 | One class per file | The file name is the class name in kebab-case | `CreateOrderDto` in `create-order.dto.ts` |
 | Classes | `PascalCase` with a suffix that matches the kind | `OrdersService`, `OrderShippedConsumer` |
 | Response shapes | Always `dto` (no `response` kind) | `order-response.dto.ts` |
 | Type files | `types` only (never `type`) | `jwt-payload.types.ts` |
-| Scheduled work | `job` (replaces `cron`; the schedule is inside) | `unpaid-orders.job.ts` |
+| Scheduled work | `job` (replaces `cron`; the schedule is inside); class name ends in `Job` | `unpaid-orders.job.ts`, `UnpaidOrdersJob` |
 | Tests | Next to the file: `<name>.spec.ts`; end-to-end tests in `test/` | |
 | Module folders | Plural for a business entity (`orders`, `products`, `users`, `vendors`, `wallets`, `reviews`, `wishlists`, `categories`, `discounts`, `referrals`); singular for a capability (`auth`, `cart`, `search`, `upload`, `health`, `security`, `analytics`, `notifications`, `payments`, `audit`) | |
 | Audience prefix | `admin-`, `vendor-` or none (customer) on controllers, DTOs and services that serve one audience | `vendor-orders.controller.ts` |
@@ -225,6 +225,7 @@ apps/api/src/
     <domain>/
       <domain>.module.ts
       controllers/   one file per audience: orders.controller.ts, vendor-orders.controller.ts, admin-orders.controller.ts
+      (every file goes in the folder for its kind, wherever it was before: a service is always in services/, a DTO always in dto/)
       services/      use-case services (split large files here)
       dto/
       consumers/     queue consumers that belong to this domain

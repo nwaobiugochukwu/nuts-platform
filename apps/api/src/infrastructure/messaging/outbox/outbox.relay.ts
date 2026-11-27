@@ -1,7 +1,7 @@
 ﻿import {
   REQUEST_ID_HEADER,
   sanitizeRequestId,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, Interval } from '@nestjs/schedule';
 import { OutboxStatus } from '@prisma/client';

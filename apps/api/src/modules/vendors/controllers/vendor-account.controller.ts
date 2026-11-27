@@ -26,7 +26,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
-import { AuthCookieService } from '@api/modules/auth/cookies/auth-cookie.service';
+import { AuthCookieService } from '@api/modules/auth/services/auth-cookie.service';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
@@ -38,7 +38,7 @@ import { UpdateVendorDto } from '../dto/update-vendor.dto';
 import { VendorReactivateDto } from '../dto/vendor-reactivate.dto';
 import { VendorProfileDto } from '../dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '../dto/vendor-status-response.dto';
-import { VendorsService } from '../vendors.service';
+import { VendorsService } from '../services/vendors.service';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('VENDORS - ACCOUNT')

@@ -23,7 +23,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
+import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
 import {
   CreateAdminDiscountCodeDto,
   DiscountCodeResponseDto,

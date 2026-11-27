@@ -208,7 +208,7 @@
         "functions": 90,
         "lines": 90
       },
-      "./src/infrastructure/database/transaction-runner.ts": {
+      "./src/infrastructure/database/transaction-runner.service.ts": {
         "statements": 80,
         "branches": 75,
         "functions": 70,

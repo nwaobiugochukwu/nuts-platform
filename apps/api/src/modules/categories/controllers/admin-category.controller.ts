@@ -22,7 +22,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { CategoriesService } from '@api/modules/categories/categories.service';
+import { CategoriesService } from '@api/modules/categories/services/categories.service';
 import { CategoryResponseDto } from '@api/modules/categories/dto/category-response.dto';
 import { CreateCategoryDto } from '@api/modules/categories/dto/create-category.dto';
 import { MoveCategoryDto } from '@api/modules/categories/dto/move-category.dto';

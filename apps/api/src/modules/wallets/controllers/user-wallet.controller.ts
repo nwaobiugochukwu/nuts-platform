@@ -18,7 +18,7 @@ import {
 } from '@api/common/dto/api-response.dto';
 import { UserWalletResponseDto } from '../dto/user-wallet-response.dto';
 import { WalletTransactionResponseDto } from '../dto/wallet-transaction-response.dto';
-import { WalletService } from '../wallet.service';
+import { WalletService } from '../services/wallet.service';
 
 @ApiTags('USER WALLET')
 @ApiBearerAuth('JWT-auth')

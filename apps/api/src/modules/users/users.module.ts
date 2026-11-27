@@ -1,11 +1,11 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { AuthCookiesModule } from '@api/modules/auth/cookies/auth-cookie.module';
+import { AuthCookiesModule } from '@api/modules/auth/auth-cookie.module';
 import { AuthModule } from '@api/modules/auth/auth.module';
-import { ReferralsModule } from '@api/modules/referrals/referral.module';
+import { ReferralsModule } from '@api/modules/referrals/referrals.module';
 import { UsersController } from './controllers/users.controller';
 import { AdminUsersController } from './controllers/admin-user.controller';
-import { UsersService } from './users.service';
-import { UserAccountCleanupService } from './jobs/user-account-cleanup.cron';
+import { UsersService } from './services/users.service';
+import { UserAccountCleanupJob } from './jobs/user-account-cleanup.job';
 
 @Module({
   imports: [
@@ -14,7 +14,7 @@ import { UserAccountCleanupService } from './jobs/user-account-cleanup.cron';
     forwardRef(() => ReferralsModule),
   ],
   controllers: [UsersController, AdminUsersController],
-  providers: [UsersService, UserAccountCleanupService],
+  providers: [UsersService, UserAccountCleanupJob],
   exports: [UsersService],
 })
 export class UsersModule {}

@@ -26,7 +26,7 @@ import { ROLE } from '@prisma/client';
 import { AdminOrderResponseDto } from '@api/modules/orders/dto/admin-order-response.dto';
 import { QueryOrderDto } from '@api/modules/orders/dto/query-order.dto';
 import { UpdateOrderStatusDto } from '@api/modules/orders/dto/update-order-status.dto';
-import { OrdersService } from '@api/modules/orders/orders.service';
+import { OrdersService } from '@api/modules/orders/services/orders.service';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';

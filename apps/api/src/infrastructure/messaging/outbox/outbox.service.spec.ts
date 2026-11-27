@@ -1,4 +1,4 @@
-import { runWithRequestId } from '@api/common/request-context/request-context';
+import { runWithRequestId } from '@api/common/request-context/request-context.util';
 import { OutboxService } from './outbox.service';
 
 describe('OutboxService request ids', () => {

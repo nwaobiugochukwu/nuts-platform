@@ -4,7 +4,7 @@ import {
   recordCacheLookup,
   recordDbQuery,
   runWithRequestId,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 import { PerformanceInterceptor } from './performance.interceptor';
 
 describe('PerformanceInterceptor (Slow ms & Server-Timing)', () => {

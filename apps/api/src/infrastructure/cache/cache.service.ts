@@ -1,4 +1,4 @@
-import { recordCacheLookup } from '@api/common/request-context/request-context';
+import { recordCacheLookup } from '@api/common/request-context/request-context.util';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import Redis from 'ioredis';

@@ -40,8 +40,8 @@ import { QueryUserDto } from '@api/modules/users/dto/query-user.dto';
 import { SuspendUserResponseDto } from '@api/modules/users/dto/suspend-user-response.dto';
 import { UserListItemResponseDto } from '@api/modules/users/dto/user-list-item-response.dto';
 import { UserResponseDto } from '@api/modules/users/dto/user-response.dto';
-import { UsersService } from '@api/modules/users/users.service';
-import { OtpService } from '@api/modules/auth/otp/otp.service';
+import { UsersService } from '@api/modules/users/services/users.service';
+import { OtpService } from '@api/modules/auth/services/otp.service';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @Roles(ROLE.ADMIN)

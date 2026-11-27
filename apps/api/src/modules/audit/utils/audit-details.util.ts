@@ -2,7 +2,7 @@ import {
   currentRequestContext,
   type AuditAnnotation,
   type AuditExtraEvent,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 
 /**
  * Attaches details to the audit event of the request being served.

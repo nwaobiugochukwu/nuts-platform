@@ -31,7 +31,7 @@ import { QueryProductDto } from '@api/modules/products/dto/query-product.dto';
 import { StockUpdateResponseDto } from '@api/modules/products/dto/stock-update-response.dto';
 import { UpdateProductDto } from '@api/modules/products/dto/update-product.dto';
 import { UpdateStockDto } from '@api/modules/products/dto/update-stock.dto';
-import { ProductsService } from '@api/modules/products/products.service';
+import { ProductsService } from '@api/modules/products/services/products.service';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';

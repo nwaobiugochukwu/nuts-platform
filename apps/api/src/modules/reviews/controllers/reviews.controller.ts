@@ -32,7 +32,7 @@ import {
   ProductReviewsResponseDto,
   ReviewResponseDto,
 } from '../dto/create-review.dto';
-import { ReviewsService } from '../reviews.service';
+import { ReviewsService } from '../services/reviews.service';
 
 @ApiTags('REVIEWS')
 @Controller('reviews')

@@ -3,7 +3,7 @@ import { ROLE } from '@prisma/client';
 import { createHmac } from 'crypto';
 
 import { authCookieRoleForPath } from '../constants/auth-cookies.constants';
-import { RefreshSessionService } from './refresh-session.service';
+import { RefreshSessionService } from '../services/refresh-session.service';
 
 const refreshSecret = 'test-refresh-secret';
 const hash = (id: string) =>

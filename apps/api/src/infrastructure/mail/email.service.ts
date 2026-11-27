@@ -14,7 +14,7 @@ import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-br
 import {
   EmailProvider,
   SendEmailOptions,
-} from '@api/common/interfaces/email-provider.interface';
+} from '@api/common/types/email-provider.types';
 import {
   generateInvoicePdf,
   PdfInvoiceData,

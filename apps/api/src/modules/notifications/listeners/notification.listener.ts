@@ -10,13 +10,13 @@ import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.servi
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
-import { NotificationsService } from '../notifications.service';
-import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events';
+import { NotificationsService } from '../services/notifications.service';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 import {
   NotificationPreferencesService,
   NotificationCategory,
-} from '../preferences/preferences.service';
+} from '../services/preferences.service';
 import type {
   OrderCancelledPayload,
   OrderDeliveredPayload,
@@ -25,7 +25,7 @@ import type {
   PaymentConfirmedPayload,
   PaymentFailedPayload,
   ReferralRewardCreditedPayload,
-} from '@api/infrastructure/messaging/events/event-payloads';
+} from '@api/infrastructure/messaging/events/event-payloads.types';
 
 @Injectable()
 export class NotificationListener {

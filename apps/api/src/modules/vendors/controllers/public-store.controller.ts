@@ -26,8 +26,8 @@ import {
   FeaturedVendorDto,
   VendorProfileDto,
 } from '../dto/vendor-response.dto';
-import { VendorsService } from '../vendors.service';
-import { VendorFollowsService } from '../vendor-follows.service';
+import { VendorsService } from '../services/vendors.service';
+import { VendorFollowsService } from '../services/vendor-follows.service';
 
 const RESERVED_VENDOR_SLUGS = new Set([
   'analytics',

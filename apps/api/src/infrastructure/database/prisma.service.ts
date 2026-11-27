@@ -1,4 +1,4 @@
-import { recordDbQuery } from '@api/common/request-context/request-context';
+import { recordDbQuery } from '@api/common/request-context/request-context.util';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';

@@ -8,9 +8,9 @@ import {
 import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-import { OtpService } from '@api/modules/auth/otp/otp.service';
-import { RefreshSessionService } from '@api/modules/auth/sessions/refresh-session.service';
-import { GoogleAuthService } from '@api/modules/auth/google-auth.service';
+import { OtpService } from '@api/modules/auth/services/otp.service';
+import { RefreshSessionService } from '@api/modules/auth/services/refresh-session.service';
+import { GoogleAuthService } from '@api/modules/auth/services/google-auth.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';

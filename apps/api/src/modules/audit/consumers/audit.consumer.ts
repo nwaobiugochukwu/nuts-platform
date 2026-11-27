@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { roleCan } from '@api/config/process-role';
+import { roleCan } from '@api/config/process-role.config';
 import { Batcher } from '../utils/audit-batcher.util';
 import type { AuditEvent } from '../../../infrastructure/messaging/events/audit-event.util';
 import { AuditWriterService } from '../services/audit-writer.service';

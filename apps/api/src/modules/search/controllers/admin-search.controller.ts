@@ -18,7 +18,7 @@ import { ROLE } from '@prisma/client';
 
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import { SearchService } from '../search.service';
+import { SearchService } from '../services/search.service';
 import { QuerySearchDto } from '../dto/query-search.dto';
 import { SearchResponseDto, SearchResultDto } from '../dto/search-result.dto';
 import {

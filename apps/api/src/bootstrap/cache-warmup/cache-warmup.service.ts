@@ -1,8 +1,8 @@
-import { roleCan } from '@api/config/process-role';
-import { CategoriesService } from '@api/modules/categories/categories.service';
-import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
-import { ProductsService } from '@api/modules/products/products.service';
-import { VendorsService } from '@api/modules/vendors/vendors.service';
+import { roleCan } from '@api/config/process-role.config';
+import { CategoriesService } from '@api/modules/categories/services/categories.service';
+import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { ProductsService } from '@api/modules/products/services/products.service';
+import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import {
   Injectable,
   Logger,

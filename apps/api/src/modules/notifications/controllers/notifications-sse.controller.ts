@@ -18,8 +18,8 @@ import { Observable } from 'rxjs';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { BypassResponseInterceptor } from '@api/common/decorators/bypass-response-interceptor.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import type { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { NotificationsService } from '../notifications.service';
+import type { AuthenticatedUser } from '../../auth/types/authenticated-user.types';
+import { NotificationsService } from '../services/notifications.service';
 
 @ApiTags('NOTIFICATIONS - SSE')
 @ApiBearerAuth('JWT-auth')

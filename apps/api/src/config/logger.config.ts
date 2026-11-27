@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { Params } from 'nestjs-pino';
-import { currentRequestId } from '@api/common/request-context/request-context';
+import { currentRequestId } from '@api/common/request-context/request-context.util';
 
 /**
  * Which program wrote a log line (api, worker, jobs, all, temporal-worker). Added

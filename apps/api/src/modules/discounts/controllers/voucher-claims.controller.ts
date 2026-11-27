@@ -14,7 +14,7 @@ import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ClaimVoucherDto } from '../dto/voucher-claim.dto';
-import { VoucherClaimsService } from '../voucher-claims.service';
+import { VoucherClaimsService } from '../services/voucher-claims.service';
 
 @ApiTags('VOUCHER CLAIMS')
 @ApiBearerAuth('JWT-auth')
