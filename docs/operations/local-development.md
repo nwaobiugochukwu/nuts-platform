@@ -37,7 +37,7 @@ Code edits reload inside the containers because the source folders are mounted i
 
 ### Running the programs directly on your machine (optional)
 
-`npm run dev:local` is the same ordered start without Docker for the api, worker, jobs and web (the data services still run in Docker). It starts them one after another, each waiting for the previous to be healthy, and writes each service's full output to `.logs/dev/<service>.log`. `npm run dev:local:quiet` shows only the start, ready and failed lines; `npm run dev:local:skip-infra` skips the data services when they are already up. The VS Code task **dev: all (in order)** (`ctrl+shift+B`) does the same with one terminal tab per service. These local options have not been exercised in an editor by the person who wrote them. `npm run dev:parallel` and `npm run dev:plain` start the same programs all at once through Turborepo, kept as options.
+`npm run dev:local` is the same ordered start without Docker for the api, worker, jobs and web (the data services still run in Docker). It starts them one after another, each waiting for the previous to be healthy, and writes each service's full output to `.logs/dev/<service>.log`. `npm run dev:local:quiet` shows only the start, ready and failed lines; `npm run dev:local:skip-infra` skips the data services when they are already up. The VS Code task **dev: all (in order)** (`ctrl+shift+B`) does the same with one terminal tab per service. These local options have not been exercised in an editor by the person who wrote them. `npm run dev:parallel` starts the same programs all at once through Turborepo, kept as an option.
 
 | Service | What it does | Where |
 |---|---|---|
@@ -60,10 +60,8 @@ Every service also has its own command, for when you want a service in its own t
 | `npm run dev:api` / `dev:worker` / `dev:jobs` | that program only |
 | `npm run dev:web` | the web app only |
 | `npm run dev:parallel` | everything at once in Turborepo's terminal view |
-| `npm run dev:plain` | the same at once, as one plain name-prefixed stream (no list view) |
 | `npm run dev:backend` | compiler, api, worker and jobs under one PM2 in one terminal |
 | `npm run dev:single` | one backend program doing everything. For debugging only; **not** how staging runs |
-| `npm run dev:docker` | the same programs as Docker containers (`api`, `worker`, `jobs`, `client`), started in the same order by Compose: each waits for the previous to report healthy |
 
 `npm run db:down` stops the databases. If a command says a port is in use, an old run is still alive (look for leftover `node` processes).
 
