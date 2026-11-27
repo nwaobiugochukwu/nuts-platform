@@ -2,8 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
+import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { TRACKING } from '@api/common/constants';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -29,7 +28,7 @@ export class ProductViewsService {
 
   constructor(
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
-    private readonly rabbitmq: RabbitMQService,
+    private readonly tracking: ShopperActivityPublisherService,
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
   ) {
@@ -268,17 +267,17 @@ export class ProductViewsService {
           }
           view.id ??= productViewEventId(view);
 
-          const published = await this.rabbitmq.publish(
-            RABBITMQ_ROUTING_KEYS.ANALYTICS_EVENT,
+          const published = await this.tracking.record(
             {
-              type: 'product_view',
+              action: 'product_viewed',
               id: view.id,
               productId: view.productId,
               userId: view.userId,
               visitorId: view.visitorId,
               sessionId: view.sessionId,
-              timestamp: view.timestamp,
             },
+            // When the page was viewed, not when the buffer was flushed.
+            { occurredAt: new Date(view.timestamp) },
           );
           if (published) {
             await this.redis.lrem(this.viewProcessingKey, 1, item);

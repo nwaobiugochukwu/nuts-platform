@@ -2,7 +2,9 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { TrackingQueueService } from './tracking-queue.service';
+import type { ShopperAction } from '../types/shopper-activity.types';
+import { actionForShelfType } from '../utils/shopper-activity.mapper';
+import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
 import type { RecommendationEventDto } from '../dto/recommendation-events.dto';
 
 const CLIENT_TRACKABLE_EVENTS = new Set([
@@ -19,7 +21,7 @@ export class RecommendationEventsService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly cache?: CacheService,
-    @Optional() private readonly queue?: TrackingQueueService,
+    @Optional() private readonly queue?: ShopperActivityPublisherService,
   ) {}
 
   /** Clicks, dismissals and category views change what we should recommend. */
@@ -32,19 +34,16 @@ export class RecommendationEventsService {
     await this.cache?.invalidateRecommendations(userId, ...sessionIds);
   }
 
-  /** Queues the events; true when the broker confirmed them. */
+  /** Queues each interaction as shopper activity; true when the broker confirmed all of them. */
   private enqueueEvents(
     effectiveUserId: string | null,
-    cacheUserId: string | undefined,
     events: RecommendationEventDto[],
   ): Promise<boolean> {
     if (!this.queue) return Promise.resolve(false);
-    const refreshes = events.some((e) => e.eventType !== 'IMPRESSION');
-    return this.queue.enqueue({
-      type: 'recommendation_events',
-      events: events.map((event) => ({
+    return this.queue.recordAll(
+      events.map((event) => ({
+        action: actionForShelfType(event.eventType) as ShopperAction,
         id: event.id,
-        eventType: event.eventType,
         surface: event.surface,
         requestId: event.requestId,
         rankerVersion: event.rankerVersion,
@@ -55,22 +54,7 @@ export class RecommendationEventsService {
         userId: effectiveUserId,
         sessionId: event.sessionId,
       })),
-      // Impressions do not change what to recommend; clicks, dismissals and category views do.
-      refreshFor: refreshes
-        ? [cacheUserId, ...events.map((e) => e.sessionId)]
-        : [],
-      // Only a signed-in shopper's feed is recomputed ahead of time: for a guest the feed is
-      // keyed by a visitor id these events do not carry, so a recompute here could land under
-      // the wrong key.
-      ...(refreshes && cacheUserId
-        ? {
-            refreshActor: {
-              userId: cacheUserId,
-              sessionId: events[0]?.sessionId,
-            },
-          }
-        : {}),
-    });
+    );
   }
 
   async record(
@@ -96,7 +80,7 @@ export class RecommendationEventsService {
 
     // Preferred path: hand it to the analytics queue (no database write in the request, and the
     // feed is refreshed once per burst of clicks). If the broker is down, store it here as before.
-    if (await this.enqueueEvents(effectiveUserId, userId, [event])) {
+    if (await this.enqueueEvents(effectiveUserId, [event])) {
       return { accepted: true };
     }
 
@@ -155,7 +139,7 @@ export class RecommendationEventsService {
 
     const effectiveUserId = userRole === ROLE.VENDOR ? null : (userId ?? null);
 
-    if (await this.enqueueEvents(effectiveUserId, userId, acceptedEvents)) {
+    if (await this.enqueueEvents(effectiveUserId, acceptedEvents)) {
       return { accepted: true, stored: acceptedEvents.length };
     }
 

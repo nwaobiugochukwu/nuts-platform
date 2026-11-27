@@ -1,6 +1,6 @@
-﻿import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { TrackingQueueService } from './tracking-queue.service';
+import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
@@ -11,7 +11,7 @@ export class SearchTrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
-    @Optional() private readonly queue?: TrackingQueueService,
+    @Optional() private readonly queue?: ShopperActivityPublisherService,
   ) {}
 
   /**
@@ -28,16 +28,15 @@ export class SearchTrackingService {
     // Preferred path: the analytics queue stores it and refreshes the recommendations once
     // the row exists (so the refresh can never run before the signal is stored). If the broker
     // is down, store it here and refresh at once, as before.
-    const queued = await this.queue?.enqueue({
-      type: 'search',
-      id: randomUUID(),
+    const id = randomUUID();
+    const queued = await this.queue?.record({
+      action: 'searched',
+      id,
       query,
       resultsCount,
       userId: userId ?? null,
       sessionId: sessionId ?? null,
-      timestamp: Date.now(),
-      refreshFor: [userId, cacheUserId, sessionId, visitorId],
-      ...(userId ? { refreshActor: { userId, sessionId, visitorId } } : {}),
+      visitorId: visitorId ?? null,
     });
     if (queued) {
       if (resultsCount === 0) {

@@ -18,7 +18,7 @@ import {
   RecommendationEventsBatchDto,
 } from '../dto/recommendation-events.dto';
 import { RecommendationEventsService } from '../services/recommendation-events.service';
-import { MarketplaceEventsService } from '../services/marketplace-events.service';
+import { ShopperActivityService } from '../services/shopper-activity.service';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { StoreViewDto } from '../dto/store-view.dto';
 import { randomUUID } from 'node:crypto';
@@ -43,7 +43,7 @@ export class AnalyticsEventsController {
     private readonly productViews: ProductViewsService,
     private readonly searchTracking: SearchTrackingService,
     private readonly recommendationEvents: RecommendationEventsService,
-    private readonly marketplaceEvents: MarketplaceEventsService,
+    private readonly shopperActivity: ShopperActivityService,
   ) {}
 
   @Post()
@@ -111,7 +111,7 @@ export class AnalyticsEventsController {
           if (userRole === ROLE.VENDOR && raw.vendorId === userId) {
             return { accepted: true };
           }
-          return await this.marketplaceEvents.recordStoreView(
+          return await this.shopperActivity.storeViewed(
             raw.vendorId,
             {
               id: raw.id || randomUUID(),

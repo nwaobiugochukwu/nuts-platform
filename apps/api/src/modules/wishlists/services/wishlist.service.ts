@@ -6,7 +6,7 @@ import { Optional } from '@nestjs/common';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { MarketplaceEventsService } from '@api/modules/analytics/services/marketplace-events.service';
+import { ShopperActivityService } from '@api/modules/analytics/services/shopper-activity.service';
 
 import { WishlistResponseDto } from '../dto/wishlist.dto';
 
@@ -58,7 +58,7 @@ export class WishlistService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
-    @Optional() private readonly marketplaceEvents?: MarketplaceEventsService,
+    @Optional() private readonly shopperActivity?: ShopperActivityService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -207,14 +207,12 @@ export class WishlistService {
 
       await this.invalidateCache(userId);
 
-      await this.marketplaceEvents?.record({
-        eventType: 'WISHLIST_ADD',
+      await this.shopperActivity?.wishlistItemAdded({
         vendorId: product.vendorId,
         productId,
         variantId: normalizedVariantId,
         categoryId: product.categoryId,
         userId,
-        quantity: 1,
         surface: 'WISHLIST',
       });
 
@@ -340,14 +338,12 @@ export class WishlistService {
     if (result.count > 0) {
       await this.invalidateCache(userId);
       if (itemForEvent) {
-        await this.marketplaceEvents?.record({
-          eventType: 'WISHLIST_REMOVE',
+        await this.shopperActivity?.wishlistItemRemoved({
           vendorId: itemForEvent.product.vendorId,
           productId,
           variantId: normalizedVariantId,
           categoryId: itemForEvent.product.categoryId,
           userId,
-          quantity: 1,
           surface: 'WISHLIST',
         });
       }
