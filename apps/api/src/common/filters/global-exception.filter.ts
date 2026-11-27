@@ -52,8 +52,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
 
-      const res = exception.getResponse() as HttpExceptionBody;
-      const rawMessage = res?.message;
+      // A body is a string when the exception was built from plain text (the rate limiter's
+      // was); reading `.message` of a string gave undefined and the reply said "Internal server
+      // error" for a 429.
+      const res = exception.getResponse() as HttpExceptionBody | string;
+      const rawMessage = typeof res === 'string' ? res : res?.message;
 
       if (
         typeof res === 'object' &&

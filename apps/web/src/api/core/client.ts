@@ -17,6 +17,7 @@ import {
   MaintenanceModeError,
   useMaintenanceModeStore,
 } from "../../zustand/maintenance-mode.ts";
+import { cooldownMsFromRateLimit, createRefreshCooldown } from "../../lib/refresh-cooldown.ts";
 
 declare module "axios" {
   interface AxiosRequestConfig {
@@ -111,6 +112,8 @@ function extractHeader(headers: AxiosResponse["headers"] | undefined, name: stri
   return typeof value === "string" ? value : undefined;
 }
 
+const refreshCooldown = createRefreshCooldown();
+
 export interface RefreshSessionResult {
   success: boolean;
   accessToken?: string;
@@ -194,6 +197,19 @@ async function executeTokenRefresh(
     };
   } catch (error) {
     const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+    if (status === 429 && axios.isAxiosError(error)) {
+      const body: unknown = error.response?.data;
+      refreshCooldown.start(
+        role,
+        cooldownMsFromRateLimit(
+          extractHeader(error.response?.headers, "retry-after"),
+          typeof body === "object" && body !== null
+            ? (body as { retryAfter?: unknown }).retryAfter
+            : undefined,
+        ),
+      );
+      return { success: false, reason: "unavailable" };
+    }
     if (status === 401) {
       const hadToken = Boolean(getAuthToken(role));
       clearAuthTokens(role);
@@ -219,6 +235,12 @@ export const performTokenRefresh = (
 ): Promise<RefreshSessionResult> => {
   if (isSessionKnownUnauthenticated(role)) {
     return Promise.resolve({ success: false, reason: "expired" });
+  }
+
+  // The server recently said "too many refreshes": every caller waits out the pause instead of
+  // sending another request into the same limit.
+  if (refreshCooldown.isActive(role)) {
+    return Promise.resolve({ success: false, reason: "unavailable" });
   }
 
   const pending = refreshPromises[role];
