@@ -18,6 +18,18 @@ Order and payment events were in-process (`@nestjs/event-emitter`), emitted afte
 4. **Each consumer owns its queue, bound to exact keys.** `QUEUE_BINDINGS` lists, per queue, the exact keys it handles. No wildcards. A new consumer gets a new queue and its own bindings, with retries, a dead-letter path and idempotency by `eventId`, so one slow or failing consumer never blocks another. Because declaring a queue never removes a binding, `OBSOLETE_BINDINGS` are unbound at connect. The four never-published routing keys and the `inventory.*` wildcard were deleted.
 5. **The actor is `system` unless given.** Producers that know the signed-in person pass it.
 
+## Addendum: shopper activity
+
+Shopper activity (a product viewed, a search, a store viewed, a cart or wishlist change, a shelf item seen or clicked) first went to the analytics queue as one routing key (`analytics.event`) with a home-made `type` field inside the body (`product_view`, `search`, `recommendation_events`, `marketplace_event`). That was a second, inconsistent naming scheme next to the catalog, and the names did not say what happened.
+
+It is now one concept with one type, `ShopperActivity`: who did it (a user, or a guest by visitor and session), what they did (`action`), what it was done to (a product, a store, a category, a search text), where (`surface`) and when (the envelope's `occurredAt`). Each action is its own event in the standard envelope, `shopper.<action>`: `product_viewed`, `searched`, `store_viewed`, `cart_item_added`, `cart_item_removed`, `wishlist_item_added`, `wishlist_item_removed`, `shelf_item_seen`, `shelf_item_clicked`, `shelf_item_dismissed` and `category_viewed`. The routing key is the event name, `q.nuts.analytics` is bound to each exactly, and the message body is the activity without the action. The aggregate is the shopper. One activity is one message, with the id of the row it becomes so a redelivery is a no-op.
+
+Which recommendations to refresh is not carried in the message: the consumer works it out from who acted (a search, a click, a dismissal and a category view change what to recommend; a view does not).
+
+Tracking is published straight to the broker, not through the transactional outbox, on purpose: it is behaviour data, a database write per click is what the queue was added to avoid, and if the broker is down the producer writes the row itself. Money and state changes keep using the outbox.
+
+`adaptLegacyTrackingMessage` reads the old shape so messages published by the previous release during a rolling deploy are still stored. Remove it, and the `analytics.event` binding, one release after the rename has fully rolled out.
+
 ## Consequences
 
 - A new event is: add its name to the catalog, publish it with `ctx.publish`, and give each consumer a queue and binding. No other consumer is affected.

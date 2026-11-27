@@ -1,48 +1,44 @@
-import { roleCan } from '@api/config/process-role.config';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
-import {
-  RecommendationRefreshService,
-  type FeedActor,
-} from '../services/recommendation-refresh.service';
-import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.service';
 import {
   getErrorMessage,
   getErrorStack,
 } from '@api/common/utils/error-details.util';
+import { roleCan } from '@api/config/process-role.config';
+import { PermanentConsumerError } from '@api/infrastructure/messaging/rabbitmq/consumer-retry.util';
+import { parseEnvelope } from '@api/infrastructure/messaging/events/event-envelope.util';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.service';
+import { RecommendationRefreshService } from '../services/recommendation-refresh.service';
+import type {
+  ShopperActivity,
+  ShopperActivityBody,
+} from '../types/shopper-activity.types';
+import { adaptLegacyTrackingMessage } from '../utils/legacy-tracking-message.util';
+import {
+  SHOPPER_ACTIVITY_EVENTS,
+  actionForEvent,
+  feedRefreshFor,
+  missingFields,
+  storeFor,
+  toActivityRow,
+  toProductViewRow,
+  toSearchRow,
+  toShelfRow,
+} from '../utils/shopper-activity.mapper';
 
-/** The rows as they are stored; the producers validate them before they are queued. */
-export type TrackedRecommendationEvent =
-  Prisma.RecommendationEventCreateManyInput;
-export type TrackedMarketplaceEvent = Prisma.MarketplaceEventCreateManyInput;
-
-export interface AnalyticsQueuePayload {
-  type:
-    | 'product_view'
-    | 'search'
-    | 'recommendation_events'
-    | 'marketplace_event';
-  /** Recommendation batches: the rows to store. */
-  events?: TrackedRecommendationEvent[];
-  /** Marketplace events: the row to store. */
-  event?: TrackedMarketplaceEvent;
-  /** Shopper ids whose cached recommendations should be refreshed once the rows are stored. */
-  refreshFor?: Array<string | null | undefined>;
-  /** Who the feed belongs to, so it can be recomputed and warmed after the refresh. */
-  refreshActor?: FeedActor;
-  id?: string;
-  productId?: string;
-  userId?: string | null;
-  visitorId?: string | null;
-  sessionId?: string | null;
-  query?: string;
-  resultsCount?: number;
-  timestamp?: string | number | Date;
-}
-
+/**
+ * Stores shopper activity (a product viewed, a search, a store viewed, a cart or wishlist change, a
+ * shelf item seen or clicked) from its queue. Every event it handles is `shopper.<action>`, and
+ * every one is the same thing: a `ShopperActivity`.
+ *
+ * Every activity carries the id of the row it becomes and rows are inserted with `skipDuplicates`,
+ * so a redelivery is a no-op. A row that points at something deleted since (a removed user or
+ * product) is dropped, or kept as an anonymous visitor for product views, rather than retried
+ * forever. Anything else that goes wrong is thrown, so the queue retries it and then dead-letters
+ * it; acknowledging a failed insert would silently erase behaviour data.
+ */
 @Injectable()
 export class AnalyticsConsumer implements OnModuleInit {
   private readonly logger = new Logger(AnalyticsConsumer.name);
@@ -53,6 +49,115 @@ export class AnalyticsConsumer implements OnModuleInit {
     private readonly refresh: RecommendationRefreshService,
   ) {}
 
+  async onModuleInit() {
+    // Queue consumers run only in the worker role (or when one process runs everything).
+    if (!roleCan('consumers')) return;
+    await this.rabbitmq.consume<unknown>(
+      RABBITMQ_QUEUES.ANALYTICS,
+      async (raw) => {
+        // Messages from the previous release use another shape; see the adapter. An old batch
+        // becomes several events, handled one after the other (a redelivery repeats only no-ops).
+        const legacy = adaptLegacyTrackingMessage(raw);
+        if (legacy === 'ignore') return;
+        for (const event of legacy ?? [raw]) await this.handle(event);
+      },
+    );
+  }
+
+  private async handle(raw: unknown): Promise<void> {
+    const event = parseEnvelope(raw, {
+      type: SHOPPER_ACTIVITY_EVENTS,
+      supportedVersions: [1],
+    });
+    const action = actionForEvent(event.type);
+    if (!action) {
+      throw new PermanentConsumerError(`No handler for ${event.type}`);
+    }
+    const activity = {
+      ...(event.payload as unknown as ShopperActivityBody),
+      action,
+    } satisfies ShopperActivity;
+    const missing = missingFields(activity);
+    if (missing.length > 0) {
+      throw new PermanentConsumerError(
+        `${event.type} is missing ${missing.join(', ')}`,
+      );
+    }
+    try {
+      await this.store(activity, new Date(event.occurredAt));
+    } catch (err: unknown) {
+      this.logger.error(
+        `Failed to process ${event.type}: ${getErrorMessage(err)}`,
+        getErrorStack(err),
+      );
+      throw err;
+    }
+    this.refreshFeed(activity);
+  }
+
+  /** One row, in the table that holds that kind of activity. */
+  private async store(activity: ShopperActivity, at: Date): Promise<void> {
+    switch (storeFor(activity.action)) {
+      case 'product_views':
+        return this.storeProductView(activity, at);
+      case 'searches':
+        return this.storeRows(() =>
+          this.prisma.searchQuery.createMany({
+            data: [toSearchRow(activity, at)],
+            skipDuplicates: true,
+          }),
+        );
+      case 'shelf':
+        return this.storeRows(() =>
+          this.prisma.recommendationEvent.createMany({
+            data: [toShelfRow(activity, at)],
+            skipDuplicates: true,
+          }),
+        );
+      case 'activity':
+        return this.storeRows(() =>
+          this.prisma.marketplaceEvent.createMany({
+            data: [toActivityRow(activity, at)],
+            skipDuplicates: true,
+          }),
+        );
+    }
+  }
+
+  private async storeProductView(
+    activity: ShopperActivity,
+    at: Date,
+  ): Promise<void> {
+    try {
+      await this.prisma.productView.createMany({
+        data: [toProductViewRow(activity, at)],
+        skipDuplicates: true,
+      });
+    } catch (error) {
+      if (!isMissingReference(error)) throw error;
+      // The user is not in the users table (a vendor browsing as a visitor): keep the view as an
+      // anonymous visitor instead of losing it.
+      await this.prisma.productView.createMany({
+        data: [
+          {
+            ...toProductViewRow(activity, at),
+            userId: null,
+            visitorId:
+              activity.visitorId ??
+              (activity.userId ? `visitor:${activity.userId}` : null),
+          },
+        ],
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  /** Once the row exists, clear the shopper's cached shelves (once per burst) and rebuild the feed. */
+  private refreshFeed(activity: ShopperActivity): void {
+    const target = feedRefreshFor(activity);
+    if (target) this.refresh.schedule(target.keys, target.actor);
+  }
+
   /**
    * Stores rows, treating a reference to something that no longer exists (a deleted user or
    * product, P2003) as nothing to store: tracking must never poison the queue.
@@ -61,170 +166,18 @@ export class AnalyticsConsumer implements OnModuleInit {
     try {
       await write();
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2003'
-      ) {
+      if (isMissingReference(error)) {
         this.logger.warn('Skipped tracking rows that reference a missing row.');
         return;
       }
       throw error;
     }
   }
+}
 
-  private async storeRecommendationEvents(
-    events: TrackedRecommendationEvent[],
-  ): Promise<void> {
-    try {
-      await this.prisma.recommendationEvent.createMany({
-        data: events,
-        skipDuplicates: true,
-      });
-    } catch (error) {
-      if (
-        !(
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2003'
-        )
-      ) {
-        throw error;
-      }
-      // One event in the batch points at a row that is gone: keep the others.
-      for (const event of events) {
-        await this.storeRows(() =>
-          this.prisma.recommendationEvent.createMany({
-            data: [event],
-            skipDuplicates: true,
-          }),
-        );
-      }
-    }
-  }
-
-  async onModuleInit() {
-    // Queue consumers run only in the worker role (or when one process runs everything).
-    if (!roleCan('consumers')) return;
-    await this.rabbitmq.consume<AnalyticsQueuePayload>(
-      RABBITMQ_QUEUES.ANALYTICS,
-      async (payload) => {
-        try {
-          if (!payload) return;
-
-          const createdAt = payload.timestamp
-            ? new Date(payload.timestamp)
-            : new Date();
-
-          if (payload.type === 'product_view' && payload.productId) {
-            try {
-              await this.prisma.productView.createMany({
-                data: [
-                  {
-                    id:
-                      payload.id ??
-                      productViewEventId({
-                        productId: payload.productId,
-                        userId: payload.userId,
-                        visitorId: payload.visitorId,
-                        sessionId: payload.sessionId,
-                        timestamp: payload.timestamp,
-                      }),
-                    productId: payload.productId,
-                    userId: payload.userId ?? null,
-                    visitorId: payload.visitorId ?? null,
-                    sessionId: payload.sessionId ?? null,
-                    createdAt,
-                  },
-                ],
-                // RabbitMQ may redeliver after the insert succeeded but before
-                // the delivery acknowledgement was recorded.
-                skipDuplicates: true,
-              });
-            } catch (insertErr) {
-              if (
-                insertErr instanceof Prisma.PrismaClientKnownRequestError &&
-                insertErr.code === 'P2003'
-              ) {
-                // If userId does not exist in User table (e.g. vendor browsing as visitor), fallback with visitorId
-                await this.prisma.productView.createMany({
-                  data: [
-                    {
-                      id:
-                        payload.id ??
-                        productViewEventId({
-                          productId: payload.productId,
-                          userId: undefined,
-                          visitorId:
-                            payload.visitorId ??
-                            (payload.userId
-                              ? `visitor:${payload.userId}`
-                              : null),
-                          sessionId: payload.sessionId,
-                          timestamp: payload.timestamp,
-                        }),
-                      productId: payload.productId,
-                      userId: null,
-                      visitorId:
-                        payload.visitorId ??
-                        (payload.userId ? `visitor:${payload.userId}` : null),
-                      sessionId: payload.sessionId ?? null,
-                      createdAt,
-                    },
-                  ],
-                  skipDuplicates: true,
-                });
-              } else {
-                throw insertErr;
-              }
-            }
-          } else if (payload.type === 'search' && payload.query) {
-            await this.storeRows(() =>
-              this.prisma.searchQuery.createMany({
-                data: [
-                  {
-                    // A producer-assigned id makes a redelivery a no-op.
-                    ...(payload.id ? { id: payload.id } : {}),
-                    query: payload.query as string,
-                    resultsCount: payload.resultsCount ?? 0,
-                    userId: payload.userId ?? null,
-                    sessionId: payload.sessionId ?? null,
-                    createdAt,
-                  },
-                ],
-                skipDuplicates: true,
-              }),
-            );
-            this.refresh.schedule(
-              payload.refreshFor ?? [],
-              payload.refreshActor,
-            );
-          } else if (
-            payload.type === 'recommendation_events' &&
-            payload.events?.length
-          ) {
-            await this.storeRecommendationEvents(payload.events);
-            this.refresh.schedule(
-              payload.refreshFor ?? [],
-              payload.refreshActor,
-            );
-          } else if (payload.type === 'marketplace_event' && payload.event) {
-            const event = payload.event;
-            await this.storeRows(() =>
-              this.prisma.marketplaceEvent.createMany({
-                data: [{ ...event, createdAt: event.createdAt ?? createdAt }],
-                skipDuplicates: true,
-              }),
-            );
-          }
-        } catch (err: unknown) {
-          this.logger.error(
-            `Failed to process analytics event: ${getErrorMessage(err)}`,
-            getErrorStack(err),
-          );
-          // Let the queue wrapper reject the delivery into its dead-letter path;
-          // acknowledging a failed insert would silently erase behavior data.
-          throw err;
-        }
-      },
-    );
-  }
+function isMissingReference(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2003'
+  );
 }

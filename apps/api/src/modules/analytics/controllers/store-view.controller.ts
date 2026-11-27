@@ -5,12 +5,12 @@ import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { StoreViewDto } from '../dto/store-view.dto';
-import { MarketplaceEventsService } from '../services/marketplace-events.service';
+import { ShopperActivityService } from '../services/shopper-activity.service';
 
-@ApiTags('MARKETPLACE ANALYTICS EVENTS')
+@ApiTags('STORE VIEW EVENTS')
 @Controller('analytics/events/store-view')
-export class MarketplaceEventsController {
-  constructor(private readonly events: MarketplaceEventsService) {}
+export class StoreViewController {
+  constructor(private readonly activity: ShopperActivityService) {}
 
   @Post()
   @OptionalAuth()
@@ -23,6 +23,6 @@ export class MarketplaceEventsController {
     @GetUser('role') userRole: ROLE | undefined,
     @Body() event: StoreViewDto,
   ) {
-    return this.events.recordStoreView(event.vendorId, event, userId, userRole);
+    return this.activity.storeViewed(event.vendorId, event, userId, userRole);
   }
 }

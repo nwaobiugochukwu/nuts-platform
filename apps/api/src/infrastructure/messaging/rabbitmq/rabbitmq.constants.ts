@@ -56,7 +56,23 @@ export const QUEUE_BINDINGS: Record<
     RABBITMQ_QUEUES.NOTIFICATIONS,
     RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
   ],
-  [RABBITMQ_QUEUES.ANALYTICS]: [RABBITMQ_ROUTING_KEYS.ANALYTICS_EVENT],
+  // Everything a shopper does that analytics and recommendations learn from. `analytics.event` is
+  // the old label for all of it (a `type` field inside the message); it stays bound while messages
+  // published by the previous release are still in flight, and can be dropped after one release.
+  [RABBITMQ_QUEUES.ANALYTICS]: [
+    RABBITMQ_ROUTING_KEYS.ANALYTICS_EVENT,
+    DomainEvents.SHOPPER_PRODUCT_VIEWED,
+    DomainEvents.SHOPPER_SEARCHED,
+    DomainEvents.SHOPPER_STORE_VIEWED,
+    DomainEvents.SHOPPER_CART_ITEM_ADDED,
+    DomainEvents.SHOPPER_CART_ITEM_REMOVED,
+    DomainEvents.SHOPPER_WISHLIST_ITEM_ADDED,
+    DomainEvents.SHOPPER_WISHLIST_ITEM_REMOVED,
+    DomainEvents.SHOPPER_SHELF_ITEM_SEEN,
+    DomainEvents.SHOPPER_SHELF_ITEM_CLICKED,
+    DomainEvents.SHOPPER_SHELF_ITEM_DISMISSED,
+    DomainEvents.SHOPPER_CATEGORY_VIEWED,
+  ],
   [RABBITMQ_QUEUES.VENDOR_EVENTS]: [
     RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED,
     RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED,

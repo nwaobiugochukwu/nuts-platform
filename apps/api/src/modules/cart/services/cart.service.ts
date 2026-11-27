@@ -16,7 +16,10 @@ import { DiscountCodeService } from '@api/modules/discounts/services/discount-co
 import type { DiscountLineItem } from '@api/modules/discounts/utils/discount-eligibility.util';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { InsufficientStockException } from '@api/common/errors/insufficient-stock.exception';
-import { MarketplaceEventsService } from '@api/modules/analytics/services/marketplace-events.service';
+import {
+  ShopperActivityService,
+  type CartItemChange,
+} from '@api/modules/analytics/services/shopper-activity.service';
 
 import { UpdateCartItemDto } from '../dto/update-cart-item.dto';
 
@@ -128,7 +131,7 @@ export class CartService {
     private readonly discountCodeService: DiscountCodeService,
     private readonly cacheService: CacheService,
     private readonly transactions: TransactionRunnerService,
-    @Optional() private readonly marketplaceEvents?: MarketplaceEventsService,
+    @Optional() private readonly shopperActivity?: ShopperActivityService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -445,8 +448,7 @@ export class CartService {
       }
     });
 
-    await this.marketplaceEvents?.record({
-      eventType: 'CART_ADD',
+    await this.shopperActivity?.cartItemAdded({
       vendorId,
       productId,
       variantId: normalizedVariantId,
@@ -504,9 +506,8 @@ export class CartService {
     }
 
     const normalizedVariantId = this.normalizeVariantId(variantId);
-    let quantityEvent:
-      | Parameters<MarketplaceEventsService['record']>[0]
-      | null = null;
+    let quantityChange: { added: boolean; change: CartItemChange } | null =
+      null;
 
     await this.runSerializableTransaction(async (tx) => {
       let cartItem = await tx.cartItem.findFirst({
@@ -612,17 +613,19 @@ export class CartService {
       }
 
       const newQuantity = cartItem.quantity + dto.quantity;
-      quantityEvent = {
-        eventType:
-          newQuantity <= 0 || dto.quantity < 0 ? 'CART_REMOVE' : 'CART_ADD',
-        vendorId: cartItem.product.vendorId,
-        productId,
-        variantId: cartItem.variantId,
-        categoryId: cartItem.product.categoryId,
-        userId,
-        cartId: cartItem.cart.id,
-        quantity: newQuantity <= 0 ? cartItem.quantity : Math.abs(dto.quantity),
-        surface: 'CART',
+      quantityChange = {
+        added: !(newQuantity <= 0 || dto.quantity < 0),
+        change: {
+          vendorId: cartItem.product.vendorId,
+          productId,
+          variantId: cartItem.variantId,
+          categoryId: cartItem.product.categoryId,
+          userId,
+          cartId: cartItem.cart.id,
+          quantity:
+            newQuantity <= 0 ? cartItem.quantity : Math.abs(dto.quantity),
+          surface: 'CART',
+        },
       };
 
       /*
@@ -688,7 +691,11 @@ export class CartService {
       });
     });
 
-    if (quantityEvent) await this.marketplaceEvents?.record(quantityEvent);
+    if (quantityChange) {
+      const { added, change } = quantityChange;
+      if (added) await this.shopperActivity?.cartItemAdded(change);
+      else await this.shopperActivity?.cartItemRemoved(change);
+    }
 
     await this.invalidateCartCache(userId);
 
@@ -763,12 +770,11 @@ export class CartService {
 
     if (result.count > 0) {
       await this.invalidateCartCache(userId);
-      const marketplaceEvents = this.marketplaceEvents;
-      if (marketplaceEvents) {
+      const shopperActivity = this.shopperActivity;
+      if (shopperActivity) {
         await Promise.all(
           removedItems.map((item) =>
-            marketplaceEvents.record({
-              eventType: 'CART_REMOVE',
+            shopperActivity.cartItemRemoved({
               vendorId: item.product.vendorId,
               productId: item.productId,
               variantId: item.variantId,
@@ -818,12 +824,11 @@ export class CartService {
     });
 
     if (result.count > 0) {
-      const marketplaceEvents = this.marketplaceEvents;
-      if (marketplaceEvents) {
+      const shopperActivity = this.shopperActivity;
+      if (shopperActivity) {
         await Promise.all(
           removedItems.map((item) =>
-            marketplaceEvents.record({
-              eventType: 'CART_REMOVE',
+            shopperActivity.cartItemRemoved({
               vendorId: item.product.vendorId,
               productId: item.productId,
               variantId: item.variantId,

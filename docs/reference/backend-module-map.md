@@ -61,7 +61,7 @@ This is a navigation reference. It maps every API module folder to its domain gu
 
 | API module | Source folder and key files | Responsibility | Frontend surfaces |
 |---|---|---|---|
-| `analytics` | [`analytics`](../../apps/api/src/modules/analytics)<br>[product-views.service](../../apps/api/src/modules/analytics/services/product-views.service.ts)<br>[marketplace-events.service](../../apps/api/src/modules/analytics/services/marketplace-events.service.ts)<br>[recommendation-events.service](../../apps/api/src/modules/analytics/services/recommendation-events.service.ts)<br>[recommendation-events.dto](../../apps/api/src/modules/analytics/dto/recommendation-events.dto.ts) | Event intake, attribution, retention, vendor reporting, and platform reporting. | [Admin analytics](<../../apps/web/src/app/(admin)/admin/analytic>), [vendor analytics](<../../apps/web/src/app/(vendor)/vendor/analytic>) |
+| `analytics` | [`analytics`](../../apps/api/src/modules/analytics)<br>[product-views.service](../../apps/api/src/modules/analytics/services/product-views.service.ts)<br>[shopper-activity.service](../../apps/api/src/modules/analytics/services/shopper-activity.service.ts)<br>[recommendation-events.service](../../apps/api/src/modules/analytics/services/recommendation-events.service.ts)<br>[recommendation-events.dto](../../apps/api/src/modules/analytics/dto/recommendation-events.dto.ts) | Event intake, attribution, retention, vendor reporting, and platform reporting. | [Admin analytics](<../../apps/web/src/app/(admin)/admin/analytic>), [vendor analytics](<../../apps/web/src/app/(vendor)/vendor/analytic>) |
 
 ## [Notifications and Asynchronous Delivery](../domains/notifications-and-async-delivery.md)
 

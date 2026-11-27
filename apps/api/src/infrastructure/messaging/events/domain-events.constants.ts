@@ -51,8 +51,6 @@ export const DomainEvents = {
   IMAGE_PROCESSED: 'image.processed',
 
   // ── Cart ──────────────────────────────────────────────
-  CART_ITEM_ADDED: 'cart.item_added',
-  CART_ITEM_REMOVED: 'cart.item_removed',
   CART_ABANDONED: 'cart.abandoned',
   CART_CHECKED_OUT: 'cart.checked_out',
 
@@ -96,14 +94,23 @@ export const DomainEvents = {
   // ── Notifications ─────────────────────────────────────
   PUSH_DELIVERY_FAILED: 'push.delivery_failed',
 
-  // ── Tracking ──────────────────────────────────────────
-  TRACKING_PRODUCT_VIEWED: 'tracking.product_viewed',
-  TRACKING_SEARCH_PERFORMED: 'tracking.search_performed',
-  TRACKING_STORE_VIEWED: 'tracking.store_viewed',
-  RECOMMENDATION_IMPRESSION: 'recommendation.impression',
-  RECOMMENDATION_CLICKED: 'recommendation.clicked',
-  RECOMMENDATION_DISMISSED: 'recommendation.dismissed',
-  RECOMMENDATION_NOT_INTERESTED: 'recommendation.not_interested',
+  // ── Shopper activity ──────────────────────────────────
+  // Everything a shopper does that analytics and recommendations learn from. One namespace,
+  // `shopper.<what they did>`; these are behaviour signals, not business facts about a cart or a
+  // wishlist (those, if a consumer ever needs them, would be `cart.*` and `wishlist.*`).
+  SHOPPER_PRODUCT_VIEWED: 'shopper.product_viewed',
+  SHOPPER_SEARCHED: 'shopper.searched',
+  SHOPPER_STORE_VIEWED: 'shopper.store_viewed',
+  SHOPPER_CART_ITEM_ADDED: 'shopper.cart_item_added',
+  SHOPPER_CART_ITEM_REMOVED: 'shopper.cart_item_removed',
+  SHOPPER_WISHLIST_ITEM_ADDED: 'shopper.wishlist_item_added',
+  SHOPPER_WISHLIST_ITEM_REMOVED: 'shopper.wishlist_item_removed',
+  /** A recommendation shelf item scrolled into view. */
+  SHOPPER_SHELF_ITEM_SEEN: 'shopper.shelf_item_seen',
+  SHOPPER_SHELF_ITEM_CLICKED: 'shopper.shelf_item_clicked',
+  SHOPPER_SHELF_ITEM_DISMISSED: 'shopper.shelf_item_dismissed',
+  /** Opened a category from a shelf or the browse page. */
+  SHOPPER_CATEGORY_VIEWED: 'shopper.category_viewed',
 
   // ── Platform ──────────────────────────────────────────
   ANNOUNCEMENT_PUBLISHED: 'announcement.published',

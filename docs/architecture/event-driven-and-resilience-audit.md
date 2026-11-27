@@ -16,7 +16,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | E4 | Referral rewards on delivery run in process with a log-only catch (`orders/orders.service.ts:1412`) | A failure or a crash loses a money reward silently | `order.delivered` event, a referral consumer with an idempotency key | High (money) |
 | E5 | Recommendation events (impression, click, dismiss) are written to Postgres inside the request, then the recommendation cache is invalidated each time (`analytics/tracking/recommendation-events.service.ts:55, 110, 30`) | One DB write per interaction, and every click forces the expensive feed to be recomputed (the `for-you` p95 was about 3 s in Grafana) | Buffer, then the analytics queue, then batched inserts; invalidate with a debounce | High (latency) (done: step 5.7) |
 | E6 | The feeds (`for-you`, `marketplace-mix`, `related`) are computed on read | p95 of 2 to 3 s measured in Grafana | Precompute candidate lists per user in the worker when views, clicks and purchases arrive; serve from Redis | High (largest latency win; bigger project) |
-| E7 | Marketplace events and search tracking write to the database directly per request (`marketplace-events.service.ts`, `search-tracking.service.ts`), while product views already use the buffered queue | Inconsistent, and avoidable writes on the request path | Move to the same buffer and queue path | Medium (done: step 5.7) |
+| E7 | Marketplace events and search tracking write to the database directly per request (`shopper-activity.service.ts`, `search-tracking.service.ts`), while product views already use the buffered queue | Inconsistent, and avoidable writes on the request path | Move to the same buffer and queue path | Medium (done: step 5.7) |
 | E8 | Vendor and admin analytics aggregate raw events when read (`vendors/analytics` took about 1.2 s on first load, cached 20 s) | Heavy reads on first view | Hourly or daily rollup tables kept up to date by a consumer or cron | Medium |
 | E9 | Review lists are read and the rating breakdown is summed on each cache miss (`reviews/reviews.service.ts:132`) | Work grows with the number of reviews | Store rating count and average on the product, updated by a `review.changed` event | Medium (done: step 5.8) |
 | E10 | Cache invalidation is done inline after writes in 8 services (wishlists, follows, discounts, categories, variants, admin vendors, token, product views) | Small cost per request, scattered logic | Tag-based invalidation, or a `cache.invalidate` consumer | Low |
@@ -146,7 +146,6 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | Catalog | `category.changed` | categories | cache invalidation, search | new |
 | Catalog | `review.created`, `review.updated`, `review.deleted` | reviews | rating aggregate, vendor notification, recommendations, moderation | `review.created`, `review.deleted` **live** (5.8: rating aggregate, queue `q.nuts.review-aggregates`); `review.updated` is bound but there is no edit endpoint yet; the other consumers are not built |
 | Catalog | `image.uploaded`, `image.processed` | upload (Cloudinary webhook) | product, cache | new |
-| Cart | `cart.item_added`, `cart.item_removed` | cart | analytics, recommendations | buffered tracking only |
 | Cart | `cart.abandoned` | scheduler or timer | notifications, email | cron with direct publish |
 | Cart | `cart.checked_out` | cart | analytics, recommendations | dead |
 | Orders | `order.placed` | orders | inventory (reserve), notifications (customer and vendor), analytics, recommendations, audit, expiry timer | dead (`order.created`) |
@@ -164,16 +163,16 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | Referrals | `referral.code_applied`, `referral.reward_credited` | referrals | wallet, notifications, audit | `referral.reward_credited` **live** (5.5: published in the credit transaction, consumed by `q.nuts.order-events`); `referral.code_applied` not published: no consumer needs it yet |
 | Notifications | `notification.requested` | notification consumer (internal command) | in-app, push, email channels | live (as `notification.dispatch`) |
 | Notifications | `push.delivery_failed` | push channel | cleanup (drop dead subscriptions) | new |
-| Tracking | `tracking.product_viewed` | web through api | analytics, recommendations (profile) | live |
-| Tracking | `tracking.search_performed`, `tracking.store_viewed` | api | analytics, recommendations | direct write today |
-| Tracking | `recommendation.impression`, `recommendation.clicked`, `recommendation.dismissed`, `recommendation.not_interested` | api | batched writer, feed precompute | direct write today |
+| Shopper activity | `shopper.product_viewed`, `shopper.searched`, `shopper.store_viewed` | web through api | analytics, recommendations | **live** (queue `q.nuts.analytics`) |
+| Shopper activity | `shopper.cart_item_added`, `shopper.cart_item_removed`, `shopper.wishlist_item_added`, `shopper.wishlist_item_removed` | cart, wishlists | analytics, recommendations | **live** (step 5.7) |
+| Shopper activity | `shopper.shelf_item_seen`, `shopper.shelf_item_clicked`, `shopper.shelf_item_dismissed`, `shopper.category_viewed` | api | analytics, feed rebuild | **live** (step 5.7) |
 | Platform | `announcement.published`, `announcement.scheduled` | admin | fan-out consumer (chunked), notifications, email | to verify |
 | Platform | `platform.config_changed` | admin | cache invalidation in every process | new |
 | Platform | `audit.recorded` | any | audit writer | live |
 | Security | `security.bot_blocked`, `security.rate_limited`, `security.suspicious_activity` | middleware | security alerts, audit | new |
 | Operations | `dlq.message_dead_lettered`, `outbox.event_dead` | broker and relay | alerting, ops dashboard | new |
 
-**Totals:** about 70 events across 13 areas. 4 are live on RabbitMQ in a usable form (`vendor.followed`, `vendor.unfollowed`, `tracking.product_viewed`, `audit.recorded`) plus the internal commands `notification.dispatch`, `email.dispatch` (order-status path only) and `workflow.start`. 8 exist only in process, 9 are declared and never published, and the rest are new.
+**Totals:** about 70 events across 13 areas. 4 are live on RabbitMQ in a usable form (`vendor.followed`, `vendor.unfollowed`, `shopper.product_viewed`, `audit.recorded`) plus the internal commands `notification.dispatch`, `email.dispatch` (order-status path only) and `workflow.start`. 8 exist only in process, 9 are declared and never published, and the rest are new.
 
 **Build order inside the work:** (1) the backbone: envelope, naming rule, publishing through the transaction runner, queue-per-consumer wiring, removal of dead constants; (2) move the 8 in-process events onto it (R19) with their existing consumers; (3) the money and security events (payments, webhook inbox, referral, wallet, user security); (4) vendor, catalog, cart and review events; (5) tracking buffers and the feeds; (6) platform, promotions, operations events.
 
