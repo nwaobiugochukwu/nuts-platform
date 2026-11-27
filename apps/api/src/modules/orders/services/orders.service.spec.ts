@@ -1,11 +1,10 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { PaymentsService } from '@api/modules/payments/services/payments.service';
@@ -22,8 +21,8 @@ describe('OrdersService', () => {
   let mockDiscountService: any;
   let mockPaymentsService: any;
   let mockWalletService: any;
-  let mockEventEmitter: any;
   let mockConfigService: any;
+  let mockOutbox: any;
 
   beforeEach(() => {
     mockPrisma = {
@@ -113,10 +112,6 @@ describe('OrdersService', () => {
       settleVendorEarning: jest.fn(),
     };
 
-    mockEventEmitter = {
-      emit: jest.fn(),
-    };
-
     mockConfigService = {
       getOrThrow: jest.fn((key: string) => {
         if (key === 'CHECKOUT_REVALIDATE_PRICES') return 'true';
@@ -126,6 +121,12 @@ describe('OrdersService', () => {
       get: jest.fn(),
     };
 
+    mockOutbox = {
+      appendEvent: jest.fn(),
+      appendEnvelope: jest.fn(),
+      wakeRelay: jest.fn(),
+    };
+
     service = new OrdersService(
       mockPrisma,
       mockUsersService,
@@ -133,8 +134,7 @@ describe('OrdersService', () => {
       {} as unknown as ReferralService,
       mockPaymentsService,
       mockWalletService,
-      mockEventEmitter,
-      { appendEvent: jest.fn() } as any,
+      mockOutbox,
       mockConfigService,
     );
   });
@@ -312,6 +312,89 @@ describe('OrdersService', () => {
       await expect(
         service.updateStatusForVendor('v-9', 'o-1', OrderStatus.SHIPPED),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('status-change events', () => {
+    const tx = { marker: 'tx', order: { findUnique: jest.fn() } };
+    const orderRow = {
+      id: 'ord-1',
+      orderNumber: 'ORD-1',
+      userId: 'u-1',
+      user: { id: 'u-1', email: 'buyer@example.com', firstName: 'Ada' },
+      orderItems: [
+        {
+          quantity: 2,
+          unitPrice: 50,
+          totalPrice: 100,
+          product: { name: 'Red Shoe' },
+          variant: null,
+          vendor: { id: 'v-1', email: 'v@shop.com', storeName: 'Shop' },
+        },
+      ],
+    };
+    const publish = (status: OrderStatus, userId: string | undefined = 'u-1') =>
+      (service as any).publishStatusChangeEvent(tx, 'ord-1', status, userId);
+
+    beforeEach(() => {
+      tx.order.findUnique.mockReset().mockResolvedValue(orderRow);
+    });
+
+    it.each([
+      [OrderStatus.SHIPPED, 'order.shipped'],
+      [OrderStatus.DELIVERED, 'order.delivered'],
+      [OrderStatus.CANCELLED, 'order.cancelled'],
+    ])(
+      'writes the %s event to the outbox in the transaction, without waking the relay',
+      async (status, type) => {
+        await publish(status);
+
+        expect(tx.order.findUnique).toHaveBeenCalledTimes(1); // read through the transaction
+        expect(mockOutbox.appendEnvelope).toHaveBeenCalledTimes(1);
+        expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
+          tx,
+          expect.objectContaining({
+            type,
+            aggregate: { type: 'order', id: 'ord-1' },
+            payload: expect.objectContaining({
+              orderId: 'ord-1',
+              userEmail: 'buyer@example.com',
+              items: [
+                expect.objectContaining({
+                  productName: 'Red Shoe',
+                  quantity: 2,
+                }),
+              ],
+            }),
+          }),
+          { wakeRelay: false },
+        );
+      },
+    );
+
+    it('publishes nothing for a status that has no event (PROCESSING comes from payment)', async () => {
+      await publish(OrderStatus.PROCESSING);
+
+      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing when the order has no customer', async () => {
+      await (service as any).publishStatusChangeEvent(
+        tx,
+        'ord-1',
+        OrderStatus.SHIPPED,
+        undefined,
+      );
+      tx.order.findUnique.mockResolvedValue({ ...orderRow, user: null });
+      await publish(OrderStatus.SHIPPED);
+
+      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
+    });
+
+    it('lets a failure propagate, so the status change rolls back with it', async () => {
+      mockOutbox.appendEnvelope.mockRejectedValue(new Error('outbox down'));
+
+      await expect(publish(OrderStatus.SHIPPED)).rejects.toThrow('outbox down');
     });
   });
 });

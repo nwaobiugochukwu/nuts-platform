@@ -1,5 +1,4 @@
 ﻿import { Injectable, Logger, Optional } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
 import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
   EmailOrderItem,
@@ -10,13 +9,12 @@ import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.servi
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
-import { NotificationsService } from '../services/notifications.service';
-import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import { NotificationsService } from './notifications.service';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 import {
   NotificationPreferencesService,
   NotificationCategory,
-} from '../services/notification-preferences.service';
+} from './notification-preferences.service';
 import type {
   OrderCancelledPayload,
   OrderDeliveredPayload,
@@ -27,9 +25,14 @@ import type {
   ReferralRewardCreditedPayload,
 } from '@api/infrastructure/messaging/events/event-payloads.types';
 
+/**
+ * Turns order, payment and referral events into the emails and in-app notifications people see.
+ * `OrderEventsConsumer` calls one `handle*` method per event it takes off the queue (the events
+ * used to be in-process and lost if the process stopped between commit and emit).
+ */
 @Injectable()
-export class NotificationListener {
-  private readonly logger = new Logger(NotificationListener.name);
+export class OrderEventNotificationsService {
+  private readonly logger = new Logger(OrderEventNotificationsService.name);
 
   constructor(
     private readonly rabbitmq: RabbitMQService,
@@ -148,7 +151,6 @@ export class NotificationListener {
     return undefined;
   }
 
-  @OnEvent(DomainEvents.ORDER_PROCESSING)
   async handleOrderProcessing(payload: OrderProcessingPayload): Promise<void> {
     this.logger.log(
       { orderId: payload.orderId },
@@ -283,7 +285,6 @@ export class NotificationListener {
     }
   }
 
-  @OnEvent(DomainEvents.ORDER_SHIPPED)
   async handleOrderShipped(payload: OrderShippedPayload): Promise<void> {
     this.logger.log(
       { orderId: payload.orderId },
@@ -352,7 +353,6 @@ export class NotificationListener {
     });
   }
 
-  @OnEvent(DomainEvents.ORDER_DELIVERED)
   async handleOrderDelivered(payload: OrderDeliveredPayload): Promise<void> {
     this.logger.log(
       { orderId: payload.orderId },
@@ -419,7 +419,6 @@ export class NotificationListener {
     });
   }
 
-  @OnEvent(DomainEvents.ORDER_CANCELLED)
   async handleOrderCancelled(payload: OrderCancelledPayload): Promise<void> {
     this.logger.log(
       { orderId: payload.orderId },
@@ -488,7 +487,6 @@ export class NotificationListener {
     });
   }
 
-  @OnEvent(DomainEvents.PAYMENT_CONFIRMED)
   async handlePaymentConfirmed(
     payload: PaymentConfirmedPayload,
   ): Promise<void> {
@@ -541,7 +539,6 @@ export class NotificationListener {
     }
   }
 
-  @OnEvent(DomainEvents.PAYMENT_FAILED)
   async handlePaymentFailed(payload: PaymentFailedPayload): Promise<void> {
     this.logger.log(
       { paymentId: payload.paymentId },
@@ -579,7 +576,6 @@ export class NotificationListener {
     });
   }
 
-  @OnEvent(DomainEvents.REFERRAL_REWARD_CREDITED)
   async handleReferralReward(
     payload: ReferralRewardCreditedPayload,
   ): Promise<void> {

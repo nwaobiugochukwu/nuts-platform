@@ -1,6 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { createHmac } from 'crypto';
 import { EmailService } from '@api/infrastructure/mail/email.service';
@@ -14,6 +13,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
   let service: PaymentsService;
   let mockPrisma: any;
   let mockConfig: any;
+  let mockOutbox: any;
   let mockWalletService: any;
   const secretKey = 'sk_test_secret_key_12345';
 
@@ -68,17 +68,22 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       creditVendorPending: jest.fn(),
     };
 
+    mockOutbox = {
+      appendEvent: jest.fn(),
+      appendEnvelope: jest.fn(),
+      wakeRelay: jest.fn(),
+    };
+
     service = new PaymentsService(
       mockPrisma,
       { assertActiveAccount: jest.fn() } as unknown as UsersService,
       mockConfig,
       {} as unknown as EmailService,
       mockWalletService,
-      { emit: jest.fn() } as unknown as EventEmitter2,
       {
         executePaystack: jest.fn((fn: () => unknown) => fn()),
       } as unknown as CircuitBreakerService,
-      { appendEvent: jest.fn() } as any,
+      mockOutbox,
     );
   });
 
@@ -189,6 +194,175 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         where: { id: 'ord-1', status: OrderStatus.PENDING },
         data: { status: OrderStatus.PROCESSING },
       });
+    });
+
+    it('publishes order.processing and payment.confirmed in the same transaction, and wakes the relay only after it commits', async () => {
+      const rawBody = JSON.stringify({
+        event: 'charge.success',
+        data: { reference: 'TX-REF-200', status: 'success' },
+      });
+      const existingPayment = {
+        id: 'pay-2',
+        orderId: 'ord-2',
+        userId: 'u-2',
+        amount: new Prisma.Decimal(100),
+        currency: 'NGN',
+        status: PaymentStatus.PENDING,
+        transactionReference: 'TX-REF-200',
+        user: { email: 'buyer@example.com', firstName: 'Ada' },
+        order: { orderNumber: 'ORD-2' },
+      };
+      mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
+      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+        status: true,
+        data: { id: 1, status: 'success', amount: 10000, currency: 'NGN' },
+      });
+      mockPrisma.payment.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.order.findUnique.mockResolvedValue({
+        id: 'ord-2',
+        orderNumber: 'ORD-2',
+        status: OrderStatus.PROCESSING,
+        userId: 'u-2',
+        user: { id: 'u-2', email: 'buyer@example.com', firstName: 'Ada' },
+        payment: { currency: 'NGN' },
+        totalAmount: new Prisma.Decimal(100),
+        finalAmount: new Prisma.Decimal(100),
+        shippingAddress: '1 Main St',
+        orderItems: [
+          {
+            productId: 'p-1',
+            vendorId: 'v-1',
+            quantity: 1,
+            unitPrice: new Prisma.Decimal(100),
+            totalPrice: new Prisma.Decimal(100),
+            product: { name: 'Red Shoe' },
+            variant: null,
+          },
+        ],
+      });
+      mockPrisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...existingPayment,
+        status: PaymentStatus.SUCCESS,
+      });
+      const order: string[] = [];
+      mockPrisma.$transaction.mockImplementation(
+        async (callback: (tx: any) => Promise<unknown>) => {
+          const result = await callback(mockPrisma);
+          order.push('commit');
+          return result;
+        },
+      );
+      mockOutbox.appendEnvelope.mockImplementation(() => {
+        order.push('append');
+        return Promise.resolve('e-1');
+      });
+      mockOutbox.wakeRelay.mockImplementation(() => order.push('wake'));
+
+      await service.handleWebhook(rawBody, generateSignature(rawBody));
+
+      const published = mockOutbox.appendEnvelope.mock.calls.map(
+        ([tx, event, options]: any[]) => ({ tx, event, options }),
+      );
+      expect(published.map((p: any) => p.event.type)).toEqual([
+        'order.processing',
+        'payment.confirmed',
+      ]);
+      for (const p of published) {
+        expect(p.tx).toBe(mockPrisma); // the transaction client, not a separate connection
+        expect(p.options).toEqual({ wakeRelay: false });
+      }
+      expect(published[0].event).toMatchObject({
+        aggregate: { type: 'order', id: 'ord-2' },
+        payload: {
+          orderId: 'ord-2',
+          userEmail: 'buyer@example.com',
+          currency: 'NGN',
+          items: [expect.objectContaining({ productName: 'Red Shoe' })],
+        },
+      });
+      expect(published[1].event).toMatchObject({
+        aggregate: { type: 'payment', id: 'pay-2' },
+        payload: { paymentId: 'pay-2', orderNumber: 'ORD-2', amount: 100 },
+      });
+      expect(order.indexOf('wake')).toBeGreaterThan(order.indexOf('commit'));
+      expect(order.slice(0, 2)).toEqual(['append', 'append']);
+    });
+
+    describe('a failed payment', () => {
+      const failing = (updated: number) => {
+        mockPrisma.payment.findFirst = jest.fn().mockResolvedValue({
+          id: 'pay-9',
+          orderId: 'ord-9',
+          userId: 'u-9',
+          user: { email: 'buyer@example.com', firstName: 'Ada' },
+          order: { orderNumber: 'ORD-9' },
+        });
+        mockPrisma.payment.updateMany.mockResolvedValue({ count: updated });
+      };
+
+      it('publishes payment.failed in the transaction that marked it failed, then wakes the relay', async () => {
+        failing(1);
+
+        await (service as any).markPaymentFailed('TX-FAIL-1', 'declined');
+
+        expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
+          mockPrisma,
+          expect.objectContaining({
+            type: 'payment.failed',
+            aggregate: { type: 'payment', id: 'pay-9' },
+            payload: expect.objectContaining({
+              paymentId: 'pay-9',
+              reason: 'declined',
+            }),
+          }),
+          { wakeRelay: false },
+        );
+        expect(mockOutbox.wakeRelay).toHaveBeenCalledTimes(1);
+      });
+
+      it('publishes nothing when another delivery already moved the payment', async () => {
+        failing(0);
+
+        await (service as any).markPaymentFailed('TX-FAIL-1', 'declined');
+
+        expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
+      });
+    });
+
+    it('does not publish the events when the order was not pending (nothing changed)', async () => {
+      const rawBody = JSON.stringify({
+        event: 'charge.success',
+        data: { reference: 'TX-REF-300', status: 'success' },
+      });
+      const existingPayment = {
+        id: 'pay-3',
+        orderId: 'ord-3',
+        amount: new Prisma.Decimal(100),
+        currency: 'NGN',
+        status: PaymentStatus.PENDING,
+        transactionReference: 'TX-REF-300',
+      };
+      mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
+      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+        status: true,
+        data: { id: 1, status: 'success', amount: 10000, currency: 'NGN' },
+      });
+      mockPrisma.payment.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.order.updateMany.mockResolvedValue({ count: 0 }); // already moved on
+      mockPrisma.order.findUnique.mockResolvedValue({
+        orderNumber: 'ORD-3',
+        status: OrderStatus.CANCELLED,
+        orderItems: [],
+      });
+      mockPrisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...existingPayment,
+        status: PaymentStatus.SUCCESS,
+      });
+
+      await service.handleWebhook(rawBody, generateSignature(rawBody));
+
+      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
     });
 
     it('successfully advances order to PROCESSING using signed webhook data when paystackVerify fails or times out', async () => {

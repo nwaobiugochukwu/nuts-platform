@@ -12,7 +12,6 @@
 import { Cron, CronExpression } from '@nestjs/schedule';
 
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import {
   NotificationPriority,
@@ -116,7 +115,6 @@ export class PaymentsService {
     private readonly config: ConfigService,
     private readonly emailService: EmailService,
     private readonly walletService: WalletService,
-    private readonly eventEmitter: EventEmitter2,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly outbox: OutboxService,
     @Optional() private readonly cacheService?: CacheService,
@@ -1612,6 +1610,10 @@ export class PaymentsService {
         }
 
         if (orderMovedToProcessing) {
+          // Facts for the notification and email consumers, committed or rolled back with this change.
+          await this.publishOrderProcessingEvent(tx, payment.orderId);
+          await this.publishPaymentConfirmedEvent(tx, payment.id);
+
           const amount = Number(payment.amount);
           const orderNumber = order?.orderNumber ?? payment.orderId;
           const customerNotification = {
@@ -1745,19 +1747,9 @@ export class PaymentsService {
         );
       });
 
-      this.emitOrderProcessingEvent(updated.orderId).catch((error) => {
-        this.logger.error(
-          `Failed to emit processing event for ${updated.orderId}`,
-          error,
-        );
-      });
-
-      this.emitPaymentConfirmedEvent(updated.id).catch((error) => {
-        this.logger.error(
-          `Failed to emit payment confirmed event for ${updated.id}`,
-          error,
-        );
-      });
+      // The order.processing and payment.confirmed events were written to the outbox in the
+      // transaction above; wake the relay now that it has committed.
+      this.outbox.wakeRelay();
     } else {
       this.logger.error(
         `Payment ${updated.id} was captured but order ${payment.orderId} did not move from PENDING to PROCESSING. Vendor earnings were not credited; reconciliation is required.`,
@@ -1788,17 +1780,20 @@ export class PaymentsService {
 
     if (!payment) return;
 
-    await this.prisma.payment.updateMany({
-      where: {
-        id: payment.id,
-        status: PaymentStatus.PENDING,
-      },
-      data: {
-        status: PaymentStatus.FAILED,
-      },
-    });
+    // The status change and the payment.failed event commit together: only the delivery that
+    // actually moved the payment from PENDING to FAILED publishes the event.
+    await this.prisma.$transaction(async (tx) => {
+      const moved = await tx.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: PaymentStatus.PENDING,
+        },
+        data: {
+          status: PaymentStatus.FAILED,
+        },
+      });
+      if (moved.count !== 1 || !payment.user || !payment.order) return;
 
-    if (payment.user && payment.order) {
       const payload: PaymentFailedPayload = {
         paymentId: payment.id,
         orderId: payment.orderId,
@@ -1808,9 +1803,17 @@ export class PaymentsService {
         userFirstName: payment.user.firstName,
         reason,
       };
-
-      this.eventEmitter.emit(DomainEvents.PAYMENT_FAILED, payload);
-    }
+      await this.outbox.appendEnvelope(
+        tx,
+        {
+          type: DomainEvents.PAYMENT_FAILED,
+          aggregate: { type: 'payment', id: payment.id },
+          payload,
+        },
+        { wakeRelay: false },
+      );
+    });
+    this.outbox.wakeRelay();
   }
 
   // ---------------------------------------------------------------------------
@@ -2150,138 +2153,146 @@ export class PaymentsService {
   // EVENTS
   // ---------------------------------------------------------------------------
 
-  private async emitOrderProcessingEvent(orderId: string): Promise<void> {
-    try {
-      const order = await this.prisma.order.findUnique({
-        where: {
-          id: orderId,
-        },
+  private async publishOrderProcessingEvent(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const order = await tx.order.findUnique({
+      where: {
+        id: orderId,
+      },
 
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-            },
-          },
-
-          payment: {
-            select: {
-              currency: true,
-            },
-          },
-
-          orderItems: {
-            include: {
-              product: {
-                select: {
-                  name: true,
-                },
-              },
-
-              variant: {
-                select: {
-                  options: true,
-                },
-              },
-            },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
           },
         },
-      });
 
-      if (!order || !order.user || !order.payment) {
-        return;
-      }
+        payment: {
+          select: {
+            currency: true,
+          },
+        },
 
-      const payload: OrderProcessingPayload = {
-        orderId: order.id,
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                name: true,
+              },
+            },
 
-        orderNumber: order.orderNumber,
+            variant: {
+              select: {
+                options: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
-        userId: order.userId,
-
-        userEmail: order.user.email,
-
-        userFirstName: order.user.firstName,
-
-        totalAmount: Number(order.totalAmount),
-
-        finalAmount: Number(order.finalAmount),
-
-        currency: order.payment.currency,
-
-        vendorIds: [...new Set(order.orderItems.map((item) => item.vendorId))],
-
-        items: order.orderItems.map((item) => ({
-          productName: item.product.name,
-
-          quantity: item.quantity,
-
-          unitPrice: Number(item.unitPrice),
-
-          totalPrice: Number(item.totalPrice),
-
-          variantOptions: item.variant
-            ? (item.variant.options as {
-                name: string;
-                value: string;
-              }[])
-            : undefined,
-        })),
-
-        shippingAddress: order.shippingAddress ?? '',
-      };
-
-      this.eventEmitter.emit(DomainEvents.ORDER_PROCESSING, payload);
-    } catch (error) {
-      this.logger.error(
-        `Failed to emit ORDER_PROCESSING for ${orderId}`,
-        error,
-      );
+    if (!order || !order.user || !order.payment) {
+      return;
     }
+
+    const payload: OrderProcessingPayload = {
+      orderId: order.id,
+
+      orderNumber: order.orderNumber,
+
+      userId: order.userId,
+
+      userEmail: order.user.email,
+
+      userFirstName: order.user.firstName,
+
+      totalAmount: Number(order.totalAmount),
+
+      finalAmount: Number(order.finalAmount),
+
+      currency: order.payment.currency,
+
+      vendorIds: [...new Set(order.orderItems.map((item) => item.vendorId))],
+
+      items: order.orderItems.map((item) => ({
+        productName: item.product.name,
+
+        quantity: item.quantity,
+
+        unitPrice: Number(item.unitPrice),
+
+        totalPrice: Number(item.totalPrice),
+
+        variantOptions: item.variant
+          ? (item.variant.options as {
+              name: string;
+              value: string;
+            }[])
+          : undefined,
+      })),
+
+      shippingAddress: order.shippingAddress ?? '',
+    };
+
+    await this.outbox.appendEnvelope(
+      tx,
+      {
+        type: DomainEvents.ORDER_PROCESSING,
+        aggregate: { type: 'order', id: orderId },
+        payload,
+      },
+      { wakeRelay: false },
+    );
   }
 
-  private async emitPaymentConfirmedEvent(paymentId: string): Promise<void> {
-    try {
-      const payment = await this.prisma.payment.findUnique({
-        where: { id: paymentId },
-        include: {
-          user: {
-            select: {
-              email: true,
-              firstName: true,
-            },
-          },
-          order: {
-            select: {
-              orderNumber: true,
-            },
+  private async publishPaymentConfirmedEvent(
+    tx: Prisma.TransactionClient,
+    paymentId: string,
+  ): Promise<void> {
+    const payment = await tx.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        user: {
+          select: {
+            email: true,
+            firstName: true,
           },
         },
-      });
+        order: {
+          select: {
+            orderNumber: true,
+          },
+        },
+      },
+    });
 
-      if (!payment || !payment.user || !payment.order) return;
+    if (!payment || !payment.user || !payment.order) return;
 
-      const payload: PaymentConfirmedPayload = {
-        paymentId: payment.id,
-        orderId: payment.orderId,
-        orderNumber: payment.order.orderNumber,
-        userId: payment.userId,
-        userEmail: payment.user.email,
-        userFirstName: payment.user.firstName,
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        paymentReference: payment.transactionReference ?? '',
-      };
+    const payload: PaymentConfirmedPayload = {
+      paymentId: payment.id,
+      orderId: payment.orderId,
+      orderNumber: payment.order.orderNumber,
+      userId: payment.userId,
+      userEmail: payment.user.email,
+      userFirstName: payment.user.firstName,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      paymentReference: payment.transactionReference ?? '',
+    };
 
-      this.eventEmitter.emit(DomainEvents.PAYMENT_CONFIRMED, payload);
-    } catch (error) {
-      this.logger.error(
-        `Failed to emit PAYMENT_CONFIRMED for ${paymentId}`,
-        error,
-      );
-    }
+    await this.outbox.appendEnvelope(
+      tx,
+      {
+        type: DomainEvents.PAYMENT_CONFIRMED,
+        aggregate: { type: 'payment', id: paymentId },
+        payload,
+      },
+      { wakeRelay: false },
+    );
   }
 
   // ---------------------------------------------------------------------------

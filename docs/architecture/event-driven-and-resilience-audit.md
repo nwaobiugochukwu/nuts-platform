@@ -151,10 +151,10 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | Cart | `cart.checked_out` | cart | analytics, recommendations | dead |
 | Orders | `order.placed` | orders | inventory (reserve), notifications (customer and vendor), analytics, recommendations, audit, expiry timer | dead (`order.created`) |
 | Orders | `order.paid` | orders (from payment) | email (confirmation with PDF), notifications, wallet (pending earnings), analytics | dead (`order.confirmed`) |
-| Orders | `order.processing`, `order.shipped`, `order.delivered`, `order.cancelled` | orders | email, notifications, inventory (release on cancel), referral (on delivered), wallet (release earnings on delivered), analytics, recommendations | in-process |
+| Orders | `order.processing`, `order.shipped`, `order.delivered`, `order.cancelled` | orders | email, notifications, inventory (release on cancel), referral (on delivered), wallet (release earnings on delivered), analytics, recommendations | **live** (5.2: published in the transaction, queue `q.nuts.order-events`) |
 | Orders | `order.expired` | timer | inventory (release), notifications | cron |
 | Payments | `payment.initiated` | payments | analytics, audit | new |
-| Payments | `payment.confirmed`, `payment.failed` | payments | orders, email, notifications, wallet, audit | in-process |
+| Payments | `payment.confirmed`, `payment.failed` | payments | orders, email, notifications, wallet, audit | **live** (5.2: published in the transaction, queue `q.nuts.order-events`) |
 | Payments | `payment.refund_requested`, `payment.refunded`, `payment.refund_failed` | payments | orders, inventory, wallet, email, notifications, audit | partly outbox, no domain event |
 | Payments | `payment.reconciliation_needed` | payments | ops alert queue, audit | recorded in the database only |
 | Payments | `payment.webhook_received` | webhook endpoint (inbox) | payments (process once, idempotent) | new (E13) |

@@ -1,3 +1,5 @@
+import { DomainEvents } from '../events/domain-events.constants';
+
 export const RABBITMQ_EXCHANGES = {
   TOPIC: 'nuts.events',
   DLX: 'nuts.dlx',
@@ -10,6 +12,7 @@ export const RABBITMQ_QUEUES = {
   VENDOR_EVENTS: 'q.nuts.vendor-events',
   INVENTORY: 'q.nuts.inventory',
   AUDIT: 'q.nuts.audit',
+  ORDER_EVENTS: 'q.nuts.order-events',
   WORKFLOWS: 'q.nuts.workflows',
   DLQ: 'q.nuts.dlq',
 } as const;
@@ -55,6 +58,16 @@ export const QUEUE_BINDINGS: Record<
   ],
   [RABBITMQ_QUEUES.INVENTORY]: [RABBITMQ_ROUTING_KEYS.INVENTORY_ADJUST],
   [RABBITMQ_QUEUES.AUDIT]: [RABBITMQ_ROUTING_KEYS.AUDIT_EVENT],
+  // Order, payment and referral facts that turn into emails and notifications.
+  [RABBITMQ_QUEUES.ORDER_EVENTS]: [
+    DomainEvents.ORDER_PROCESSING,
+    DomainEvents.ORDER_SHIPPED,
+    DomainEvents.ORDER_DELIVERED,
+    DomainEvents.ORDER_CANCELLED,
+    DomainEvents.PAYMENT_CONFIRMED,
+    DomainEvents.PAYMENT_FAILED,
+    DomainEvents.REFERRAL_REWARD_CREDITED,
+  ],
   [RABBITMQ_QUEUES.WORKFLOWS]: [RABBITMQ_ROUTING_KEYS.WORKFLOW_START],
 };
 

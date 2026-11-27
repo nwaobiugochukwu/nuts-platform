@@ -1,6 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { EmailService } from '@api/infrastructure/mail/email.service';
@@ -80,10 +79,6 @@ const mockReferralService = {
   grantReferralRewards: jest.fn(),
 };
 
-const mockEventEmitter = {
-  emit: jest.fn(),
-};
-
 describe('PaymentsService â€“ refund', () => {
   let service: PaymentsService;
 
@@ -99,7 +94,6 @@ describe('PaymentsService â€“ refund', () => {
         { provide: EmailService, useValue: mockEmailService },
         { provide: WalletService, useValue: mockWalletService },
         { provide: OutboxService, useValue: mockOutboxService },
-        { provide: EventEmitter2, useValue: mockEventEmitter },
         { provide: CircuitBreakerService, useValue: mockCircuitBreakerService },
       ],
     }).compile();
