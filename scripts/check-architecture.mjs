@@ -79,7 +79,6 @@ const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/modules/recommendations/services/personalized-feed.service.ts",
   "apps/api/src/modules/referrals/services/referral.service.ts",
   "apps/api/src/modules/vendors/services/vendor-follows.service.ts",
-  "apps/api/src/modules/wallets/services/wallet.service.ts",
 ]);
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
