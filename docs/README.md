@@ -20,6 +20,7 @@ This index separates product behavior, code navigation, shared engineering conce
 - [Code organization and dependency rules](architecture/code-organization.md) — folder layout, layering, naming, and the CI guardrails for the API and web app.
 - [How production teams run several services](architecture/how-production-teams-run-services.md) — one image, many roles, health checks, and why `npm run dev` starts in order.
 - [How the system works](architecture/how-it-works.md) — plain-language tour: the programs, how a request travels, what watches over it, and why each piece exists.
+- [Event-driven and resilience audit](architecture/event-driven-and-resilience-audit.md) — what should move to RabbitMQ events, how the outbox, retries, dead-letter queue and circuit breakers measure up, and file-layout problems, each with evidence.
 - [Master roadmap](architecture/master-roadmap.md) — the final plan: decisions, the ordered batches (what is done and what is next, who does what), quick rollback switches, and the future directions considered.
 - [Platform reliability plan](architecture/platform-reliability-plan.md) — proposed plan for PM2-supervised independent processes, observability, an asynchronous audit pipeline and Temporal workflows (not built yet).
 - [Hub fulfillment and delivery plan](architecture/hub-fulfillment-and-delivery-plan.md) — proposed plan for consolidated parcels, Lagos distance pricing, live tracking and per-vendor payouts (not built yet).

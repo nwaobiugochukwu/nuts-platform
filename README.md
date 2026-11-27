@@ -19,7 +19,7 @@
 
 This README and the documents under [docs/](docs/README.md) are **living documentation**. They are updated as each batch of work lands, so details such as hosting, local start-up and the programs that run can change. The current plan, the order of the remaining batches and what is done are in the [master roadmap](docs/architecture/master-roadmap.md), last updated 2026-11-26.
 
-**Where the project is heading:** staging runs on Render as two services (api, worker and jobs as separate processes in one, and web in the other), each program becoming its own service when the budget allows; local development runs the same programs in Docker Compose; staging adds monitoring, a post-deploy check and Temporal; then the money code is made safe, long-running processes move onto Temporal, and the delivery operation is built last.
+**Where the project is heading:** staging runs on Render as two services (the backend as one process today and web), moving to separate api, worker and jobs processes, then separate services, as the plan size allows; local development runs the same programs in Docker Compose; staging adds monitoring, a post-deploy check and Temporal; then the money code is made safe, long-running processes move onto Temporal, and the delivery operation is built last.
 
 **Future directions considered, not adopted for now** (each has a "revisit when" signal in the roadmap): splitting every program into its own service now, free hosting tiers, AWS (ECS), Kubernetes, hosting the web app on Vercel, Tilt for local development, self-hosted Temporal, splitting the worker further, a separate real-time gateway, and a trained recommendation model. See [section 6 of the roadmap](docs/architecture/master-roadmap.md#6-future-directions-considered).
 
@@ -1172,11 +1172,10 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
 
 ### Prerequisites
 
-- Node.js 22+
-- Docker & Docker Compose
-- npm 11+
+- Node.js 22.12 or newer 22.x (`.nvmrc` pins 22; `npm` enforces it) and npm 11
+- Docker and Docker Compose
 
-### Step 1: Clone & Install Dependencies
+### Step 1: Clone and install dependencies
 
 ```bash
 git clone https://github.com/nwaobiugochukwu/nuts-platform.git
@@ -1184,24 +1183,26 @@ cd nuts-platform
 npm install
 ```
 
-### Step 2: Boot Infrastructure & Database
+### Step 2: Create your environment files
+
+Copy `apps/api/.env.example` to `apps/api/.env.development` and `apps/web/.env.example` to `apps/web/.env.development`, then fill in the values the comments mark as required.
+
+### Step 3: Start everything
 
 ```bash
-# Starts local PostgreSQL, Redis, and RabbitMQ
-npm run db:up
-
-# Run Prisma schema migrations
-npm run migrate:deploy
-```
-
-### Step 3: Run Development Server
-
-```bash
-# Runs both NestJS API (port 3001) and Next.js Storefront (port 3000) with Turbopack
 npm run dev
 ```
 
-Visit the storefront at `http://localhost:3000` and Swagger docs at `http://localhost:3001/api/docs`.
+This starts PostgreSQL, Redis and RabbitMQ, then runs the api, worker, jobs runner and web app as separate Docker containers, each starting only after the previous one is healthy. It prints a status table and returns your terminal; it does not stream every log into one window.
+
+| What | Where |
+|---|---|
+| Storefront | `http://localhost:5173` |
+| API | `http://localhost:3001/api/v1/health` (Swagger at `http://localhost:3001/api/docs` in development) |
+| One service's logs | `npm run dev:logs:api`, `dev:logs:worker`, `dev:logs:jobs`, `dev:logs:web` |
+| Stop | `npm run dev:down` (the databases keep running; `npm run db:down` stops them) |
+
+The first start builds the images and takes several minutes; later starts take about a minute. Apply database migrations once with `npm run migrate:deploy`. Metrics and dashboards: `npm run obs:up`, then Grafana at `http://localhost:3030`. The full guide, including running the programs without Docker, is [Running and testing locally](docs/operations/local-development.md).
 
 ---
 

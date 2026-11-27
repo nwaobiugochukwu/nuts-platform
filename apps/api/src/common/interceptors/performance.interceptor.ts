@@ -8,6 +8,10 @@ import {
 import type { Request, Response } from 'express';
 import { performance } from 'node:perf_hooks';
 import { Observable } from 'rxjs';
+import {
+  currentTimings,
+  type RequestTimings,
+} from '@api/common/request-context/request-context';
 import { tap } from 'rxjs/operators';
 
 @Injectable()
@@ -36,10 +40,16 @@ export class PerformanceInterceptor implements NestInterceptor {
 
     const recordDuration = (isError: boolean, error?: unknown) => {
       const duration = Math.round(performance.now() - start);
+      const timings = currentTimings();
       if (!response.headersSent) {
-        response.setHeader('Server-Timing', `app;dur=${duration}`);
+        // db is the summed query time, so it can exceed the wall time when queries overlap.
+        const db =
+          timings && timings.dbQueries > 0
+            ? `, db;dur=${Math.round(timings.dbMs)};desc="${timings.dbQueries} queries"`
+            : '';
+        response.setHeader('Server-Timing', `app;dur=${duration}${db}`);
       }
-      this.logPerformance(method, url, duration, isError, error);
+      this.logPerformance(method, url, duration, isError, error, timings);
     };
 
     return next.handle().pipe(
@@ -56,6 +66,7 @@ export class PerformanceInterceptor implements NestInterceptor {
     duration: number,
     isError: boolean,
     error?: unknown,
+    timings?: RequestTimings,
   ): void {
     const message = `${method} ${url} - ${duration}ms`;
 
@@ -68,7 +79,24 @@ export class PerformanceInterceptor implements NestInterceptor {
             : 'Unknown error';
       this.logger.error(`${message} - ERROR: ${errorMessage}`);
     } else if (duration > this.SLOW_REQUEST_THRESHOLD) {
-      this.logger.warn(`SLOW REQUEST (>199ms): ${message}`);
+      this.logger.warn(
+        `SLOW REQUEST (>199ms): ${message}${describeTimings(timings)}`,
+      );
     }
   }
+}
+
+/** " [db 180ms in 4 queries, cache 2 hits 1 miss]" or "" when nothing was recorded. */
+function describeTimings(timings?: RequestTimings): string {
+  if (!timings) return '';
+  const parts: string[] = [];
+  if (timings.dbQueries > 0) {
+    parts.push(
+      `db ${Math.round(timings.dbMs)}ms in ${timings.dbQueries} queries`,
+    );
+  }
+  if (timings.cacheHits + timings.cacheMisses > 0) {
+    parts.push(`cache ${timings.cacheHits} hits ${timings.cacheMisses} misses`);
+  }
+  return parts.length > 0 ? ` [${parts.join(', ')}]` : '';
 }

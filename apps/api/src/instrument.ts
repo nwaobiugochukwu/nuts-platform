@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nestjs';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import './load-env';
+import { installProcessErrorHandlers } from './bootstrap/process-handlers';
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -83,3 +84,8 @@ if (dsn) {
     release: process.env.SENTRY_RELEASE || process.env.npm_package_version,
   });
 }
+
+// Every program imports this file first, so one call here covers api, worker, jobs and the Temporal worker.
+installProcessErrorHandlers({
+  program: process.env.PM2_APP_NAME ?? process.env.PROCESS_ROLE ?? 'api',
+});
