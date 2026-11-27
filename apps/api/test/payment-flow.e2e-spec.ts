@@ -206,6 +206,26 @@ describe('Payment Flow End-to-End (e2e)', () => {
       $disconnect: jest.fn().mockResolvedValue(undefined),
       $queryRaw: jest.fn().mockResolvedValue([{ id: dbState.cart.id }]),
       $on: jest.fn(),
+      // Discount models used by checkout and settlement. This flow uses no discount code, so
+      // every lookup is empty; they exist so the simulated database matches the real one.
+      discountCode: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      // Admins are notified when an order is confirmed.
+      admin: { findMany: jest.fn().mockResolvedValue([]) },
+      discountCodeUsage: {
+        count: jest.fn().mockResolvedValue(0),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({}),
+        createMany: jest.fn().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       $transaction: jest.fn(async (callback: any) => {
         if (typeof callback === 'function') {
           return callback(mockPrisma);
@@ -652,7 +672,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
       });
 
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/payment/initialize?orderId=${testOrderId}`)
+        .post(`/api/v1/payments/initialize?orderId=${testOrderId}`)
         .set('Authorization', `Bearer ${authAccessToken}`)
         .send({})
         .expect(200);
@@ -739,16 +759,22 @@ describe('Payment Flow End-to-End (e2e)', () => {
       // Verifies vendor wallet credited with 85% merchant earnings
       expect(mockPrisma.vendorWallet.update).toHaveBeenCalled();
 
-      // Verifies transactional outbox event published for downstream notification & email
+      // Verifies the confirmation notifications are stored in the same transaction (outbox),
+      // so a crash after the commit cannot lose them. Today they are `notification.dispatch`
+      // commands; the real `order.confirmed` domain event arrives with the event backbone.
       expect(mockPrisma.outboxEvent.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          aggregateType: 'ORDER',
+          aggregateType: 'order',
           aggregateId: testOrderId,
-          eventType: 'order.confirmed',
+          eventType: 'notification.dispatch',
           status: 'PENDING',
         }),
       });
     });
+
+    it.todo(
+      'publishes an order.confirmed domain event through the outbox in the same transaction (roadmap phase 5)',
+    );
 
     /**
      * PHASE 6: Storefront Self-Healing & Order Inspection
