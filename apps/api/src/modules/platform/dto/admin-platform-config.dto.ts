@@ -1,3 +1,4 @@
+import type { PlatformConfig } from '@api/common/types/platform-config.types';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
@@ -33,7 +34,7 @@ export class UpdatePlatformConfigDto {
   allowVendorRegistrations?: boolean;
 }
 
-export class PlatformConfigResponseDto {
+export class PlatformConfigResponseDto implements PlatformConfig {
   @ApiProperty()
   maintenanceMode!: boolean;
 

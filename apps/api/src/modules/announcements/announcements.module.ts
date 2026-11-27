@@ -3,20 +3,12 @@ import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { AuditModule } from '@api/modules/audit/audit.module';
 import { NotificationsModule } from '@api/modules/notifications/notifications.module';
-import { AdminService } from './admin.service';
-import { AdminAnnouncementsService } from './admin-announcements.service';
 import { AdminAnnouncementsController } from './controllers/admin-announcements.controller';
-import { AdminStaffController } from './controllers/admin-staff.controller';
-import { AdminPlatformController } from './controllers/admin-platform.controller';
+import { AdminAnnouncementsService } from './services/admin-announcements.service';
 
 @Module({
   imports: [PrismaModule, CacheModule, AuditModule, NotificationsModule],
-  controllers: [
-    AdminAnnouncementsController,
-    AdminStaffController,
-    AdminPlatformController,
-  ],
-  providers: [AdminService, AdminAnnouncementsService],
-  exports: [AdminService],
+  controllers: [AdminAnnouncementsController],
+  providers: [AdminAnnouncementsService],
 })
-export class AdminModule {}
+export class AnnouncementsModule {}

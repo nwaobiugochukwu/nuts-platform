@@ -22,7 +22,7 @@ import {
   ScheduleAdminAnnouncementDto,
   UpdateAdminAnnouncementDto,
   type CampaignAnnouncementAudience,
-} from './dto/admin-announcement.dto';
+} from '../dto/admin-announcement.dto';
 import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const DELIVERY_BATCH_SIZE = 200;

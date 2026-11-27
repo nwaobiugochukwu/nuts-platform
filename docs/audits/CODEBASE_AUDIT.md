@@ -103,7 +103,7 @@ This table covers API domain modules plus shared API areas. “Review focus” d
 
 | Folder | Review focus and follow-up |
 | --- | --- |
-| [admin](../../apps/api/src/modules/admin) | Admin-only routes, destructive actions, audit records, and scoping. Verify every sensitive endpoint has both role enforcement and a durable audit entry. |
+| [staff](../../apps/api/src/modules/staff), [platform](../../apps/api/src/modules/platform), [announcements](../../apps/api/src/modules/announcements) | Admin-only routes, destructive actions, audit records, and scoping. Verify every sensitive endpoint has both role enforcement and a durable audit entry. |
 | [analytics](../../apps/api/src/modules/analytics) | Event ingestion, recommendation attribution, buffering, and retention. Monitor ingestion lag and avoid keeping direct identifiers in aggregate metrics longer than required. |
 | [auth](../../apps/api/src/modules/auth) | OTP, refresh rotation, role sessions, Google login, cookies, and server-side token use. Keep cookie flags, CSRF, revocation, and all portal login flows aligned. |
 | [cart](../../apps/api/src/modules/cart) | Cart mutation and cache invalidation. Checkout remains the authoritative stock/price validation boundary; do not trust client totals. |

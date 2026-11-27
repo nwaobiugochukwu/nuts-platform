@@ -6,10 +6,8 @@ import {
 } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import type { PlatformConfigResponseDto } from '@api/modules/admin/dto/admin-platform-config.dto';
-
-/** Cache key must match the constant in AdminService. */
-const PLATFORM_CONFIG_CACHE_KEY = 'platform:config:governance';
+import type { PlatformConfig } from '@api/common/types/platform-config.types';
+import { PLATFORM_CONFIG_CACHE_KEY } from '@api/common/constants/platform-config.constants';
 
 /**
  * Routes that remain reachable even when maintenance mode is active.
@@ -49,11 +47,9 @@ export class MaintenanceModeMiddleware implements NestMiddleware {
       return next();
     }
 
-    let config: PlatformConfigResponseDto | undefined;
+    let config: PlatformConfig | undefined;
     try {
-      config = await this.cache.get<PlatformConfigResponseDto>(
-        PLATFORM_CONFIG_CACHE_KEY,
-      );
+      config = await this.cache.get<PlatformConfig>(PLATFORM_CONFIG_CACHE_KEY);
     } catch (error) {
       // Cache errors must never take the platform down.
       // Fail open: allow the request through and log a warning.
@@ -67,7 +63,7 @@ export class MaintenanceModeMiddleware implements NestMiddleware {
 
     if (config?.maintenanceMode) {
       const legacyConfig = config as
-        | (PlatformConfigResponseDto & { announcement?: string | null })
+        | (PlatformConfig & { announcement?: string | null })
         | undefined;
       const maintenanceMessage =
         config.maintenanceMessage ??

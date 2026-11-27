@@ -8,9 +8,9 @@ import {
 import type { Request } from 'express';
 import { ROLE } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import type { PlatformConfigResponseDto } from '@api/modules/admin/dto/admin-platform-config.dto';
+import type { PlatformConfig } from '@api/common/types/platform-config.types';
+import { PLATFORM_CONFIG_CACHE_KEY } from '@api/common/constants/platform-config.constants';
 
-const PLATFORM_CONFIG_CACHE_KEY = 'platform:config:governance';
 const MAINTENANCE_BYPASS_PREFIXES: readonly string[] = [
   '/api/v1/admin/auth',
   '/api/v1/auth/admin',
@@ -43,11 +43,9 @@ export class MaintenanceModeGuard implements CanActivate {
     // continue using the admin app, including shared APIs such as notifications.
     if (req.user?.role === ROLE.ADMIN || isBypassed(req)) return true;
 
-    let config: PlatformConfigResponseDto | undefined;
+    let config: PlatformConfig | undefined;
     try {
-      config = await this.cache.get<PlatformConfigResponseDto>(
-        PLATFORM_CONFIG_CACHE_KEY,
-      );
+      config = await this.cache.get<PlatformConfig>(PLATFORM_CONFIG_CACHE_KEY);
     } catch (error) {
       // Keep the maintenance control from becoming a platform-wide outage if
       // Redis is unavailable; the cache service itself also fails open.
@@ -61,7 +59,7 @@ export class MaintenanceModeGuard implements CanActivate {
 
     if (!config?.maintenanceMode) return true;
 
-    const legacyConfig = config as PlatformConfigResponseDto & {
+    const legacyConfig = config as PlatformConfig & {
       announcement?: string | null;
     };
     throw new ServiceUnavailableException({

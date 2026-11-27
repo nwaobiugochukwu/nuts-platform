@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { AuthCookiesModule } from '@api/modules/auth/auth-cookies.module';
+import { AuthCookiesModule } from '@api/modules/auth/cookies/auth-cookie.module';
 import { AuthModule } from '@api/modules/auth/auth.module';
 import { ReferralsModule } from '@api/modules/referrals/referral.module';
 import { UsersController } from './controllers/users.controller';

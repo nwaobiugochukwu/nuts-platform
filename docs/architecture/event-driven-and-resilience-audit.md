@@ -96,6 +96,7 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | H17 | The weekly vendor summary reports revenue as unit price times quantity for every order that is not cancelled (pending and refunded included) and uses floating-point numbers for money | `vendor-summary.cron.ts` | Medium; confirm the intended definition against the analytics docs |
 | H18 | Wishlist price and restock alerts scan every saved item every 15 minutes (batches of 300), work that grows with the wishlist table instead of with price changes | `wishlist-alerts.cron.ts` | Medium; becomes `product.price_changed` and `product.restocked` consumers (catalog, section 5) |
 | H19 | The end-to-end suite that boots the whole application was never run in CI and had drifted (missing models in its simulated database, a renamed route, an assertion for an event the code does not publish). Regenerating the lockfile also moved `class-validator` where Nest cannot load it, so the API would not have started; only this suite catches that | `apps/api/test`, a crash-looping dev container | Fixed: suite repaired, class-validator placement fixed, a Backend End-to-End Tests job added to CI |
+| H20 | Platform switches (maintenance mode, whether registrations are open) are stored only in the cache, with a 24-hour expiry (`platform.service.ts`). After 24 hours or a Redis flush they silently reset to the defaults (maintenance off, registrations on), and the value is also lost on a Redis outage | `PlatformService.getPlatformConfig` and `updatePlatformConfig` write only `cache.set(..., 86400)` | High; persist in the database (a settings row), keep the cache as a read-through copy |
 
 ### Test coverage baseline (2026-11-27, after phase 2)
 
@@ -254,7 +255,7 @@ Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cooki
 | `common/events` (event names and payloads) | `infrastructure/messaging/events/` (the `audit.event` message contract, `audit-event.util.ts`, lives there too because the transaction runner and the dead-letter tool use it) |
 | `modules/vendors/vendor-auth.service.ts`, `modules/auth/admin-auth.service.ts` | `modules/auth/services/` (`customer-auth`, `vendor-auth`, `admin-auth`) |
 | `modules/vendors/admin-vendors.service.ts` | `modules/vendors/services/` |
-| `modules/security/services/token.service.ts`, `account-lock.service.ts` | `modules/auth/services/` |
+| `modules/security/services/token.service.ts`, `account-lock.service.ts` | stay in `modules/security` (decision in step 5: they are security primitives that auth builds on; moving them would make `security` depend on `auth`) |
 | `modules/admin/*` | `modules/announcements`, `modules/platform`, `modules/staff` |
 | `auth-cookies.module.ts` and `cookies/auth-cookie.module.ts` | one cookie module under `modules/auth/cookies/` |
 | `src/types`, `common/interfaces` | `common/types` |

@@ -6,7 +6,7 @@ import { Roles } from '@api/common/decorators/role.decorator';
 import {} from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import {} from '@api/common/utils/request.util';
-import { AdminService } from '../admin.service';
+import { PlatformService } from '../services/platform.service';
 import {
   PlatformConfigResponseDto,
   UpdatePlatformConfigDto,
@@ -18,7 +18,7 @@ import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 @Roles(ROLE.ADMIN)
 @Controller('admin/platform')
 export class AdminPlatformController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(private readonly platformService: PlatformService) {}
 
   @Get('config')
   @ApiOperation({
@@ -26,7 +26,7 @@ export class AdminPlatformController {
   })
   @Message('Platform configuration retrieved successfully')
   async getPlatformConfig(): Promise<PlatformConfigResponseDto> {
-    return this.adminService.getPlatformConfig();
+    return this.platformService.getPlatformConfig();
   }
 
   @Audit({ action: 'PLATFORM_CONFIG_UPDATED', entity: 'PlatformConfig' })
@@ -38,13 +38,13 @@ export class AdminPlatformController {
   async updatePlatformConfig(
     @Body() dto: UpdatePlatformConfigDto,
   ): Promise<PlatformConfigResponseDto> {
-    return this.adminService.updatePlatformConfig(dto);
+    return this.platformService.updatePlatformConfig(dto);
   }
 
   @Get('overview')
   @ApiOperation({ summary: 'Get high-level platform system metric counts' })
   @Message('System overview retrieved successfully')
   async getSystemOverview() {
-    return this.adminService.getSystemOverview();
+    return this.platformService.getSystemOverview();
   }
 }

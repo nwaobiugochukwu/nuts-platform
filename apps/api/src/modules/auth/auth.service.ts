@@ -26,7 +26,10 @@ import {
   BCRYPT_COST_FACTOR,
   UNKNOWN_ACCOUNT_PASSWORD_HASH,
 } from '@api/common/constants/bcrypt.constants';
-import { USER_AUTH_SELECT, USER_LOGIN_SELECT } from './auth.selects';
+import {
+  USER_AUTH_SELECT,
+  USER_LOGIN_SELECT,
+} from './constants/auth-selects.constants';
 import type { AuthSession } from './types/auth.types';
 import { RefreshSessionService } from './sessions/refresh-session.service';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';

@@ -20,11 +20,11 @@ import {
 } from '@api/common/constants/bcrypt.constants';
 import { generateSlug } from '@api/common/utils/slug.util';
 
-import { CreateVendorDto } from './dto/create-vendor.dto';
-import { VendorLoginDto } from './dto/update-vendor.dto';
-import { VendorGoogleAuthDto } from './dto/vendor-google-auth.dto';
-import { VendorResetPasswordDto } from './dto/vendor-reset-password.dto';
-import { VendorProfileDto } from './dto/vendor-response.dto';
+import { CreateVendorDto } from '../../vendors/dto/create-vendor.dto';
+import { VendorLoginDto } from '../../vendors/dto/update-vendor.dto';
+import { VendorGoogleAuthDto } from '../../vendors/dto/vendor-google-auth.dto';
+import { VendorResetPasswordDto } from '../../vendors/dto/vendor-reset-password.dto';
+import { VendorProfileDto } from '../../vendors/dto/vendor-response.dto';
 import type { AuthTokens } from '@api/modules/auth/types/auth.types';
 import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
