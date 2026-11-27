@@ -7,6 +7,7 @@ import { Cron, Interval } from '@nestjs/schedule';
 import { OutboxStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
+import { isOutboxExhausted, outboxRetryDelayMs } from './outbox-backoff.util';
 import {
   getErrorCode,
   getErrorMessage,
@@ -19,7 +20,7 @@ export class OutboxRelay {
   private warnedMissingTable = false;
   private warnedBrokerUnavailable = false;
   private readonly staleClaimMs = 5 * 60 * 1000;
-  private claimedIds: string[] = [];
+  private claimed = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -73,9 +74,12 @@ export class OutboxRelay {
         >`
           SELECT id, "eventType", payload, attempts
           FROM "outbox_events"
-          WHERE attempts < 5
-            AND (
-              status IN ('PENDING', 'FAILED')
+          WHERE (
+              status = 'PENDING'
+              OR (
+                status = 'FAILED'
+                AND (next_attempt_at IS NULL OR next_attempt_at <= now())
+              )
               OR (status = 'PROCESSING' AND "updatedAt" < ${staleBefore})
             )
           ORDER BY "createdAt" ASC
@@ -90,7 +94,9 @@ export class OutboxRelay {
         }
         return events;
       });
-      this.claimedIds = pendingEvents.map((event) => event.id);
+      this.claimed = new Map(
+        pendingEvents.map((event) => [event.id, event.attempts]),
+      );
 
       if (pendingEvents.length === 0) {
         return;
@@ -134,38 +140,24 @@ export class OutboxRelay {
         });
       }
 
-      // 4. Batch settle failed publishes with attempt increment
-      if (failedIds.length > 0) {
-        await this.prisma.outboxEvent.updateMany({
-          where: { id: { in: failedIds } },
-          data: {
-            status: OutboxStatus.FAILED,
-            attempts: { increment: 1 },
-            lastError: 'RabbitMQ publish failed or disconnected',
-          },
-        });
-      }
+      // 4. Failed publishes: back off, or give up and mark DEAD
+      await this.settleFailures(
+        failedIds,
+        'RabbitMQ publish failed or disconnected',
+      );
     } catch (err: unknown) {
       const errorMessage = getErrorMessage(err);
-      if (this.claimedIds.length > 0) {
-        await this.prisma.outboxEvent
-          .updateMany({
-            where: {
-              id: { in: this.claimedIds },
-              status: OutboxStatus.PROCESSING,
-            },
-            data: {
-              status: OutboxStatus.FAILED,
-              attempts: { increment: 1 },
-              lastError: errorMessage.slice(0, 1000),
-            },
-          })
-          .catch((settleError: unknown) => {
-            this.logger.error(
-              `Failed settling claimed outbox rows: ${getErrorMessage(settleError)}`,
-            );
-          });
-        this.claimedIds = [];
+      if (this.claimed.size > 0) {
+        await this.settleFailures(
+          [...this.claimed.keys()],
+          errorMessage.slice(0, 1000),
+          true,
+        ).catch((settleError: unknown) => {
+          this.logger.error(
+            `Failed settling claimed outbox rows: ${getErrorMessage(settleError)}`,
+          );
+        });
+        this.claimed = new Map();
       }
       if (
         getErrorCode(err) === 'P2021' ||
@@ -182,9 +174,47 @@ export class OutboxRelay {
       }
       this.logger.error(`Error in outbox relay execution: ${errorMessage}`);
     } finally {
-      this.claimedIds = [];
+      this.claimed = new Map();
       this.isProcessing = false;
     }
+  }
+
+  /**
+   * Records a failed publish for each id: the next attempt waits an exponentially growing,
+   * jittered delay; after the last allowed attempt the row becomes DEAD (alerted on and
+   * replayable with `npm run outbox -- replay`). `onlyProcessing` guards the crash path so a
+   * row another relay already settled is left alone.
+   */
+  private async settleFailures(
+    ids: string[],
+    lastError: string,
+    onlyProcessing = false,
+  ): Promise<void> {
+    await Promise.all(
+      ids.map(async (id) => {
+        const attemptsMade = (this.claimed.get(id) ?? 0) + 1;
+        const dead = isOutboxExhausted(attemptsMade);
+        await this.prisma.outboxEvent.updateMany({
+          where: {
+            id,
+            ...(onlyProcessing ? { status: OutboxStatus.PROCESSING } : {}),
+          },
+          data: {
+            status: dead ? OutboxStatus.DEAD : OutboxStatus.FAILED,
+            attempts: { increment: 1 },
+            lastError,
+            nextAttemptAt: dead
+              ? null
+              : new Date(Date.now() + outboxRetryDelayMs(attemptsMade)),
+          },
+        });
+        if (dead) {
+          this.logger.error(
+            `Outbox event ${id} is DEAD after ${attemptsMade} attempts: ${lastError}`,
+          );
+        }
+      }),
+    );
   }
 
   @Cron('0 0 3 * * *', {
@@ -242,10 +272,7 @@ export class OutboxRelay {
               status: OutboxStatus.PROCESSING,
               updatedAt: { lt: new Date(now - this.staleClaimMs) },
             },
-            {
-              status: OutboxStatus.FAILED,
-              attempts: { gte: 5 },
-            },
+            { status: OutboxStatus.DEAD },
           ],
         },
         orderBy: { createdAt: 'asc' },

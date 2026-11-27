@@ -136,9 +136,9 @@ Read-only audit of fault isolation, independent scaling, database connections, m
 
 | ID | Item | Status |
 |---|---|---|
-| 4.1 | Outbox: `next_attempt_at` with exponential backoff and jitter; terminal `DEAD` status; replay for dead rows; alert on dead rows [R3] | todo |
-| 4.2 | Outbox: per-aggregate ordering, or declare every consumer order-tolerant [R4] | todo |
-| 4.3 | One owner for the relay and the wake-on-commit design written down [R18] | todo |
+| 4.1 | Outbox: `next_attempt_at` with exponential backoff and jitter; terminal `DEAD` status; replay for dead rows; alert on dead rows [R3] | done: 5 s doubling to 15 min with jitter, `DEAD` after 8 attempts, `npm run outbox -- list\|replay`, metric `nuts_outbox_dead_events` and alert `OutboxDeadEvents` |
+| 4.2 | Outbox: per-aggregate ordering, or declare every consumer order-tolerant [R4] | done: declared order-tolerant, [ADR 0006](adr/0006-outbox-retry-ordering-and-relay-ownership.md) |
+| 4.3 | One owner for the relay and the wake-on-commit design written down [R18]. Also wrap every cron in the distributed lock (isolation audit I2) | owner and wake design written down (ADR 0006); cron locks next slice |
 | 4.4 | Consumers: retry queues with delays (10 s, 1 min, 10 min), an attempt counter header, dead-letter after the last attempt [R6] | todo |
 | 4.5 | Classify transient versus permanent errors; permanent go straight to the dead-letter queue [R7] | todo |
 | 4.6 | Idempotent consumers: processed-event record per consumer (the email consumer first) [R8] | todo |

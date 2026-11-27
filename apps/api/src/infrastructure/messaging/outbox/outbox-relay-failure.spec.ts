@@ -1,4 +1,5 @@
 import { OutboxStatus } from '@prisma/client';
+import { OUTBOX_MAX_ATTEMPTS } from './outbox-backoff.util';
 import { OutboxRelay } from './outbox.relay';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -42,12 +43,13 @@ describe('OutboxRelay under failure', () => {
   const settled = (status: OutboxStatus) =>
     settleCalls().filter((call: any) => call.data.status === status);
 
-  it('claims with a row lock that skips rows another relay holds, and never re-claims exhausted rows', async () => {
+  it('claims with a row lock that skips rows another relay holds, and waits for a failed row retry time', async () => {
     await relay.processOutboxEvents();
 
     const sql = (prisma.$queryRaw.mock.calls[0][0] as string[]).join('?');
     expect(sql).toContain('FOR UPDATE SKIP LOCKED');
-    expect(sql).toContain('attempts < 5');
+    expect(sql).not.toContain('attempts < 5');
+    expect(sql).toContain('next_attempt_at <= now()');
     expect(sql).toContain('LIMIT 50');
   });
 
@@ -64,7 +66,9 @@ describe('OutboxRelay under failure', () => {
       'a',
       'c',
     ]);
-    expect(settled(OutboxStatus.FAILED)[0].where.id.in).toEqual(['b']);
+    expect(settled(OutboxStatus.FAILED).map((c: any) => c.where.id)).toEqual([
+      'b',
+    ]);
     expect(settled(OutboxStatus.FAILED)[0].data.attempts).toEqual({
       increment: 1,
     });
@@ -76,13 +80,13 @@ describe('OutboxRelay under failure', () => {
 
     await expect(relay.processOutboxEvents()).resolves.toBeUndefined();
 
-    const failed = settled(OutboxStatus.FAILED)[0];
-    expect(failed.where).toEqual({
-      id: { in: ['a', 'b'] },
-      status: OutboxStatus.PROCESSING,
-    });
-    expect(failed.data.lastError).toBe('channel closed');
-    expect(failed.data.attempts).toEqual({ increment: 1 });
+    const failed = settled(OutboxStatus.FAILED);
+    expect(failed.map((c: any) => c.where)).toEqual([
+      { id: 'a', status: OutboxStatus.PROCESSING },
+      { id: 'b', status: OutboxStatus.PROCESSING },
+    ]);
+    expect(failed[0].data.lastError).toBe('channel closed');
+    expect(failed[0].data.attempts).toEqual({ increment: 1 });
 
     // The next run is not blocked by the failed one.
     prisma.$queryRaw.mockResolvedValue([]);
@@ -100,7 +104,7 @@ describe('OutboxRelay under failure', () => {
     await relay.processOutboxEvents();
 
     expect(rabbit.publish).toHaveBeenCalledTimes(1);
-    expect(settled(OutboxStatus.FAILED)[0].where.id.in).toEqual(['a']);
+    expect(settled(OutboxStatus.FAILED)[0].where.id).toBe('a');
   });
 
   it('runs one batch at a time even if woken repeatedly', async () => {
@@ -216,20 +220,37 @@ describe('OutboxRelay under failure', () => {
     });
   });
 
-  // KNOWN DEFECT (audit R3): a refused publish is retried on the very next 10-second tick, so all
-  // five attempts are spent in under a minute, and a row with five attempts is never retried again.
-  // The correct behaviour is to schedule the retry later with backoff. Marked `failing` until fixed.
-  it.failing(
-    'schedules a refused event for a later retry instead of the next tick',
-    async () => {
-      prisma.$queryRaw.mockResolvedValue([event('a', 1)]);
-      rabbit.publish.mockResolvedValue(false);
+  it('schedules a refused event for a later retry instead of the next tick', async () => {
+    prisma.$queryRaw.mockResolvedValue([event('a', 1)]);
+    rabbit.publish.mockResolvedValue(false);
 
-      await relay.processOutboxEvents();
+    await relay.processOutboxEvents();
 
-      const failed = settled(OutboxStatus.FAILED)[0];
-      expect(failed.data.nextAttemptAt).toBeInstanceOf(Date);
-      expect(failed.data.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
-    },
-  );
+    const failed = settled(OutboxStatus.FAILED)[0];
+    expect(failed.data.nextAttemptAt).toBeInstanceOf(Date);
+    expect(failed.data.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('gives up after the last allowed attempt: the row becomes DEAD with no retry time', async () => {
+    prisma.$queryRaw.mockResolvedValue([event('a', OUTBOX_MAX_ATTEMPTS - 1)]);
+    rabbit.publish.mockResolvedValue(false);
+
+    await relay.processOutboxEvents();
+
+    expect(settled(OutboxStatus.FAILED)).toHaveLength(0);
+    const dead = settled(OutboxStatus.DEAD)[0];
+    expect(dead.where).toEqual({ id: 'a' });
+    expect(dead.data.nextAttemptAt).toBeNull();
+    expect((relay as any).logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('DEAD'),
+    );
+  });
+
+  it('the stalled-event alert lists DEAD rows, not rows still retrying', async () => {
+    await relay.reportStalledEvents();
+
+    const where = prisma.outboxEvent.findMany.mock.calls[0][0].where;
+    expect(JSON.stringify(where)).toContain(OutboxStatus.DEAD);
+    expect(JSON.stringify(where)).not.toContain('gte');
+  });
 });

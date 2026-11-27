@@ -1,4 +1,4 @@
-import { OutboxStatus } from '@prisma/client';
+﻿import { OutboxStatus } from '@prisma/client';
 import { OutboxRelay } from './outbox.relay';
 
 describe('OutboxRelay', () => {
@@ -117,10 +117,11 @@ describe('OutboxRelay', () => {
 
     expect(mockPrisma.outboxEvent.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: { in: ['evt-2'] } },
+        where: { id: 'evt-2' },
         data: expect.objectContaining({
           status: OutboxStatus.FAILED,
           attempts: { increment: 1 },
+          nextAttemptAt: expect.any(Date),
         }),
       }),
     );

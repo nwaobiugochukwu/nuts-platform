@@ -1263,6 +1263,7 @@ enum OutboxStatus {
   PROCESSING
   PUBLISHED
   FAILED
+  DEAD
 }
 
 model OutboxEvent {
@@ -1275,10 +1276,12 @@ model OutboxEvent {
   attempts      Int          @default(0)
   lastError     String?
   processedAt   DateTime?
+  nextAttemptAt DateTime?    @map("next_attempt_at")
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
   @@index([status, attempts, createdAt])
+  @@index([status, nextAttemptAt])
   @@index([status, createdAt])
   @@index([status, processedAt])
   @@index([aggregateType, aggregateId])
