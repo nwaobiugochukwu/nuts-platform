@@ -1,21 +1,16 @@
 import { fakeCronRedis } from '@api/infrastructure/cache/cron-lock-harness-spec';
-import { PaymentsService } from './payments.service';
+import { PaymentRefundsService } from './payment-refunds.service';
 
-describe('PaymentsService.reconcilePendingRefunds lock', () => {
+describe('PaymentRefundsService.reconcilePendingRefunds lock', () => {
   const build = (redis: unknown) => {
     const prisma = {
       paymentRefund: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new PaymentsService(
+    const service = new PaymentRefundsService(
       prisma as never,
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      undefined,
       redis as never,
     );
     return { service, prisma };

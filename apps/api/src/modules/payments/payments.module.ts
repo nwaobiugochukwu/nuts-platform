@@ -10,6 +10,7 @@ import {
 } from './controllers/payments.controller';
 import { OrderConfirmationEmailConsumer } from './consumers/order-confirmation-email.consumer';
 import { PaymentWebhookConsumer } from './consumers/payment-webhook.consumer';
+import { PaymentRefundsService } from './services/payment-refunds.service';
 import { PaymentsService } from './services/payments.service';
 import { PaystackClientService } from './services/paystack-client.service';
 import { WebhookInboxService } from './services/webhook-inbox.service';
@@ -25,6 +26,7 @@ import { WebhookInboxService } from './services/webhook-inbox.service';
   controllers: [PaymentsController, OrderPaymentCanonicalController],
   providers: [
     PaymentsService,
+    PaymentRefundsService,
     PaystackClientService,
     WebhookInboxService,
     PaymentWebhookConsumer,

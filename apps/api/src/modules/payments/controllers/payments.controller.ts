@@ -28,6 +28,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { Public } from '@api/common/decorators/public.decorator';
+import { PaymentRefundsService } from '../services/payment-refunds.service';
 import { PaymentsService } from '../services/payments.service';
 
 import { RefundPaymentDto } from '../dto';
@@ -45,7 +46,10 @@ import { Roles } from '@api/common/decorators/role.decorator';
 @ApiTags('PAYMENTS')
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly refunds: PaymentRefundsService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // INITIALIZE
@@ -230,7 +234,7 @@ export class PaymentsController {
     @Body()
     dto: RefundPaymentDto,
   ): Promise<PaymentResponseDto> {
-    return this.paymentsService.refund(dto.paymentId, adminId, dto.amount);
+    return this.refunds.refund(dto.paymentId, adminId, dto.amount);
   }
 }
 
