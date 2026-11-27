@@ -120,6 +120,22 @@ export class MetricsService {
         }
       },
     });
+    const dead = new Gauge({
+      name: 'nuts_outbox_dead_events',
+      help: 'Outbox events the relay gave up on (status DEAD); replay with `npm run outbox -- replay`',
+      registers,
+      collect: async () => {
+        try {
+          dead.set(
+            await this.prisma.outboxEvent.count({
+              where: { status: OutboxStatus.DEAD },
+            }),
+          );
+        } catch (error) {
+          this.logSoft('outbox dead count', error);
+        }
+      },
+    });
     const oldest = new Gauge({
       name: 'nuts_outbox_oldest_pending_age_seconds',
       help: 'Age of the oldest pending outbox event (0 when none); the best stuck-pipeline signal',

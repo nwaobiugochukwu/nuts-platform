@@ -44,6 +44,14 @@ groups:
           summary: The oldest pending outbox event is older than 2 minutes
           description: Events are not reaching the broker. Check the broker connection and the worker role.
 
+      - alert: OutboxDeadEvents
+        expr: max(nuts_outbox_dead_events) > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: The outbox relay gave up on one or more events
+          description: Each dead row is a business event that never reached the broker. List them with `npm run outbox -- list`, fix the cause, then `npm run outbox -- replay`.
+
       - alert: BrokerDown
         expr: min(nuts_rabbitmq_up) == 0
         for: 2m

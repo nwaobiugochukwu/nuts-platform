@@ -58,6 +58,7 @@
     "temporal:up": "docker compose --profile dev up -d temporal",
     "temporal:down": "docker compose --profile dev stop temporal",
     "dlq": "npm run --prefix apps/api dlq --",
+    "outbox": "npm run --prefix apps/api outbox --",
     "verify:deploy": "sh scripts/verify-deploy.sh",
     "staging": "docker compose --profile staging up -d --build",
     "staging:down": "docker compose --profile staging down",
