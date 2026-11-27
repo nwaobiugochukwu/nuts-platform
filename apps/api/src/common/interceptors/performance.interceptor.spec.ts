@@ -1,5 +1,10 @@
 import { ExecutionContext, CallHandler } from '@nestjs/common';
 import { of, throwError } from 'rxjs';
+import {
+  recordCacheLookup,
+  recordDbQuery,
+  runWithRequestId,
+} from '@api/common/request-context/request-context';
 import { PerformanceInterceptor } from './performance.interceptor';
 
 describe('PerformanceInterceptor (Slow ms & Server-Timing)', () => {
@@ -61,6 +66,39 @@ describe('PerformanceInterceptor (Slow ms & Server-Timing)', () => {
         );
         done();
       },
+    });
+  });
+
+  /*
+   * [Performance / Where the time went]
+   * The Server-Timing header and the slow-request log carry the database and cache work
+   * recorded during the request, so a slow page can be explained from one log line.
+   */
+  it('adds database time to Server-Timing and cache counts to the slow log', (done) => {
+    runWithRequestId('req-timings-1', () => {
+      recordDbQuery(40);
+      recordDbQuery(60);
+      recordCacheLookup(true);
+      recordCacheLookup(false);
+      recordCacheLookup(false);
+      const nowSpy = jest
+        .spyOn(performance, 'now')
+        .mockReturnValueOnce(0)
+        .mockReturnValueOnce(300);
+
+      interceptor.intercept(mockContext, mockCallHandler).subscribe({
+        complete: () => {
+          nowSpy.mockRestore();
+          expect(mockResponse.setHeader).toHaveBeenCalledWith(
+            'Server-Timing',
+            'app;dur=300, db;dur=100;desc="2 queries"',
+          );
+          expect(loggerWarnSpy).toHaveBeenCalledWith(
+            'SLOW REQUEST (>199ms): GET /api/v1/products - 300ms [db 100ms in 2 queries, cache 1 hits 2 misses]',
+          );
+          done();
+        },
+      });
     });
   });
 

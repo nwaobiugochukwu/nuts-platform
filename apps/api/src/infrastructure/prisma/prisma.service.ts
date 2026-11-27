@@ -1,3 +1,4 @@
+import { recordDbQuery } from '@api/common/request-context/request-context';
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -16,6 +17,8 @@ export class PrismaService
    * creates unnecessary I/O and makes useful database problems harder to see.
    */
   private readonly slowQueryMs: number;
+  /** The pool size this process was configured with, for the start-up log only. */
+  private readonly poolMaxForLog: number;
 
   /**
    * Prevents destructive database-cleanup helpers from being executed
@@ -185,6 +188,7 @@ export class PrismaService
      * monitoring rather than using application logs as the only source
      * of database performance information.
      */
+    this.poolMaxForLog = poolMax;
     this.slowQueryMs = getNumber('PRISMA_SLOW_QUERY_MS', 1_000);
 
     /**
@@ -255,6 +259,7 @@ export class PrismaService
      * values.
      */
     this.$on('query' as never, (event: Prisma.QueryEvent) => {
+      recordDbQuery(event.duration);
       if (event.duration < this.slowQueryMs) {
         return;
       }
@@ -291,7 +296,7 @@ export class PrismaService
 
     this.logger.info(
       {
-        poolMax: this.getPoolConfigurationForLog(),
+        poolMax: this.poolMaxForLog,
         slowQueryThresholdMs: this.slowQueryMs,
         heartbeatEnabled: this.heartbeatMs > 0,
       },
@@ -324,24 +329,6 @@ export class PrismaService
         'Database heartbeat failed',
       );
     }
-  }
-
-  /**
-   * Returns only non-sensitive database-pool information for startup logs.
-   *
-   * The DATABASE_URL is intentionally never logged because it can contain
-   * database credentials.
-   */
-  private getPoolConfigurationForLog(): number {
-    /**
-     * PrismaPg does not expose its pool configuration through PrismaClient,
-     * so this method exists only to keep the startup log intentionally
-     * limited. The actual value is not required by the application.
-     *
-     * Returning 0 here would make the log misleading, so this method is
-     * intentionally kept private and the caller can be simplified if desired.
-     */
-    return 0;
   }
 
   async onModuleDestroy(): Promise<void> {

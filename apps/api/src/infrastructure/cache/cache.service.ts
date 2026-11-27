@@ -1,3 +1,4 @@
+import { recordCacheLookup } from '@api/common/request-context/request-context';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import Redis from 'ioredis';
@@ -178,6 +179,12 @@ export class CacheService {
    * the database remains the source of truth.
    */
   async get<T>(key: string): Promise<T | undefined> {
+    const value = await this.lookup<T>(key);
+    recordCacheLookup(value !== undefined);
+    return value;
+  }
+
+  private async lookup<T>(key: string): Promise<T | undefined> {
     const local = this.localCache.get(key);
     if (local) {
       if (local.expiresAt > Date.now()) {
