@@ -11,6 +11,7 @@ import {
 import { OrderConfirmationEmailConsumer } from './consumers/order-confirmation-email.consumer';
 import { PaymentWebhookConsumer } from './consumers/payment-webhook.consumer';
 import { PaymentsService } from './services/payments.service';
+import { PaystackClientService } from './services/paystack-client.service';
 import { WebhookInboxService } from './services/webhook-inbox.service';
 
 @Module({
@@ -24,6 +25,7 @@ import { WebhookInboxService } from './services/webhook-inbox.service';
   controllers: [PaymentsController, OrderPaymentCanonicalController],
   providers: [
     PaymentsService,
+    PaystackClientService,
     WebhookInboxService,
     PaymentWebhookConsumer,
     OrderConfirmationEmailConsumer,
