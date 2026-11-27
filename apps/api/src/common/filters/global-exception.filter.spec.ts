@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   HttpStatus,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -38,6 +39,42 @@ describe('GlobalExceptionFilter', () => {
     filter = new GlobalExceptionFilter({
       get: jest.fn(),
     } as unknown as ConfigService);
+  });
+
+  it('keeps the message of an error built from plain text, instead of reporting "Internal server error"', () => {
+    // The rate limiter and some libraries build their errors this way.
+    filter.catch(
+      new HttpException(
+        'Too Many Requests from this address',
+        HttpStatus.TOO_MANY_REQUESTS,
+      ),
+      mockArgumentsHost,
+    );
+
+    expect(mockResponse.status).toHaveBeenCalledWith(
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Too Many Requests from this address',
+        error: expect.objectContaining({ code: 'RATE_LIMITED' }),
+      }),
+    );
+  });
+
+  it('still hides the detail of a plain-text 5xx in production', () => {
+    const production = new GlobalExceptionFilter({
+      get: jest.fn().mockReturnValue('production'),
+    } as unknown as ConfigService);
+
+    production.catch(
+      new HttpException('database password is hunter2', HttpStatus.BAD_GATEWAY),
+      mockArgumentsHost,
+    );
+
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Internal server error' }),
+    );
   });
 
   it('formats standard HttpException correctly', () => {

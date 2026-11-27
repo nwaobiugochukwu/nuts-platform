@@ -173,8 +173,14 @@ async function flushRecommendationImpressions() {
 
 /**
  * Marks every personalised recommendation shelf stale after a behavioural
- * signal has been durably accepted by the API. Active shelves (home, search
- * drawer, catalog) refetch immediately; inactive ones refetch on next mount.
+ * signal has been durably accepted by the API. Shelves refetch the next time
+ * they are shown (or the tab is refocused after they went stale); a shelf that
+ * is on screen right now is NOT refetched.
+ *
+ * Why not refetch the visible ones at once: the API rebuilds a shopper's feed
+ * a few seconds after their signals (one rebuild per burst, in the worker), so
+ * an immediate refetch only receives the old feed again, and every signal
+ * would send a duplicate batch of shelf requests.
  * The daily-stable marketplace mix and product-related lists are left alone.
  */
 export function refreshPersonalizedRecommendations(): void {
@@ -185,10 +191,8 @@ export function refreshPersonalizedRecommendations(): void {
         queryKey[0] === "recommendations" &&
         queryKey[1] !== "marketplace-mix" &&
         queryKey[1] !== "related",
-      refetchType: "active",
+      refetchType: "none",
     },
-    // A shelf that is already loading will pick up the signal on its own
-    // request; restarting it would just send the same request twice.
     { cancelRefetch: false },
   );
 }

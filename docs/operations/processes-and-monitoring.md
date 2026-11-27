@@ -64,3 +64,13 @@ Every request gets an id (`X-Request-Id`). It is carried through the outbox into
 ## Dashboard
 
 [`ops/grafana/nuts-overview.json`](../../ops/grafana/nuts-overview.json): health at a glance, queues and outbox, API traffic and latency, transaction timing, process memory, event-loop lag and CPU. Import it into Grafana and choose your Prometheus data source. HTTP metrics are recorded for every response, including those rejected by middleware or guards (401, 403, 429), under the route label `unmatched` when no route matched.
+
+## Rate limits
+
+The API limits calls per caller address: 100 per minute overall, 10 per minute for session refresh, and 5 per minute for sign-in, registration and one-time codes. A caller over the limit gets HTTP 429 with the message "Too many requests. Please wait N seconds and try again.", the error code `RATE_LIMITED`, and a `Retry-After` header of the seconds really left (never 0). The web app reads it and pauses session refreshes for that long instead of retrying.
+
+The limit only works if the API sees each visitor's real address:
+
+- **Production with nginx:** nginx sends `/api/` straight to the API with `X-Forwarded-For`, so each visitor has their own limit.
+- **Render:** the platform's edge adds `X-Forwarded-For` to the web service, and the web service's `/api` rewrite passes incoming headers on to the API. Check the API log of a rejected request (`Request rejected`) shows different `ip` values for different people.
+- **Local Docker (`npm run dev`):** nothing sits in front of the web server, so the API sees the web container's address for every browser call and all your tabs share one limit. Expect to reach the refresh limit sooner while testing; it is not what customers see.

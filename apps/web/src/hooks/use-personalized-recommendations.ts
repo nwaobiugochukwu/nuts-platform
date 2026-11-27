@@ -52,6 +52,15 @@ function selectStarterPicks(
   return selected;
 }
 
+/**
+ * How long a personalised shelf counts as fresh. Every shelf here refetches when the browser window
+ * regains focus and its data is stale; with the old 30 s to 2 min windows, each alt-tab (or
+ * devtools focus change) after a minute re-sent every shelf, which looked like duplicate requests.
+ * Behavioural signals still mark the shelves stale (see refreshPersonalizedRecommendations), so
+ * they refresh the next time they are shown; this window only covers "came back later".
+ */
+const SHELF_STALE_MS = 5 * 60_000;
+
 export function useForYouRecommendations(enabled = true) {
   const userId = useAuthStore((state) => state.user?.id);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -78,7 +87,7 @@ export function useForYouRecommendations(enabled = true) {
     // timer. The timer only covers "came back to the tab a while later", so it
     // must be long enough that merely focusing the window never re-sends
     // requests that are still current.
-    staleTime: 60_000,
+    staleTime: SHELF_STALE_MS,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -121,7 +130,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     enabled: requestEnabled,
     // Recently viewed should be fresh — 30s so returning to home picks up
     // any new views from product pages visited in the same session.
-    staleTime: 30_000,
+    staleTime: SHELF_STALE_MS,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -135,7 +144,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     // queryKey[2] is the user id: never show a previous identity's picks.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
-    staleTime: 120_000,
+    staleTime: SHELF_STALE_MS,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
@@ -153,7 +162,7 @@ export function usePersonalizedRecommendations(enabled = true) {
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
-    staleTime: 120_000,
+    staleTime: SHELF_STALE_MS,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,

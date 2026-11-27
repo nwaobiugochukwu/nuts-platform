@@ -4,7 +4,8 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { LoggerModule } from 'nestjs-pino';
 
 // ── Framework & Core ──────────────────────────────────────
@@ -137,7 +138,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: AppThrottlerGuard },
     { provide: APP_GUARD, useClass: OtpGuard },
     { provide: APP_GUARD, useClass: MaintenanceModeGuard },
     { provide: APP_INTERCEPTOR, useClass: PerformanceInterceptor },
