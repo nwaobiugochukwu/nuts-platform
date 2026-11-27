@@ -38,6 +38,8 @@
     "test:api": "npm run --prefix apps/api test",
     "test": "npm run test:api",
     "check:architecture": "node scripts/check-architecture.mjs",
+    "check:schema-drift": "node scripts/check-schema-drift.mjs",
+    "audit:deps": "npm audit --omit=dev --audit-level=high",
     "check:lockfile": "cross-env npm_config_allow_scripts=\"\" npm ci --dry-run",
     "postinstall": "node scripts/postinstall.js",
     "db:generate": "npm run --prefix apps/api db:generate",

@@ -1,0 +1,37 @@
+# Weekly dependency updates, grouped so one pull request covers one kind of change.
+# Security advisories open their own pull requests immediately, regardless of this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      nestjs:
+        patterns: ["@nestjs/*"]
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      next-and-react:
+        patterns: ["next", "@next/*", "eslint-config-next", "react", "react-dom"]
+      temporal:
+        patterns: ["@temporalio/*"]
+      dev-tooling:
+        dependency-type: development
+        update-types: ["minor", "patch"]
+      production-patches:
+        dependency-type: production
+        update-types: ["patch"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: weekly
