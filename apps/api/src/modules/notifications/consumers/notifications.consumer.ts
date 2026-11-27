@@ -8,6 +8,7 @@ import {
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { PermanentConsumerError } from '../../../infrastructure/messaging/rabbitmq/consumer-retry.util';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
+import type { NotificationCategory } from '../services/notification-preferences.service';
 import { NotificationsService } from '../services/notifications.service';
 
 interface NotificationMessage {
@@ -21,7 +22,17 @@ interface NotificationMessage {
   link?: string;
   metadata?: Record<string, unknown>;
   dedupeKey?: string;
+  category?: NotificationCategory;
 }
+
+const CATEGORIES: ReadonlySet<string> = new Set<NotificationCategory>([
+  'orderUpdates',
+  'paymentAlerts',
+  'inventoryAlerts',
+  'socialUpdates',
+  'marketingPromos',
+  'securityAlerts',
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -94,6 +105,10 @@ function parseNotificationMessage(value: unknown): NotificationMessage | null {
   const eventId =
     typeof value.eventId === 'string' ? value.eventId.trim() : undefined;
   const metadata = isRecord(value.metadata) ? value.metadata : undefined;
+  const category =
+    typeof value.category === 'string' && CATEGORIES.has(value.category)
+      ? (value.category as NotificationCategory)
+      : undefined;
 
   return {
     userId: value.userId,
@@ -106,6 +121,7 @@ function parseNotificationMessage(value: unknown): NotificationMessage | null {
     link,
     metadata,
     dedupeKey,
+    category,
   };
 }
 
@@ -148,6 +164,7 @@ export class NotificationsConsumer implements OnModuleInit {
             dedupeKey:
               payload.dedupeKey ||
               (payload.eventId ? `outbox:${payload.eventId}` : undefined),
+            category: payload.category,
           });
         } catch (err: unknown) {
           this.logger.error(

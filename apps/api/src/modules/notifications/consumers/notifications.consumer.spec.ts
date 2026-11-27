@@ -70,6 +70,23 @@ describe('NotificationsConsumer', () => {
     );
   });
 
+  it('passes a preference category through, and ignores one it does not know', async () => {
+    const base = {
+      userId: 'u1',
+      type: NotificationType.SYSTEM_ANNOUNCEMENT,
+      title: 'Referral Reward Credited',
+      message: 'Body',
+    };
+
+    await handle({ ...base, category: 'paymentAlerts' });
+    await handle({ ...base, category: 'not-a-category' });
+
+    expect(notifications.create.mock.calls[0][0].category).toBe(
+      'paymentAlerts',
+    );
+    expect(notifications.create.mock.calls[1][0].category).toBeUndefined();
+  });
+
   it('derives the de-duplication key from the outbox event id, so a redelivery is not shown twice', async () => {
     await handle({
       userId: 'u1',
