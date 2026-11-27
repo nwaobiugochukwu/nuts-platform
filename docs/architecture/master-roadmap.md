@@ -100,7 +100,7 @@ Status key: **done**, **todo**, **you** (an action only you can take), **decide*
 | 2.4 | Outbox relay under failure: broker down, publish rejected, crash between publish and settle, two relays at once | done except two relays at once, which needs a real database |
 | 2.5 | End-to-end money flow test: checkout, pay, webhook, ship, deliver, earnings, refund | done (the existing suite repaired and now run in CI) |
 | 2.6 | Smoke test that every route in the OpenAPI document answers without a 5xx (the sweep I ran by hand) | done (`npm run smoke:routes`, usable after a deploy) |
-| 2.7 | Coverage thresholds in CI, set at today's level and raised over time | todo |
+| 2.7 | Coverage thresholds in CI, set at today's level and raised over time | done (CI runs `test:api:ci`: global floors 42/30/30/42 and higher floors on the covered areas; baseline in the audit) |
 
 **Done when:** every consumer, cron and money service has tests, and CI enforces them.
 

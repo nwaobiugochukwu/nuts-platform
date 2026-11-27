@@ -43,6 +43,7 @@
     "typecheck:web": "npm run --prefix apps/web typecheck",
     "test": "npm run test:api",
     "test:api": "npm run --prefix apps/api test",
+    "test:api:ci": "npm run --prefix apps/api test:ci",
     "test:e2e": "npm run --prefix apps/api test:e2e",
     "test:scripts": "node --test scripts/dev-orchestrator.test.mjs scripts/smoke-routes.test.mjs",
     "smoke:routes": "node scripts/smoke-routes.mjs",

@@ -95,6 +95,23 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | H18 | Wishlist price and restock alerts scan every saved item every 15 minutes (batches of 300), work that grows with the wishlist table instead of with price changes | `wishlist-alerts.cron.ts` | Medium; becomes `product.price_changed` and `product.restocked` consumers (catalog, section 5) |
 | H19 | The end-to-end suite that boots the whole application was never run in CI and had drifted (missing models in its simulated database, a renamed route, an assertion for an event the code does not publish). Regenerating the lockfile also moved `class-validator` where Nest cannot load it, so the API would not have started; only this suite catches that | `apps/api/test`, a crash-looping dev container | Fixed: suite repaired, class-validator placement fixed, a Backend End-to-End Tests job added to CI |
 
+### Test coverage baseline (2026-11-27, after phase 2)
+
+766 tests in 102 suites. Overall: 45.6% of statements, 33.6% of branches, 34.5% of functions. CI enforces floors just below this (global 42/30/30/42) and higher floors on the areas phase 2 covered. The weakest areas are the money code, which is what phase 6 must bring up:
+
+| Area | Statements | Branches | Note |
+|---|---|---|---|
+| `modules/products` | 25.9% | 11.7% | 1,072 statements; includes the 3,700-line service |
+| `modules/users` | 21.6% | 1.3% | account deletion, profile |
+| `modules/payments` | 30.3% | 22.1% | webhook, refunds, settlement |
+| `modules/wallets` | 31.2% | 17.5% | vendor earnings, payouts |
+| `modules/orders` | 40.4% | 22.9% | status changes, cancellation, stock |
+| `modules/analytics` | 33.3% | 15.2% | |
+| `modules/auth` | 52.4% | 39.1% | |
+| `modules/discounts` | 54.4% | 40.7% | |
+| `infrastructure/rabbitmq` | 62.9% | 67.0% | consumers covered; the broker service itself is not |
+| `infrastructure/outbox`, `modules/referrals`, `common/audit-log`, `common/request-context` | 96% to 98% | 87% to 98% | covered in phase 2 and held by CI floors |
+
 ## 5. The complete event catalog (the production target)
 
 **Rules the catalog follows**
