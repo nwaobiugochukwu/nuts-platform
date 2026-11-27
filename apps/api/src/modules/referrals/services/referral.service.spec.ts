@@ -16,6 +16,7 @@ describe('ReferralService', () => {
   let service: ReferralService;
   let prisma: any;
   let tx: any;
+  let outbox: { appendEnvelope: jest.Mock; wakeRelay: jest.Mock };
 
   beforeEach(() => {
     tx = {
@@ -26,6 +27,7 @@ describe('ReferralService', () => {
       },
       referralCode: { create: jest.fn() },
       order: { findFirst: jest.fn() },
+      user: { findUnique: jest.fn() },
       userWallet: { findMany: jest.fn(), update: jest.fn() },
       walletTransaction: { create: jest.fn() },
     };
@@ -35,7 +37,11 @@ describe('ReferralService', () => {
       referralCode: { create: jest.fn(), findUnique: jest.fn() },
       $transaction: jest.fn((cb: (t: any) => Promise<unknown>) => cb(tx)),
     };
-    service = new ReferralService(prisma);
+    outbox = {
+      appendEnvelope: jest.fn().mockResolvedValue('e-1'),
+      wakeRelay: jest.fn(),
+    };
+    service = new ReferralService(prisma, outbox as never);
     jest
       .spyOn((service as any).logger, 'warn')
       .mockImplementation(() => undefined);
@@ -221,6 +227,11 @@ describe('ReferralService', () => {
       });
       tx.userWallet.findMany.mockResolvedValue(wallets);
       tx.referral.updateMany.mockResolvedValue({ count: 1 });
+      tx.user.findUnique.mockResolvedValue({
+        email: 'referrer@example.com',
+        firstName: 'Ada',
+        lastName: 'Obi',
+      });
       Object.assign(tx, overrides);
     }
 
@@ -331,6 +342,70 @@ describe('ReferralService', () => {
 
       expect(tx.userWallet.update).not.toHaveBeenCalled();
       expect(tx.walletTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('publishes referral.reward_credited in the same transaction as the credits, then wakes the relay', async () => {
+      arrange('20000');
+      const order: string[] = [];
+      tx.walletTransaction.create.mockImplementation(() => {
+        order.push('credit');
+        return Promise.resolve({});
+      });
+      outbox.appendEnvelope.mockImplementation(() => {
+        order.push('event');
+        return Promise.resolve('e-1');
+      });
+      outbox.wakeRelay.mockImplementation(() => order.push('wake'));
+      prisma.$transaction.mockImplementation(
+        async (cb: (t: any) => Promise<unknown>) => {
+          const result = await cb(tx);
+          order.push('commit');
+          return result;
+        },
+      );
+
+      await service.grantReferralRewards('order-1', 'referred-1');
+
+      expect(outbox.appendEnvelope).toHaveBeenCalledWith(
+        tx,
+        {
+          type: 'referral.reward_credited',
+          aggregate: { type: 'referral', id: 'ref-1' },
+          payload: {
+            referralId: 'ref-1',
+            referrerId: 'referrer-1',
+            referrerEmail: 'referrer@example.com',
+            referrerName: 'Ada Obi',
+            referredUserId: 'referred-1',
+            orderId: 'order-1',
+            rewardAmount: 1000,
+            referredRewardAmount: 2000,
+            currency: 'NGN',
+          },
+        },
+        { wakeRelay: false },
+      );
+      expect(order).toEqual(['credit', 'credit', 'event', 'commit', 'wake']);
+    });
+
+    it('publishes nothing when the reward was already granted or claimed by another request', async () => {
+      arrange('20000');
+      tx.referral.updateMany.mockResolvedValue({ count: 0 });
+
+      await service.grantReferralRewards('order-1', 'referred-1');
+
+      expect(outbox.appendEnvelope).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing, and wakes nothing, when the transaction fails', async () => {
+      arrange('20000');
+      tx.userWallet.findMany.mockResolvedValue([wallets[0]]);
+
+      await expect(
+        service.grantReferralRewards('order-1', 'referred-1'),
+      ).rejects.toThrow();
+      expect(outbox.appendEnvelope).not.toHaveBeenCalled();
+      expect(outbox.wakeRelay).not.toHaveBeenCalled();
     });
 
     it('pays nothing when another request claimed the reward first', async () => {

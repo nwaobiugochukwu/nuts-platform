@@ -161,7 +161,7 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | Wallets | `wallet.credited`, `wallet.debited`, `vendor.earnings_available` | wallets | notifications, email, audit | new |
 | Wallets | `payout.requested`, `payout.processed`, `payout.failed` | wallets | notifications, email, audit | new (when payouts exist) |
 | Promotions | `discount.created`, `discount.activated`, `discount.expired`, `discount.used`, `voucher.claimed` | discounts | cache (campaigns), notifications, analytics | new |
-| Referrals | `referral.code_applied`, `referral.reward_credited` | referrals | wallet, notifications, audit | in-process |
+| Referrals | `referral.code_applied`, `referral.reward_credited` | referrals | wallet, notifications, audit | `referral.reward_credited` **live** (5.5: published in the credit transaction, consumed by `q.nuts.order-events`); `referral.code_applied` not published: no consumer needs it yet |
 | Notifications | `notification.requested` | notification consumer (internal command) | in-app, push, email channels | live (as `notification.dispatch`) |
 | Notifications | `push.delivery_failed` | push channel | cleanup (drop dead subscriptions) | new |
 | Tracking | `tracking.product_viewed` | web through api | analytics, recommendations (profile) | live |
