@@ -20,11 +20,21 @@ groups:
           summary: "Queue {{ $labels.queue }} has a growing backlog"
 
       - alert: QueueWithoutConsumers
-        expr: max by (queue) (nuts_rabbitmq_queue_consumers{queue!="q.nuts.dlq"}) == 0
+        # q.nuts.workflows has a consumer only when Temporal is on; its own rule below
+        # covers it, so an environment without Temporal does not alert forever.
+        expr: max by (queue) (nuts_rabbitmq_queue_consumers{queue!~"q.nuts.dlq|q.nuts.workflows"}) == 0
         for: 5m
         labels: { severity: critical }
         annotations:
           summary: "Queue {{ $labels.queue }} has no consumers (is the worker role running?)"
+
+      - alert: WorkflowQueueStalled
+        # Workflow start requests are waiting and nothing is consuming them (Temporal worker down).
+        expr: max(nuts_rabbitmq_queue_messages{queue="q.nuts.workflows"}) > 0 and max(nuts_rabbitmq_queue_consumers{queue="q.nuts.workflows"}) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Workflow start requests are waiting but no Temporal worker is consuming them
 
       - alert: OutboxStuck
         expr: max(nuts_outbox_oldest_pending_age_seconds) > 120
