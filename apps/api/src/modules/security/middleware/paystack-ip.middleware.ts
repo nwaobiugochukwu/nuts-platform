@@ -33,22 +33,42 @@ export class PaystackIpMiddleware implements NestMiddleware {
       return next();
     }
 
-    const ip = req.ip || req.socket.remoteAddress || '';
-
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const rawIp =
-      (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor) || ip;
-    const clientIp =
-      (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '') || ip;
+    const clientIp = this.resolveClientIp(req);
 
     if (!this.allowedIps.has(clientIp)) {
       this.logger.warn(
-        { ip: clientIp, rawIp, path: req.path },
+        {
+          ip: clientIp,
+          forwardedFor: req.headers['x-forwarded-for'],
+          path: req.path,
+        },
         'Blocked webhook request from unauthorized IP',
       );
       throw new UnauthorizedException('Invalid webhook source');
     }
 
     next();
+  }
+
+  /**
+   * The address of the caller, taken only from sources a caller cannot forge:
+   * the headers the platform edge sets itself (true-client-ip on Render, cf-connecting-ip
+   * on Cloudflare; the edge overwrites anything the caller sent), then `req.ip`, which
+   * Express resolves against the configured trusted proxies. The leftmost value of
+   * `x-forwarded-for` is never used: the caller writes it.
+   */
+  private resolveClientIp(req: Request): string {
+    const edgeHeader = (name: string): string => {
+      const value = req.headers[name];
+      const raw = Array.isArray(value) ? value[0] : value;
+      return typeof raw === 'string' ? raw.trim() : '';
+    };
+    return (
+      edgeHeader('true-client-ip') ||
+      edgeHeader('cf-connecting-ip') ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      ''
+    );
   }
 }
