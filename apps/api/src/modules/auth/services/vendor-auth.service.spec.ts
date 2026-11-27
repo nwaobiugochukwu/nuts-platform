@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { FakeTransactionRunner } from '@api/infrastructure/database/fake-transaction-runner-spec';
 import { VendorAuthService } from './vendor-auth.service';
 import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 
@@ -13,6 +14,7 @@ describe('VendorAuthService', () => {
   let mockPrisma: any;
   let mockOtp: any;
   let mockEmail: any;
+  let transactions: FakeTransactionRunner;
   let mockAccountLock: any;
   let mockRefreshSession: any;
   let mockGoogleAuth: any;
@@ -43,6 +45,9 @@ describe('VendorAuthService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      $transaction: jest.fn((cb: (tx: any) => Promise<unknown>) =>
+        cb(mockPrisma),
+      ),
       vendor: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -62,6 +67,8 @@ describe('VendorAuthService', () => {
         .mockResolvedValue(undefined),
       sendPasswordResetSuccessEmail: jest.fn().mockResolvedValue(undefined),
     };
+
+    transactions = new FakeTransactionRunner(mockPrisma);
 
     mockAccountLock = {
       recordFailedAttempt: jest.fn().mockResolvedValue(undefined),
@@ -88,6 +95,7 @@ describe('VendorAuthService', () => {
       mockEmail,
       mockAccountLock,
       mockRefreshSession,
+      transactions as never,
       mockGoogleAuth,
     );
   });
@@ -346,6 +354,59 @@ describe('VendorAuthService', () => {
         'VENDOR',
       );
       expect(details).toMatchObject({ entityId: 'vendor-1' });
+    });
+  });
+
+  describe('resetPassword()', () => {
+    const dto = {
+      email: 'Vendor@Shop.com',
+      otpCode: '123456',
+      newPassword: 'NewStrongPassword1!',
+    };
+
+    it('changes the password and publishes user.password_changed in the same transaction', async () => {
+      mockPrisma.vendor.findUnique.mockResolvedValue({
+        id: 'v-1',
+        firstName: 'Ada',
+      });
+      mockPrisma.vendor.update.mockResolvedValue({});
+
+      await service.resetPassword(dto);
+
+      expect(mockOtp.verifyOtp).toHaveBeenCalledWith(
+        'vendor@shop.com',
+        '123456',
+        'password-reset',
+      );
+      expect(transactions.runs).toEqual(['vendor.reset-password']);
+      expect(mockPrisma.vendor.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'v-1' } }),
+      );
+      expect(transactions.published).toEqual([
+        expect.objectContaining({
+          type: 'user.password_changed',
+          aggregate: { type: 'vendor', id: 'v-1' },
+          payload: expect.objectContaining({
+            email: 'vendor@shop.com',
+            firstName: 'Ada',
+            role: 'VENDOR',
+          }),
+        }),
+      ]);
+      expect(mockEmail.sendPasswordResetSuccessEmail).not.toHaveBeenCalled();
+    });
+
+    it('publishes nothing when the password could not be changed', async () => {
+      mockPrisma.vendor.findUnique.mockResolvedValue({
+        id: 'v-1',
+        firstName: 'Ada',
+      });
+      mockPrisma.vendor.update.mockRejectedValue(new Error('db down'));
+
+      await expect(service.resetPassword(dto as never)).rejects.toThrow(
+        'db down',
+      );
+      expect(transactions.published).toHaveLength(0);
     });
   });
 });

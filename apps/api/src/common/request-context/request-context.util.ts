@@ -34,9 +34,17 @@ export interface RequestTimings {
   cacheMisses: number;
 }
 
+/** Who is calling, as far as the server can tell. */
+export interface RequestClient {
+  userAgent?: string;
+  ip?: string;
+}
+
 export interface RequestContext {
   /** The id that follows one request across HTTP, outbox, RabbitMQ and workers. */
   requestId: string;
+  /** The caller's browser and address, for security features such as new-device alerts. */
+  client?: RequestClient;
   /** Filled by `auditDetails`, read by the audit interceptor after the handler. */
   audit?: AuditAnnotation;
   /** Filled as the request runs; read by the performance interceptor. */
@@ -51,14 +59,24 @@ export function currentRequestContext(): RequestContext | undefined {
 const storage = new AsyncLocalStorage<RequestContext>();
 
 /** Runs `fn` with `requestId` available to everything it calls, awaited or not. */
-export function runWithRequestId<T>(requestId: string, fn: () => T): T {
+export function runWithRequestId<T>(
+  requestId: string,
+  fn: () => T,
+  client?: RequestClient,
+): T {
   return storage.run(
     {
       requestId,
+      ...(client ? { client } : {}),
       timings: { dbQueries: 0, dbMs: 0, cacheHits: 0, cacheMisses: 0 },
     },
     fn,
   );
+}
+
+/** The caller of the current request, if there is one (not in workers or jobs). */
+export function currentClient(): RequestClient | undefined {
+  return storage.getStore()?.client;
 }
 
 export function currentRequestId(): string | undefined {

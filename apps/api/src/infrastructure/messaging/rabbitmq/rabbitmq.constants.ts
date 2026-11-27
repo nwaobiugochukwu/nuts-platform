@@ -14,6 +14,8 @@ export const RABBITMQ_QUEUES = {
   AUDIT: 'q.nuts.audit',
   ORDER_EVENTS: 'q.nuts.order-events',
   PAYMENT_WEBHOOKS: 'q.nuts.payment-webhooks',
+  USER_EMAILS: 'q.nuts.user-emails',
+  ORDER_CONFIRMATION_EMAILS: 'q.nuts.order-confirmation-emails',
   WORKFLOWS: 'q.nuts.workflows',
   DLQ: 'q.nuts.dlq',
 } as const;
@@ -59,6 +61,14 @@ export const QUEUE_BINDINGS: Record<
   ],
   [RABBITMQ_QUEUES.INVENTORY]: [RABBITMQ_ROUTING_KEYS.INVENTORY_ADJUST],
   [RABBITMQ_QUEUES.AUDIT]: [RABBITMQ_ROUTING_KEYS.AUDIT_EVENT],
+  // Welcome, password-changed and new-device emails.
+  [RABBITMQ_QUEUES.USER_EMAILS]: [
+    DomainEvents.USER_REGISTERED,
+    DomainEvents.USER_PASSWORD_CHANGED,
+    DomainEvents.USER_LOGIN_FROM_NEW_DEVICE,
+  ],
+  // The order confirmation email with its PDF invoice.
+  [RABBITMQ_QUEUES.ORDER_CONFIRMATION_EMAILS]: [DomainEvents.PAYMENT_CONFIRMED],
   // Stored Paystack webhooks waiting to be applied (the webhook inbox).
   [RABBITMQ_QUEUES.PAYMENT_WEBHOOKS]: [DomainEvents.PAYMENT_WEBHOOK_RECEIVED],
   // Order, payment and referral facts that turn into emails and notifications.

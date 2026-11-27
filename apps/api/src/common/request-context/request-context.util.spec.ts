@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  currentClient,
   currentRequestId,
   runWithRequestId,
   sanitizeRequestId,
@@ -7,6 +8,28 @@ import {
 import { RequestContextMiddleware } from './request-context.middleware';
 
 describe('request context', () => {
+  it('carries the caller (browser and address) to everything the request touches', () => {
+    expect(currentClient()).toBeUndefined();
+    const seen = runWithRequestId(
+      'req-client-0001',
+      async () => {
+        await Promise.resolve();
+        return currentClient();
+      },
+      { userAgent: 'Mozilla/5.0 test', ip: '41.58.1.2' },
+    );
+    return expect(seen).resolves.toEqual({
+      userAgent: 'Mozilla/5.0 test',
+      ip: '41.58.1.2',
+    });
+  });
+
+  it('has no caller in a worker, where there is no HTTP request', () => {
+    expect(
+      runWithRequestId('req-worker-0001', () => currentClient()),
+    ).toBeUndefined();
+  });
+
   it('is empty outside a request', () => {
     expect(currentRequestId()).toBeUndefined();
   });
@@ -66,6 +89,24 @@ describe('RequestContextMiddleware', () => {
     expect(run({ id: 'pino-request-id-1', headers: {} })).toBe(
       'pino-request-id-1',
     );
+  });
+
+  it('puts the browser and address of the request into the context, trimming a huge agent', () => {
+    const captured: unknown[] = [];
+    new RequestContextMiddleware().use(
+      {
+        id: 'pino-request-id-2',
+        headers: { 'user-agent': 'x'.repeat(1000) },
+        ip: '102.1.1.1',
+      } as never,
+      { getHeader: () => undefined } as never,
+      () => captured.push(currentClient()),
+    );
+
+    expect(captured[0]).toEqual({
+      userAgent: 'x'.repeat(300),
+      ip: '102.1.1.1',
+    });
   });
 
   it('falls back to the response header, then the request header, then a new id', () => {

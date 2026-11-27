@@ -148,6 +148,23 @@ export class EmailService implements OnModuleInit {
   }
 
   /**
+   * Security alert for a sign-in from a browser or system the customer has not used before.
+   */
+  async sendNewDeviceLoginEmail(
+    to: string,
+    name: string,
+    details: { device: string; ip: string | null; signedInAt: Date },
+  ): Promise<void> {
+    await this.sendEmail({
+      to,
+      subject: 'New sign-in to your NUTS account',
+      html: this.buildNewDeviceLoginHtml(name, details),
+    });
+
+    this.logger.log('New-device sign-in email sent successfully');
+  }
+
+  /**
    * Generates a payment receipt PDF, attaches it to the single order
    * confirmation email, and guarantees temporary-file cleanup.
    *
@@ -562,6 +579,50 @@ export class EmailService implements OnModuleInit {
             Reach out to support if anything looks unfamiliar.
           </p>
         </div>
+      </div>
+    `);
+  }
+
+  private buildNewDeviceLoginHtml(
+    name: string,
+    details: { device: string; ip: string | null; signedInAt: Date },
+  ): string {
+    const safeName = this.escapeHtml(name || 'Customer');
+    const device = this.escapeHtml(details.device);
+    const ip = details.ip ? this.escapeHtml(details.ip) : 'not available';
+    const when = this.escapeHtml(
+      details.signedInAt.toLocaleString('en-NG', {
+        timeZone: 'Africa/Lagos',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }),
+    );
+
+    return this.wrapHtml(`
+      <div class="email-header">
+        <p class="eyebrow">Account security</p>
+        <h1>New sign-in to your account</h1>
+      </div>
+
+      <div class="email-body">
+        <p>Hello ${safeName},</p>
+
+        <p>
+          We noticed a sign-in to your NUTS account from a browser or device
+          we have not seen before.
+        </p>
+
+        <div class="hero-card">
+          <p><strong>Device:</strong> ${device}</p>
+          <p><strong>When:</strong> ${when} (Lagos time)</p>
+          <p><strong>Network address:</strong> ${ip}</p>
+        </div>
+
+        <p>
+          If this was you, there is nothing to do. If it was not, reset your
+          password right away so nobody else can use your account, and contact
+          our support team.
+        </p>
       </div>
     `);
   }

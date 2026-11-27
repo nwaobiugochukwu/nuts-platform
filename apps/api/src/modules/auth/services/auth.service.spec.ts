@@ -13,7 +13,7 @@ describe('AuthService', () => {
   let service: AuthService;
   let mockPrisma: any;
   let mockOtpService: any;
-  let mockEmailService: any;
+  let mockOutbox: any;
   let mockReferralService: any;
   let mockAccountLockService: any;
   let mockRefreshSessionService: any;
@@ -43,8 +43,9 @@ describe('AuthService', () => {
       verifyRegistrationOtp: jest.fn().mockResolvedValue(true),
       isOtpVerified: jest.fn().mockResolvedValue(false),
     };
-    mockEmailService = {
-      sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+    mockOutbox = {
+      appendEnvelope: jest.fn().mockResolvedValue('e-1'),
+      wakeRelay: jest.fn(),
     };
     mockReferralService = {
       validateReferralCode: jest.fn(),
@@ -78,10 +79,10 @@ describe('AuthService', () => {
     service = new AuthService(
       mockPrisma,
       mockOtpService,
-      mockEmailService,
       mockReferralService,
       mockAccountLockService,
       mockRefreshSessionService,
+      mockOutbox,
       mockGoogleAuthService,
     );
   });
@@ -129,6 +130,41 @@ describe('AuthService', () => {
         'u-1',
       );
       expect(session.tokens.accessToken).toBe('access-jwt-token');
+    });
+
+    it('publishes user.registered in the same transaction, so the welcome email cannot be lost or sent for an account that was not created', async () => {
+      mockPrisma.user.create.mockResolvedValue({
+        id: 'u-1',
+        email: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+        role: 'USER',
+        isActive: true,
+      });
+
+      await service.register(registerDto);
+
+      expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          type: 'user.registered',
+          aggregate: { type: 'user', id: 'u-1' },
+          payload: expect.objectContaining({
+            email: 'test@example.com',
+            authProvider: 'LOCAL',
+          }),
+        }),
+        { wakeRelay: false },
+      );
+      expect(mockOutbox.wakeRelay).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes nothing when the account could not be created', async () => {
+      mockPrisma.user.create.mockRejectedValue(new Error('db down'));
+
+      await expect(service.register(registerDto)).rejects.toThrow('db down');
+      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
+      expect(mockOutbox.wakeRelay).not.toHaveBeenCalled();
     });
 
     it('throws ConflictException on unique email constraint violation (P2002)', async () => {
@@ -401,11 +437,77 @@ describe('AuthService', () => {
         mockPrisma,
         'new-user-1',
       );
-      expect(mockEmailService.sendWelcomeEmail).toHaveBeenCalledWith(
-        'jane.google@example.com',
-        'Jane',
+      // The welcome email is sent by a consumer of this event, written in the registration
+      // transaction.
+      expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          type: 'user.registered',
+          aggregate: { type: 'user', id: 'new-user-1' },
+          payload: expect.objectContaining({
+            email: 'jane.google@example.com',
+            firstName: 'Jane',
+            authProvider: 'GOOGLE',
+          }),
+        }),
+        { wakeRelay: false },
       );
+      expect(mockOutbox.wakeRelay).toHaveBeenCalled();
       expect(session).toHaveProperty('tokens');
+    });
+  });
+
+  describe('resetPassword', () => {
+    const dto = {
+      email: 'Test@Example.com',
+      otpCode: '123456',
+      newPassword: 'NewStrongPassword1!',
+    };
+
+    it('changes the password and publishes user.password_changed in the same transaction, then wakes the relay', async () => {
+      mockPrisma.user.update.mockResolvedValue({
+        id: 'u-1',
+        firstName: 'John',
+      });
+
+      await service.resetPassword(dto);
+
+      expect(mockOtpService.verifyOtp).toHaveBeenCalledWith(
+        'test@example.com',
+        '123456',
+        'password-reset',
+      );
+      expect(
+        mockRefreshSessionService.revokeAllUserSessions,
+      ).toHaveBeenCalledWith('u-1');
+      expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
+        mockPrisma,
+        expect.objectContaining({
+          type: 'user.password_changed',
+          aggregate: { type: 'user', id: 'u-1' },
+          payload: expect.objectContaining({
+            email: 'test@example.com',
+            firstName: 'John',
+            role: 'USER',
+          }),
+        }),
+        { wakeRelay: false },
+      );
+      expect(mockOutbox.wakeRelay).toHaveBeenCalledTimes(1);
+    });
+
+    it('publishes nothing for an unknown account', async () => {
+      mockPrisma.user.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('missing', {
+          code: 'P2025',
+          clientVersion: '7.8.0',
+        }),
+      );
+
+      await expect(service.resetPassword(dto as never)).rejects.toThrow(
+        'Invalid password reset request',
+      );
+      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
     });
   });
 });

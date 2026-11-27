@@ -5,6 +5,7 @@ import { RabbitMQModule } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.
 import { NotificationsConsumer } from './consumers/notifications.consumer';
 import { OrderEventNotificationsService } from './services/order-event-notifications.service';
 import { OrderEventsConsumer } from './consumers/order-events.consumer';
+import { UserEmailsConsumer } from './consumers/user-emails.consumer';
 import { NotificationsController } from './controllers/notifications.controller';
 import { NotificationsService } from './services/notifications.service';
 import { NotificationsSseController } from './controllers/notifications-sse.controller';
@@ -30,6 +31,7 @@ import { VendorFollowConsumer } from './consumers/vendor-follow.consumer';
     VendorFollowConsumer,
     OrderEventNotificationsService,
     OrderEventsConsumer,
+    UserEmailsConsumer,
     WebPushService,
     NotificationPreferencesService,
     NotificationRetentionJob,

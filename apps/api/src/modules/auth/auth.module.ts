@@ -12,6 +12,7 @@ import { AdminAuthController } from './controllers/admin-auth.controller';
 import { AdminAuthService } from './services/admin-auth.service';
 import { OtpService } from './services/otp.service';
 import { AuthSessionService } from './services/auth-session.service';
+import { DeviceTrackingService } from './services/device-tracking.service';
 import { RefreshSessionService } from './services/refresh-session.service';
 import { AuthCookiesModule } from './auth-cookies.module';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
@@ -47,6 +48,7 @@ import { RegistrationsGuard } from '@api/common/guards/registrations.guard';
     VendorAuthService,
     OtpService,
     AuthSessionService,
+    DeviceTrackingService,
     RefreshSessionService,
     GoogleAuthService,
     JwtStrategy,

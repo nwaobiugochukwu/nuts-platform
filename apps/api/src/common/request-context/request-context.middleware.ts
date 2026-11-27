@@ -16,6 +16,11 @@ export class RequestContextMiddleware implements NestMiddleware {
       sanitizeRequestId(res.getHeader('x-request-id')) ??
       sanitizeRequestId(req.headers['x-request-id']) ??
       randomUUID();
-    runWithRequestId(requestId, next);
+    const userAgent = req.headers['user-agent'];
+    runWithRequestId(requestId, next, {
+      userAgent:
+        typeof userAgent === 'string' ? userAgent.slice(0, 300) : undefined,
+      ip: req.ip,
+    });
   }
 }

@@ -94,12 +94,18 @@ describe('queue bindings as a design rule', () => {
     expect(allKeys.filter((key) => /[*#]/.test(key))).toEqual([]);
   });
 
-  it('gives every work queue a binding, and no queue the same key as another except by design', () => {
+  it('gives every work queue a binding, and shares a key between queues only for domain events', () => {
     for (const queue of Object.values(RABBITMQ_QUEUES)) {
       if (queue === RABBITMQ_QUEUES.DLQ) continue;
       expect(QUEUE_BINDINGS[queue].length).toBeGreaterThan(0);
     }
-    expect(new Set(allKeys).size).toBe(allKeys.length);
+    // A domain event may fan out to several consumers, each on its own queue. A command or a
+    // queue-name key belongs to exactly one queue.
+    const events = new Set<string>(Object.values(DomainEvents));
+    const repeated = allKeys.filter(
+      (key, index) => allKeys.indexOf(key) !== index && !events.has(key),
+    );
+    expect(repeated).toEqual([]);
   });
 
   it('binds a domain event name only on the queue that owns reacting to it', () => {
@@ -113,6 +119,9 @@ describe('queue bindings as a design rule', () => {
       [RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
       [RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
       [DomainEvents.PAYMENT_WEBHOOK_RECEIVED]: RABBITMQ_QUEUES.PAYMENT_WEBHOOKS,
+      [DomainEvents.USER_REGISTERED]: RABBITMQ_QUEUES.USER_EMAILS,
+      [DomainEvents.USER_PASSWORD_CHANGED]: RABBITMQ_QUEUES.USER_EMAILS,
+      [DomainEvents.USER_LOGIN_FROM_NEW_DEVICE]: RABBITMQ_QUEUES.USER_EMAILS,
       [DomainEvents.ORDER_PROCESSING]: RABBITMQ_QUEUES.ORDER_EVENTS,
       [DomainEvents.ORDER_SHIPPED]: RABBITMQ_QUEUES.ORDER_EVENTS,
       [DomainEvents.ORDER_DELIVERED]: RABBITMQ_QUEUES.ORDER_EVENTS,

@@ -130,11 +130,11 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 
 | Area | Event | Producer | Consumers | Status |
 |---|---|---|---|---|
-| Identity | `user.registered` | auth | email (welcome), referral (attach code), recommendations (start profile), analytics, audit | new (an outbox type exists, no consumer) |
-| Identity | `user.otp_requested` | otp | email | new |
+| Identity | `user.registered` | auth | email (welcome), referral (attach code), recommendations (start profile), analytics, audit | **live** (welcome email, queue `q.nuts.user-emails`; the other consumers come with step 5.6) |
+| Identity | `user.otp_requested` | otp | email | **by decision stays synchronous**: the code must not be stored in the outbox, broker or dead-letter queue |
 | Identity | `user.password_reset_requested` | auth | email (reset link) | new |
-| Identity | `user.password_changed` | auth | email, security (revoke sessions), audit | new |
-| Identity | `user.login_from_new_device` | auth | email and push (security alert), audit | new |
+| Identity | `user.password_changed` | auth | email, security (revoke sessions), audit | **live** (confirmation email, queue `q.nuts.user-emails`; session revoke stays in the reset flow) |
+| Identity | `user.login_from_new_device` | auth | email and push (security alert), audit | **live** (email and in-app alert, queue `q.nuts.user-emails`; push later) |
 | Identity | `user.suspended`, `user.reactivated` | admin | sessions (revoke), notifications, audit | new |
 | Identity | `user.deletion_requested`, `user.deleted` | users | cleanup (later a Temporal workflow), analytics (anonymise), email | new |
 | Vendors | `vendor.registered`, `vendor.approved`, `vendor.rejected`, `vendor.verified`, `vendor.deactivated`, `vendor.reactivated` | vendors, admin | email, notifications, cache, audit | new |

@@ -207,6 +207,50 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('notification preferences', () => {
+    const base = {
+      userId: 'user-1',
+      type: NotificationType.SYSTEM_ANNOUNCEMENT,
+      title: 'New sign-in to your account',
+      message: 'Your account was signed in from a new device.',
+      dedupeKey: 'SECURITY:new-device:e-1',
+    };
+    let withPreferences: NotificationsService;
+    let canSend: jest.Mock;
+
+    beforeEach(() => {
+      canSend = jest.fn().mockResolvedValue(false); // marketing is off by default
+      prisma.notification.create.mockResolvedValue({
+        id: 'n-1',
+        ...base,
+        role: ROLE.USER,
+      });
+      withPreferences = new NotificationsService(
+        prisma as never,
+        undefined,
+        undefined,
+        undefined,
+        { canSend } as never,
+      );
+    });
+
+    it('drops an ordinary notice the user has switched off', async () => {
+      await expect(withPreferences.create(base)).resolves.toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('delivers an essential notice even though its category is switched off', async () => {
+      const created = await withPreferences.create({
+        ...base,
+        essential: true,
+      });
+
+      expect(created).toMatchObject({ id: 'n-1' });
+      expect(canSend).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('filters live notification streams by both userId and role, and attaches event id', () => {
     const events: unknown[] = [];
     const subscription = service

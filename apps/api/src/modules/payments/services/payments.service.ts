@@ -1767,13 +1767,6 @@ export class PaymentsService {
     if (orderMovedToProcessing) {
       void this.invalidateCartCache(payment.userId);
 
-      this.sendOrderConfirmationEmail(updated.id).catch((error) => {
-        this.logger.error(
-          `Failed to send order confirmation for ${updated.id}`,
-          error,
-        );
-      });
-
       // The order.processing and payment.confirmed events were written to the outbox in the
       // transaction above; wake the relay now that it has committed.
       this.outbox.wakeRelay();
@@ -2326,7 +2319,12 @@ export class PaymentsService {
   // ORDER CONFIRMATION EMAIL (SENT ON SUCCESSFUL PAYMENT)
   // ---------------------------------------------------------------------------
 
-  private async sendOrderConfirmationEmail(paymentId: string): Promise<void> {
+  /**
+   * Sends the order confirmation email with the PDF invoice. Called by
+   * `OrderConfirmationEmailConsumer` for each `payment.confirmed` event; a failure is thrown so
+   * the queue retries it (a redelivery of the same event is skipped by the consumer).
+   */
+  async sendOrderConfirmationEmail(paymentId: string): Promise<void> {
     try {
       const payment = await this.prisma.payment.findUnique({
         where: {
@@ -2405,10 +2403,12 @@ export class PaymentsService {
         items,
       });
     } catch (error) {
+      // Thrown, not swallowed: the consumer that calls this retries it, then dead-letters it.
       this.logger.error(
         `Failed to send order confirmation for ${paymentId}`,
         error,
       );
+      throw error;
     }
   }
 }

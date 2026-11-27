@@ -11,6 +11,8 @@ import * as bcrypt from 'bcrypt';
 import { OtpService } from '@api/modules/auth/services/otp.service';
 import { RefreshSessionService } from '@api/modules/auth/services/refresh-session.service';
 import { GoogleAuthService } from '@api/modules/auth/services/google-auth.service';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
@@ -70,6 +72,7 @@ export class VendorAuthService {
     private readonly emailService: EmailService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
+    private readonly transactions: TransactionRunnerService,
     private readonly googleAuthService?: GoogleAuthService,
   ) {}
 
@@ -622,30 +625,40 @@ export class VendorAuthService {
       BCRYPT_COST_FACTOR,
     );
 
-    await this.prisma.vendor.update({
-      where: { id: vendor.id },
-      data: {
-        password: hashedPassword,
-        refreshToken: null,
-        refreshTokenId: null,
-        tokenVersion: { increment: 1 },
+    // The new password and the "password changed" event commit together; the confirmation
+    // email is sent by a consumer of the event.
+    await this.transactions.run(
+      async (ctx) => {
+        await ctx.tx.vendor.update({
+          where: { id: vendor.id },
+          data: {
+            password: hashedPassword,
+            refreshToken: null,
+            refreshTokenId: null,
+            tokenVersion: { increment: 1 },
+          },
+        });
+        await ctx.publish({
+          type: DomainEvents.USER_PASSWORD_CHANGED,
+          aggregate: { type: 'vendor', id: vendor.id },
+          actor: { type: 'vendor', id: vendor.id },
+          payload: {
+            userId: vendor.id,
+            email: normalizedEmail,
+            firstName: vendor.firstName,
+            role: 'VENDOR',
+            via: 'password-reset',
+          },
+        });
       },
-    });
+      { name: 'vendor.reset-password', preset: 'short' },
+    );
 
     await this.refreshSessionService.revokeSession(vendor.id, ROLE.VENDOR);
 
     auditDetails({
       entityId: vendor.id,
     });
-
-    void this.emailService
-      .sendPasswordResetSuccessEmail(dto.email, vendor.firstName ?? '')
-      .catch((error: unknown) => {
-        this.logger.error(
-          'Failed to send password reset confirmation email',
-          error,
-        );
-      });
   }
 
   // ---------------------------------------------------------------------------

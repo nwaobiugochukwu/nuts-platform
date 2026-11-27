@@ -83,6 +83,14 @@ describe('Nuts API (e2e)', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
       },
+      outboxEvent: {
+        create: jest.fn().mockResolvedValue({ id: 'outbox-1' }),
+      },
+      userKnownDevice: {
+        count: jest.fn().mockResolvedValue(0),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       referralCode: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
@@ -218,6 +226,22 @@ describe('Nuts API (e2e)', () => {
           expect(body.success).toBe(true);
           expect(body.data.user.email).toBe(email);
           expect(body.data.accessToken).toBeDefined();
+
+          // The welcome email is an event in the outbox, written in the registration
+          // transaction, not a send inside the request.
+          expect(mockPrisma.outboxEvent.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+              eventType: 'user.registered',
+              aggregateType: 'user',
+              aggregateId: 'u-e2e-1',
+              payload: expect.objectContaining({
+                type: 'user.registered',
+                payload: expect.objectContaining({ email }),
+              }),
+            }),
+          });
+          // The first device ever seen is recorded without an alert.
+          expect(mockPrisma.userKnownDevice.createMany).toHaveBeenCalled();
         });
     });
 

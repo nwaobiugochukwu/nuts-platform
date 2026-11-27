@@ -56,6 +56,12 @@ export interface CreateNotificationDto {
   link?: string;
   metadata?: Record<string, unknown>;
   dedupeKey?: string;
+  /**
+   * For security and account notices (a new sign-in, a password change): delivered whatever the
+   * user's notification preferences say. Without it a notice that falls under "marketing",
+   * which is off by default, would silently never arrive.
+   */
+  essential?: boolean;
 }
 
 export interface NotificationSseEvent {
@@ -294,7 +300,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
     const role = dto.role ?? ROLE.USER;
     const category = mapTypeToCategory(dto.type);
 
-    if (this.preferencesService) {
+    if (this.preferencesService && !dto.essential) {
       const canSendInApp = await this.preferencesService.canSend(
         dto.userId,
         role,
