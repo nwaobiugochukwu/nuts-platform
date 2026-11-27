@@ -22,7 +22,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | E10 | Cache invalidation is done inline after writes in 8 services (wishlists, follows, discounts, categories, variants, admin vendors, token, product views) | Small cost per request, scattered logic | Tag-based invalidation, or a `cache.invalidate` consumer | Low |
 | E11 | Image upload calls Cloudinary inside the request | Request time follows Cloudinary; the Cloudinary breaker is not applied (see R9) | Signed direct-to-Cloudinary upload and a webhook event | Low |
 | E13 | The Paystack webhook is processed inside the request (`payments.controller.ts` awaits `handleWebhook`: settlement, stock, wallet and notifications all run before the 200 is returned) | Paystack waits for the whole job and retries on slow responses; a failure part-way is hard to replay | Webhook inbox: verify the signature, store the raw event once (unique event id), return 200, process through the queue | High (money) |
-| E12 | Announcement audience fan-out (`admin/admin-announcements.service.ts`) | Not verified: I did not confirm whether delivery is chunked through the notifications queue | Verify first; chunk through the queue if it is not | To verify |
+| E12 | Announcement audience fan-out (`admin/admin-announcements.service.ts`) | Not verified: I did not confirm whether delivery is chunked through the notifications queue | Verified: chunked, resumable, exclusive and idempotent; no change needed (step 5.9) | To verify |
 
 ## 2. Messaging and resilience patterns, checked against production practice
 
