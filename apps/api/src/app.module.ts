@@ -1,3 +1,4 @@
+import { CacheWarmupModule } from '@api/modules/cache-warmup/cache-warmup.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
@@ -132,6 +133,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     UploadModule,
     SecurityModule,
     HealthModule,
+    CacheWarmupModule,
     AdminModule,
     RecommendationsModule,
   ],
