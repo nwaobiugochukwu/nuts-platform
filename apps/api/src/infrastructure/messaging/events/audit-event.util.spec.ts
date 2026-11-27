@@ -1,4 +1,4 @@
-import { REDACTED, buildAuditEvent, redactForAudit } from './audit-event';
+import { REDACTED, buildAuditEvent, redactForAudit } from './audit-event.util';
 
 describe('redactForAudit', () => {
   it('replaces secrets at any depth, whatever the key casing', () => {

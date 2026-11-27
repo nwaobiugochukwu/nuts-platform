@@ -7,7 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CategoryStatus } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { captureAudit } from '@api/common/audit-log/audit-testing';
+import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 import { CategoriesService } from './categories.service';
 
 describe('CategoriesService (Hierarchical Catalog System)', () => {

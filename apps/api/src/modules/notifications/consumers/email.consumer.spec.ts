@@ -1,6 +1,9 @@
-import { RABBITMQ_QUEUES } from './rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { EmailConsumer } from './email.consumer';
-import { fakeRabbit, withRole } from './consumer-harness-spec';
+import {
+  fakeRabbit,
+  withRole,
+} from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 
 describe('EmailConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;

@@ -48,7 +48,7 @@ import { AdminAuthResponseDto } from '../dto/admin-auth-response.dto';
 import { AdminAuthUserDto } from '../dto/admin-auth-user.dto';
 import { AdminRegisterDto } from '../dto/admin-register.dto';
 import { UpdateAdminProfileDto } from '../dto/update-admin-profile.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('ADMIN - AUTH')
 @Controller('admin/auth')

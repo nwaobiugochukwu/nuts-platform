@@ -3,7 +3,7 @@
 - **Status:** Accepted; implemented on the release branch, not yet merged or deployed.
 - **Date:** 2026-11-25
 - **Owners:** Platform engineering
-- **Related code:** [`process-role.ts`](../../../apps/api/src/config/process-role.ts), [`heartbeat.service.ts`](../../../apps/api/src/infrastructure/observability/health/heartbeat.service.ts), [`ecosystem.config.cjs`](../../../apps/api/ecosystem.config.cjs), [`ecosystem.dev.config.cjs`](../../../apps/api/ecosystem.dev.config.cjs), [`request-context.ts`](../../../apps/api/src/common/request-context/request-context.ts), [`audit.interceptor.ts`](../../../apps/api/src/common/audit-log/audit.interceptor.ts), [`verify-deploy.sh`](../../../scripts/verify-deploy.sh)
+- **Related code:** [`process-role.ts`](../../../apps/api/src/config/process-role.ts), [`heartbeat.service.ts`](../../../apps/api/src/infrastructure/observability/health/heartbeat.service.ts), [`ecosystem.config.cjs`](../../../apps/api/ecosystem.config.cjs), [`ecosystem.dev.config.cjs`](../../../apps/api/ecosystem.dev.config.cjs), [`request-context.ts`](../../../apps/api/src/common/request-context/request-context.ts), [`audit.interceptor.ts`](../../../apps/api/src/modules/audit/interceptors/audit.interceptor.ts), [`verify-deploy.sh`](../../../scripts/verify-deploy.sh)
 
 ## Context
 

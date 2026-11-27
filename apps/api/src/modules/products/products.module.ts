@@ -1,3 +1,4 @@
+import { InventoryConsumer } from './consumers/inventory.consumer';
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
@@ -33,7 +34,12 @@ import { LowStockCron } from './jobs/low-stock.cron';
     VendorProductVariantsController,
     VendorProductVariantsCanonicalController,
   ],
-  providers: [ProductsService, ProductVariantsService, LowStockCron],
+  providers: [
+    ProductsService,
+    ProductVariantsService,
+    LowStockCron,
+    InventoryConsumer,
+  ],
   exports: [ProductsService, ProductVariantsService],
 })
 export class ProductsModule {}

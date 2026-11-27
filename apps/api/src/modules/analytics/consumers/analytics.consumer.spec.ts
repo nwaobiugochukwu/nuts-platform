@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
-import { RABBITMQ_QUEUES } from './rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { AnalyticsConsumer } from './analytics.consumer';
-import { fakeRabbit } from './consumer-harness-spec';
+import { fakeRabbit } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 
 const fkViolation = () =>
   new Prisma.PrismaClientKnownRequestError('fk', {

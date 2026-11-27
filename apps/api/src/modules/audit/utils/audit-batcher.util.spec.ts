@@ -1,4 +1,4 @@
-import { Batcher } from './audit-batcher';
+import { Batcher } from './audit-batcher.util';
 
 describe('Batcher', () => {
   afterEach(() => jest.useRealTimers());

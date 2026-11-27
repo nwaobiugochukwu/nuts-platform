@@ -26,7 +26,7 @@ import { VendorGoogleAuthDto } from './dto/vendor-google-auth.dto';
 import { VendorResetPasswordDto } from './dto/vendor-reset-password.dto';
 import { VendorProfileDto } from './dto/vendor-response.dto';
 import type { AuthTokens } from '@api/modules/auth/types/auth.types';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 export const vendorAuthSelect = {
   id: true,

@@ -66,7 +66,7 @@ import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
 import { ROLE } from '@prisma/client';
 import { AUTH_REFRESH_COOKIE } from '../constants/auth-cookies.constants';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 function getCookieValue(cookies: unknown, name: string): string | undefined {
   if (typeof cookies !== 'object' || cookies === null || !(name in cookies)) {

@@ -49,7 +49,7 @@ import { VendorLoginDto } from '../dto/update-vendor.dto';
 import { VendorResetPasswordDto } from '../dto/vendor-reset-password.dto';
 import { VendorResponseDto } from '../dto/vendor-response.dto';
 import { VendorAuthService } from '../vendor-auth.service';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('VENDORS - AUTH')
 @Controller('vendors/auth')

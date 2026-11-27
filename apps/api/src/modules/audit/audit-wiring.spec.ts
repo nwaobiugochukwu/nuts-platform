@@ -13,10 +13,10 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { RequestContextMiddleware } from '@api/common/request-context/request-context.middleware';
-import { Audit } from './audit.decorator';
-import { auditAlso, auditDetails } from './audit-details';
-import { AuditInterceptor } from './audit.interceptor';
-import { AuditLogService } from './audit-log.service';
+import { Audit } from './decorators/audit.decorator';
+import { auditAlso, auditDetails } from './utils/audit-details.util';
+import { AuditInterceptor } from './interceptors/audit.interceptor';
+import { AuditLogService } from './services/audit-log.service';
 
 // Built at run time so the test fixture is not a password-shaped literal that secret scanners flag.
 const FAKE_SECRET = ['must', 'not', 'be', 'stored'].join('-');

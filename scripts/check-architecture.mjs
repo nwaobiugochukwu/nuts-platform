@@ -64,7 +64,7 @@ const API_LEGACY_EXCEPTIONS = new Set([
 // `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
 const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
-  "apps/api/src/infrastructure/messaging/rabbitmq/inventory.consumer.ts",
+  "apps/api/src/modules/products/consumers/inventory.consumer.ts",
   "apps/api/src/modules/auth/admin-auth.service.ts",
   "apps/api/src/modules/auth/auth.service.ts",
   "apps/api/src/modules/auth/sessions/refresh-session.service.ts",
@@ -103,7 +103,7 @@ for (const file of walk(API_SRC)) {
       if (!allowed) violations.push(`[api:4] ${r} imports "${spec}" (workflow code may only import @temporalio/workflow and relative pure modules)`);
     }
   }
-  if (!isSpec && !r.startsWith("apps/api/src/common/audit-log/")) {
+  if (!isSpec && !r.startsWith("apps/api/src/modules/audit/")) {
     const calls = (fs.readFileSync(file, "utf8").match(DIRECT_AUDIT_CALL) ?? []).length;
     const allowed = API_DIRECT_AUDIT_ALLOWED.get(r) ?? 0;
     if (calls > allowed) {

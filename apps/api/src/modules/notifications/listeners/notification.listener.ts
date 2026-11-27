@@ -11,7 +11,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../notifications.service';
-import { DomainEvents } from '@api/common/events/domain-events';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 import {
   NotificationPreferencesService,
@@ -25,7 +25,7 @@ import type {
   PaymentConfirmedPayload,
   PaymentFailedPayload,
   ReferralRewardCreditedPayload,
-} from '@api/common/events/event-payloads';
+} from '@api/infrastructure/messaging/events/event-payloads';
 
 @Injectable()
 export class NotificationListener {

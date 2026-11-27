@@ -1,6 +1,6 @@
-import { RABBITMQ_QUEUES } from './rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { InventoryConsumer } from './inventory.consumer';
-import { fakeRabbit } from './consumer-harness-spec';
+import { fakeRabbit } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 
 describe('InventoryConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;

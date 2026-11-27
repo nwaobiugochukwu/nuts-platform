@@ -31,7 +31,7 @@ import { UpdateCategoryDto } from '@api/modules/categories/dto/update-category.d
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiEnvelopeResponse } from '@api/common/decorators/api-envelope-response.decorator';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('ADMIN - CATEGORY')
 @ApiBearerAuth('JWT-auth')

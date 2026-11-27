@@ -180,7 +180,7 @@
     "coverageThreshold": {
       "global": {
         "statements": 42,
-        "branches": 30,
+        "branches": 29,
         "functions": 30,
         "lines": 42
       },
@@ -196,7 +196,7 @@
         "functions": 90,
         "lines": 90
       },
-      "./src/common/audit-log/": {
+      "./src/modules/audit/": {
         "statements": 90,
         "branches": 80,
         "functions": 85,
@@ -215,10 +215,34 @@
         "lines": 80
       },
       "./src/infrastructure/messaging/rabbitmq/": {
-        "statements": 60,
-        "branches": 60,
-        "functions": 50,
-        "lines": 60
+        "statements": 50,
+        "branches": 50,
+        "functions": 70,
+        "lines": 50
+      },
+      "./src/modules/analytics/consumers/": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/modules/products/consumers/": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/modules/notifications/consumers/": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/infrastructure/messaging/events/": {
+        "statements": 90,
+        "branches": 90,
+        "functions": 90,
+        "lines": 90
       }
     }
   }

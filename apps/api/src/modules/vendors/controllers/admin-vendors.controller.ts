@@ -32,7 +32,7 @@ import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 import {} from '@api/common/utils/request.util';
 import { AdminVendorsService } from '../admin-vendors.service';
 import { QueryAdminVendorsDto } from '../dto/query-admin-vendors.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiBearerAuth('JWT-auth')
 @ApiTags('ADMIN - VENDORS')

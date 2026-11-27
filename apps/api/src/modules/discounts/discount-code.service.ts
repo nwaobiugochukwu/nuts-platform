@@ -18,7 +18,7 @@ import {
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { randomBytes } from 'node:crypto';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
+import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import {
   DISCOUNT_CODE_PATTERN,

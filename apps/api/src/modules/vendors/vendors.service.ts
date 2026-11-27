@@ -17,7 +17,7 @@ import {
   resolveCategoryHierarchy,
   type CategorySummaryRef,
 } from '@api/modules/products/products.service';
-import { type AuditChanges } from '@api/common/audit-log/audit-log.service';
+import { type AuditChanges } from '@api/modules/audit/services/audit-log.service';
 import { UNKNOWN_ACCOUNT_PASSWORD_HASH } from '@api/common/constants/bcrypt.constants';
 import {
   VENDOR_STORE,
@@ -31,7 +31,7 @@ import { UpdateVendorDto } from './dto/update-vendor.dto';
 import { VendorReactivateDto } from './dto/vendor-reactivate.dto';
 import { FeaturedVendorDto, VendorProfileDto } from './dto/vendor-response.dto';
 import { VendorStatusResponseDto } from './dto/vendor-status-response.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const vendorSelect = {
   id: true,

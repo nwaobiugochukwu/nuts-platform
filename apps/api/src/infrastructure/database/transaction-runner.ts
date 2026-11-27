@@ -10,7 +10,7 @@ import { currentProcessRole } from '../../config/process-role';
 import {
   buildAuditEvent,
   type BuildAuditEventInput,
-} from '@api/common/audit-log/audit-event';
+} from '@api/infrastructure/messaging/events/audit-event.util';
 
 export type TransactionPreset = 'default' | 'short' | 'critical';
 

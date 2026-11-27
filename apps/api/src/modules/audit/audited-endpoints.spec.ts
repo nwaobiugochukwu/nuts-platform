@@ -1,21 +1,21 @@
 import {
   AUDIT_METADATA,
   type AuditOptions,
-} from '@api/common/audit-log/audit.decorator';
-import { AdminAnnouncementsController } from '../../modules/admin/controllers/admin-announcements.controller';
-import { AdminPlatformController } from '../../modules/admin/controllers/admin-platform.controller';
-import { AdminStaffController } from '../../modules/admin/controllers/admin-staff.controller';
-import { AdminAuthController } from '../../modules/auth/controllers/admin-auth.controller';
-import { AuthController } from '../../modules/auth/controllers/auth.controller';
-import { AdminCategoryController } from '../../modules/categories/controllers/admin-category.controller';
-import { AdminOrdersController } from '../../modules/orders/controllers/admin-order.controller';
-import { AdminProductsController } from '../../modules/products/controllers/admin-product.controller';
-import { VendorProductsController } from '../../modules/products/controllers/vendor-products.controller';
-import { AdminUsersController } from '../../modules/users/controllers/admin-user.controller';
-import { UsersController } from '../../modules/users/controllers/users.controller';
-import { AdminVendorsController } from '../../modules/vendors/controllers/admin-vendors.controller';
-import { VendorAccountController } from '../../modules/vendors/controllers/vendor-account.controller';
-import { VendorAuthController } from '../../modules/vendors/controllers/vendor-auth.controller';
+} from '@api/modules/audit/decorators/audit.decorator';
+import { AdminAnnouncementsController } from '../admin/controllers/admin-announcements.controller';
+import { AdminPlatformController } from '../admin/controllers/admin-platform.controller';
+import { AdminStaffController } from '../admin/controllers/admin-staff.controller';
+import { AdminAuthController } from '../auth/controllers/admin-auth.controller';
+import { AuthController } from '../auth/controllers/auth.controller';
+import { AdminCategoryController } from '../categories/controllers/admin-category.controller';
+import { AdminOrdersController } from '../orders/controllers/admin-order.controller';
+import { AdminProductsController } from '../products/controllers/admin-product.controller';
+import { VendorProductsController } from '../products/controllers/vendor-products.controller';
+import { AdminUsersController } from '../users/controllers/admin-user.controller';
+import { UsersController } from '../users/controllers/users.controller';
+import { AdminVendorsController } from '../vendors/controllers/admin-vendors.controller';
+import { VendorAccountController } from '../vendors/controllers/vendor-account.controller';
+import { VendorAuthController } from '../vendors/controllers/vendor-auth.controller';
 
 /**
  * Every endpoint that records an audit event, with its action. Audit used to be

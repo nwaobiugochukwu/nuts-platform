@@ -11,7 +11,7 @@ import {
   PlatformConfigResponseDto,
   UpdatePlatformConfigDto,
 } from '../dto/admin-platform-config.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('ADMIN - PLATFORM GOVERNANCE')
 @ApiBearerAuth()

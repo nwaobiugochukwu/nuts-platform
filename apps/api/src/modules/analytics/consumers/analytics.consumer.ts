@@ -1,10 +1,10 @@
 import { roleCan } from '@api/config/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
+import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
-import { RABBITMQ_QUEUES } from './rabbitmq.constants';
-import { RabbitMQService } from './rabbitmq.service';
+import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.service';
 import {
   getErrorMessage,
   getErrorStack,

@@ -1,3 +1,4 @@
+import { EmailConsumer } from './consumers/email.consumer';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { RabbitMQModule } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.module';
@@ -31,6 +32,7 @@ import { VendorFollowConsumer } from './consumers/vendor-follow.consumer';
     NotificationPreferencesService,
     NotificationRetentionCron,
     WishlistAlertsCron,
+    EmailConsumer,
   ],
   exports: [
     NotificationsService,

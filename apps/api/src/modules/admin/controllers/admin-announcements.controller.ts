@@ -22,7 +22,7 @@ import {
   ScheduleAdminAnnouncementDto,
   UpdateAdminAnnouncementDto,
 } from '../dto/admin-announcement.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('ADMIN - ANNOUNCEMENTS')
 @ApiBearerAuth()
