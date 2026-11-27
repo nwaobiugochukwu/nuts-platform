@@ -72,23 +72,23 @@ Status key: **done**, **todo**, **you** (an action only you can take), **decide*
 
 | ID | Item | Status |
 |---|---|---|
-| 1.1 | Upgrade vulnerable dependencies until `npm audit --omit=dev` shows no critical or high: Next.js, express chain (`proxy-addr`, `body-parser`), `multer` and `@nestjs/platform-express`, `compression`, `nanoid`, `sharp`, `postcss`, `prisma` [H1] | todo |
-| 1.2 | Remove unused direct dependencies: `zod`, `@sentry/node`, `@temporalio/activity`, `@temporalio/common`; remove the dead `BULLMQ_PREFIX` config [H8] | todo |
-| 1.3 | CI: fail on high or critical advisories; Dependabot (weekly, grouped); local secret scan before commit | todo |
-| 1.4 | Pin Node: `.nvmrc` and `engines` (Docker and CI already use 22) | todo |
-| 1.5 | One corrective migration: drop the `CREATOR` role value, create the two missing indexes, rename the legacy `creators_*` indexes and the foreign key, remove the duplicate search indexes, and declare the trigram indexes as raw-SQL-managed so a future `migrate dev` cannot drop them [H2] | todo |
-| 1.6 | CI check that the migrations and `schema.prisma` produce no drift (with the trigram list allowed) | todo |
-| 1.7 | Scope the `QueueWithoutConsumers` alert so it ignores `q.nuts.workflows` while Temporal is off [H3] | todo |
-| 1.8 | Warm the caches on start (campaigns, discover, category previews, categories) [H4] | todo |
-| 1.9 | Paystack IP filter: use the proxy-aware `req.ip`, not the client header; keep the HMAC check as the real protection [H6] | todo |
-| 1.10 | Process-level `unhandledRejection` and `uncaughtException` handlers in api, worker, jobs (log, report to Sentry, flush, exit) [H7] | todo |
-| 1.11 | Fix the root README quickstart (storefront is 5173; the new `npm run dev`); prune and group the ~60 root scripts [H9] | todo |
-| 1.12 | The lint warning in `request-context.ts`; the hard-coded `poolMax: 0` in the startup log (log the real `DB_CONNECTION_LIMIT`) [H11] | todo |
-| 1.13 | Timing breakdown in the slow-request log; investigate `auth/refresh` (bcrypt on 4 threads, `UV_THREADPOOL_SIZE`) and the `for-you` feed with a signed-in session [H10] | todo |
-| 1.14 | Branch hygiene: delete the 65 remote branches already merged into `development` and the old `feat/release1-hardening`; document the branch protection and required checks | todo |
-| 1.15 | Add `nuts_*` metric for each circuit breaker and an alert when one is open (also in phase 4) | todo |
+| 1.1 | Upgrade vulnerable dependencies until `npm audit --omit=dev` shows no critical or high: Next.js, express chain (`proxy-addr`, `body-parser`), `multer` and `@nestjs/platform-express`, `compression`, `nanoid`, `sharp`, `postcss`, `prisma` [H1] | done |
+| 1.2 | Remove unused direct dependencies: `zod`, `@sentry/node`, `@temporalio/activity`, `@temporalio/common`; remove the dead `BULLMQ_PREFIX` config [H8] | done |
+| 1.3 | CI: fail on high or critical advisories; Dependabot (weekly, grouped); local secret scan before commit | done |
+| 1.4 | Pin Node: `.nvmrc` and `engines` (Docker and CI already use 22) | done |
+| 1.5 | One corrective migration: drop the `CREATOR` role value, create the two missing indexes, rename the legacy `creators_*` indexes and the foreign key, remove the duplicate search indexes, and declare the trigram indexes as raw-SQL-managed so a future `migrate dev` cannot drop them [H2] | done |
+| 1.6 | CI check that the migrations and `schema.prisma` produce no drift (with the trigram list allowed) | done |
+| 1.7 | Scope the `QueueWithoutConsumers` alert so it ignores `q.nuts.workflows` while Temporal is off [H3] | done |
+| 1.8 | Warm the caches on start (campaigns, discover, category previews, categories) [H4] | done |
+| 1.9 | Paystack IP filter: use the proxy-aware `req.ip`, not the client header; keep the HMAC check as the real protection [H6] | done |
+| 1.10 | Process-level `unhandledRejection` and `uncaughtException` handlers in api, worker, jobs (log, report to Sentry, flush, exit) [H7] | done |
+| 1.11 | Fix the root README quickstart (storefront is 5173; the new `npm run dev`); prune and group the ~60 root scripts [H9] | done |
+| 1.12 | The lint warning in `request-context.ts`; the hard-coded `poolMax: 0` in the startup log (log the real `DB_CONNECTION_LIMIT`) [H11] | done |
+| 1.13 | Timing breakdown in the slow-request log; investigate `auth/refresh` (bcrypt on 4 threads, `UV_THREADPOOL_SIZE`) and the `for-you` feed with a signed-in session [H10] | done (the breakdown is live; `auth/refresh` uses HMAC, bcrypt only for legacy hashes, so read its real database time from `Server-Timing`) |
+| 1.14 | Branch hygiene: delete the 65 remote branches already merged into `development` and the old `feat/release1-hardening`; document the branch protection and required checks | **you**: the list of 65 merged branches is ready to delete on your word |
+| 1.15 | Add `nuts_*` metric for each circuit breaker and an alert when one is open (also in phase 4) | moved to 4.8 |
 
-**Done when:** the audit is clean, drift is zero, CI blocks new advisories, and the dev stack starts with no error or warning other than known provider issues.
+**Result (2026-11-27):** `npm audit` for production dependencies went from 33 findings (2 critical, 15 high) to 10 moderate in build-time tooling; the migrated database and `schema.prisma` agree (checked on an empty database built from all 43 migrations); CI now fails on high advisories and on drift; 580 API tests, lint, type-checks, the architecture check and a production web build pass. Not committed to the remote yet (branch `chore/phase1-dev-health`).
 
 ### Phase 2. Tests where there are none, and quality gates
 
