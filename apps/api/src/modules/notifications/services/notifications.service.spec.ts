@@ -239,6 +239,27 @@ describe('NotificationsService', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
+    it('files a notice under the category it names, not the one its type implies', async () => {
+      canSend.mockImplementation(
+        (_u: string, _r: string, _c: string, category: string) =>
+          Promise.resolve(category === 'paymentAlerts'),
+      );
+
+      // SYSTEM_ANNOUNCEMENT is marketing by type (off); named as a payment alert it is on.
+      const created = await withPreferences.create({
+        ...base,
+        category: 'paymentAlerts',
+      });
+
+      expect(canSend).toHaveBeenCalledWith(
+        'user-1',
+        'USER',
+        'inApp',
+        'paymentAlerts',
+      );
+      expect(created).toMatchObject({ id: 'n-1' });
+    });
+
     it('delivers an essential notice even though its category is switched off', async () => {
       const created = await withPreferences.create({
         ...base,

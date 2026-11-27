@@ -110,6 +110,7 @@ export class OrderEventNotificationsService {
     link?: string;
     metadata?: Record<string, unknown>;
     dedupeKey?: string;
+    category?: NotificationCategory;
   }): Promise<void> {
     try {
       await this.prisma.$transaction((tx) =>
@@ -599,7 +600,8 @@ export class OrderEventNotificationsService {
       type: 'referral_reward',
       userId: payload.referrerId,
       role: ROLE.USER,
-      category: 'marketingPromos',
+      // A reward credited to a wallet is a payment notice, not marketing.
+      category: 'paymentAlerts',
       metadata: { referralId: payload.referralId },
     });
 
@@ -613,6 +615,7 @@ export class OrderEventNotificationsService {
       link: `/wallet`,
       metadata: { referralId: payload.referralId },
       dedupeKey: `SYSTEM_ANNOUNCEMENT:referral:${payload.referralId}:USER:${payload.referrerId}`,
+      category: 'paymentAlerts',
     });
   }
 }

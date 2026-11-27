@@ -62,6 +62,12 @@ export interface CreateNotificationDto {
    * which is off by default, would silently never arrive.
    */
   essential?: boolean;
+  /**
+   * Which preference governs this notice, when the type alone would file it under the wrong one:
+   * a referral reward is `SYSTEM_ANNOUNCEMENT` by type, which counts as marketing (off by
+   * default), but it is money credited to a wallet, so it follows "payment alerts".
+   */
+  category?: NotificationCategory;
 }
 
 export interface NotificationSseEvent {
@@ -298,7 +304,7 @@ export class NotificationsService implements OnModuleInit, OnModuleDestroy {
    */
   async create(dto: CreateNotificationDto) {
     const role = dto.role ?? ROLE.USER;
-    const category = mapTypeToCategory(dto.type);
+    const category = dto.category ?? mapTypeToCategory(dto.type);
 
     if (this.preferencesService && !dto.essential) {
       const canSendInApp = await this.preferencesService.canSend(
