@@ -11,7 +11,7 @@ import { ROLE } from '@prisma/client';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import { AdminAnalyticsService } from '../admin/admin-analytics.service';
+import { AdminAnalyticsService } from '../services/admin-analytics.service';
 import { AdminAnalyticsQueryDto } from '../admin/dto/admin-analytics-query.dto';
 import {
   ActivityAnalyticsDto,

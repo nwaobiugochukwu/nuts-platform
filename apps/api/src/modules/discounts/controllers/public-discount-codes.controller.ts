@@ -13,7 +13,7 @@ import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Message } from '@api/common/decorators/message.decorator';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
-import { DiscountCodeService } from '../discount-code.service';
+import { DiscountCodeService } from '../services/discount-code.service';
 import {
   BatchProductDiscountsDto,
   PublicPlatformPromoDto,

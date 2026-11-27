@@ -12,8 +12,8 @@ import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import type { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.type';
-import { NotificationsService } from '../notifications.service';
+import type { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.types';
+import { NotificationsService } from '../services/notifications.service';
 import { ListNotificationsQueryDto } from '../dto/list-notifications-query.dto';
 
 @ApiTags('NOTIFICATIONS')

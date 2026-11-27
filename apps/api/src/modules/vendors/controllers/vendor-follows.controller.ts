@@ -12,7 +12,7 @@ import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { VendorFollowsService } from '../vendor-follows.service';
+import { VendorFollowsService } from '../services/vendor-follows.service';
 
 @ApiTags('VENDOR FOLLOWS')
 @ApiBearerAuth('JWT-auth')

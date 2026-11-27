@@ -3,7 +3,7 @@
 - **Status:** Accepted (decisions below); implementation not started. See the [implementation plan](../hub-fulfillment-and-delivery-plan.md).
 - **Date:** 2026-11-24
 - **Owners:** Platform engineering, operations
-- **Related code:** [`orders.service.ts`](../../../apps/api/src/modules/orders/orders.service.ts), [`cart.service.ts`](../../../apps/api/src/modules/cart/cart.service.ts), [schema](../../../packages/database/schema.prisma)
+- **Related code:** [`orders.service.ts`](../../../apps/api/src/modules/orders/services/orders.service.ts), [`cart.service.ts`](../../../apps/api/src/modules/cart/services/cart.service.ts), [schema](../../../packages/database/schema.prisma)
 
 ## Context
 

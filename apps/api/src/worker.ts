@@ -6,14 +6,14 @@ import { ConfigService } from '@nestjs/config';
 import { createServer } from 'node:http';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
-import { currentProcessRole, portFor } from './config/process-role';
+import { currentProcessRole, portFor } from './config/process-role.config';
 import {
   buildWorkerHealth,
   stopCronsUnlessJobsRole,
-} from './config/role-runtime';
+} from './config/role-runtime.util';
 import { RabbitMQService } from './infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { MetricsService } from './infrastructure/observability/metrics/metrics.service';
-import { startMetricsServer } from './infrastructure/observability/metrics/metrics-server';
+import { startMetricsServer } from './infrastructure/observability/metrics/metrics-server.util';
 
 /**
  * Entry point for the `worker` (queue consumers + outbox relay) and `jobs`

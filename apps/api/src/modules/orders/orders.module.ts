@@ -3,14 +3,14 @@ import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { UsersModule } from '@api/modules/users/users.module';
 import { DiscountsModule } from '@api/modules/discounts/discounts.module';
-import { ReferralsModule } from '@api/modules/referrals/referral.module';
+import { ReferralsModule } from '@api/modules/referrals/referrals.module';
 import { PaymentsModule } from '@api/modules/payments/payments.module';
 import { WalletsModule } from '@api/modules/wallets/wallets.module';
 import { OrdersController } from './controllers/orders.controller';
 import { AdminOrdersController } from './controllers/admin-order.controller';
 import { VendorOrdersController } from './controllers/vendor-orders.controller';
-import { OrdersService } from './orders.service';
-import { UnpaidOrdersCron } from './jobs/unpaid-orders.cron';
+import { OrdersService } from './services/orders.service';
+import { UnpaidOrdersJob } from './jobs/unpaid-orders.job';
 
 @Module({
   imports: [
@@ -27,7 +27,7 @@ import { UnpaidOrdersCron } from './jobs/unpaid-orders.cron';
     AdminOrdersController,
     VendorOrdersController,
   ],
-  providers: [OrdersService, UnpaidOrdersCron],
+  providers: [OrdersService, UnpaidOrdersJob],
   exports: [OrdersService],
 })
 export class OrdersModule {}

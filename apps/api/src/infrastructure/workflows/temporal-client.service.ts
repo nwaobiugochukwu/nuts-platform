@@ -4,7 +4,7 @@ import {
   Connection,
   WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
-import { currentRequestId } from '@api/common/request-context/request-context';
+import { currentRequestId } from '@api/common/request-context/request-context.util';
 import { readTemporalConfig, type TemporalConfig } from './temporal.config';
 
 export interface StartWorkflowInput {

@@ -11,7 +11,7 @@ import type { Request } from 'express';
 import { ApiEnvelopeResponse } from '@api/common/decorators/api-envelope-response.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
-import { CategoriesService } from '../categories.service';
+import { CategoriesService } from '../services/categories.service';
 import {
   CategoryBreadcrumbDto,
   CategoryResponseDto,

@@ -4,9 +4,9 @@ import { AdminDiscountCodesController } from './controllers/admin-discount-codes
 import { PublicDiscountCodesController } from './controllers/public-discount-codes.controller';
 import { VendorDiscountCodesController } from './controllers/vendor-discount-codes.controller';
 import { VoucherClaimsController } from './controllers/voucher-claims.controller';
-import { DiscountCodeService } from './discount-code.service';
-import { VoucherClaimCleanupCron } from './jobs/voucher-claim-cleanup.cron';
-import { VoucherClaimsService } from './voucher-claims.service';
+import { DiscountCodeService } from './services/discount-code.service';
+import { VoucherClaimCleanupJob } from './jobs/voucher-claim-cleanup.job';
+import { VoucherClaimsService } from './services/voucher-claims.service';
 
 @Module({
   imports: [PrismaModule],
@@ -19,7 +19,7 @@ import { VoucherClaimsService } from './voucher-claims.service';
   providers: [
     DiscountCodeService,
     VoucherClaimsService,
-    VoucherClaimCleanupCron,
+    VoucherClaimCleanupJob,
   ],
   exports: [DiscountCodeService, VoucherClaimsService],
 })

@@ -5,14 +5,14 @@ import { RabbitMQModule } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.
 import { NotificationsConsumer } from './consumers/notifications.consumer';
 import { NotificationListener } from './listeners/notification.listener';
 import { NotificationsController } from './controllers/notifications.controller';
-import { NotificationsService } from './notifications.service';
+import { NotificationsService } from './services/notifications.service';
 import { NotificationsSseController } from './controllers/notifications-sse.controller';
-import { WebPushService } from './push/push.service';
+import { WebPushService } from './services/push.service';
 import { PushSubscriptionsController } from './controllers/push.controller';
-import { NotificationPreferencesService } from './preferences/preferences.service';
+import { NotificationPreferencesService } from './services/preferences.service';
 import { NotificationPreferencesController } from './controllers/preferences.controller';
-import { NotificationRetentionCron } from './jobs/notification-retention.cron';
-import { WishlistAlertsCron } from './jobs/wishlist-alerts.cron';
+import { NotificationRetentionJob } from './jobs/notification-retention.job';
+import { WishlistAlertsJob } from './jobs/wishlist-alerts.job';
 import { VendorFollowConsumer } from './consumers/vendor-follow.consumer';
 
 @Module({
@@ -30,8 +30,8 @@ import { VendorFollowConsumer } from './consumers/vendor-follow.consumer';
     NotificationListener,
     WebPushService,
     NotificationPreferencesService,
-    NotificationRetentionCron,
-    WishlistAlertsCron,
+    NotificationRetentionJob,
+    WishlistAlertsJob,
     EmailConsumer,
   ],
   exports: [

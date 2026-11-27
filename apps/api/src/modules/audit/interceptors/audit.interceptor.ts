@@ -9,8 +9,8 @@ import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { currentProcessRole } from '@api/config/process-role';
-import { currentRequestId } from '@api/common/request-context/request-context';
+import { currentProcessRole } from '@api/config/process-role.config';
+import { currentRequestId } from '@api/common/request-context/request-context.util';
 import {
   extractIpAddress,
   extractUserAgent,

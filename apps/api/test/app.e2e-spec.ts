@@ -9,7 +9,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '../src/infrastructure/cache/redis.constants';
 import { RedlockService } from '../src/infrastructure/cache/redlock.service';
-import { OtpService } from '../src/modules/auth/otp/otp.service';
+import { OtpService } from '../src/modules/auth/services/otp.service';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 
 describe('Nuts API (e2e)', () => {

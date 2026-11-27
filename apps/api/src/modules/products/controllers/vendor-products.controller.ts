@@ -40,7 +40,7 @@ import { StockUpdateResponseDto } from '@api/modules/products/dto/stock-update-r
 import { UpdateProductDto } from '@api/modules/products/dto/update-product.dto';
 import { UpdateStockDto } from '@api/modules/products/dto/update-stock.dto';
 import { VendorProductResponseDto } from '@api/modules/products/dto/vendor-product-response.dto';
-import { ProductsService } from '@api/modules/products/products.service';
+import { ProductsService } from '@api/modules/products/services/products.service';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';

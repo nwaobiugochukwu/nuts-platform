@@ -1,5 +1,5 @@
 import { MetricsService, statusClass } from './metrics.service';
-import { tokenMatches } from './metrics-server';
+import { tokenMatches } from './metrics-server.util';
 
 describe('metrics helpers', () => {
   it('groups status codes by class', () => {

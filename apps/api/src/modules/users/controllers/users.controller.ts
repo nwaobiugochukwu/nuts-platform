@@ -27,9 +27,9 @@ import {
 import type { Request, Response } from 'express';
 
 import { ROLE } from '@prisma/client';
-import { AuthCookieService } from '@api/modules/auth/cookies/auth-cookie.service';
-import { OtpService } from '@api/modules/auth/otp/otp.service';
-import { ReferralService } from '@api/modules/referrals/referral.service';
+import { AuthCookieService } from '@api/modules/auth/services/auth-cookie.service';
+import { OtpService } from '@api/modules/auth/services/otp.service';
+import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { OtpRequired } from '@api/common/decorators/otp-required.decorator';
@@ -42,7 +42,7 @@ import { DeactivateAccountResponseDto } from '../dto/deactivate-account-response
 import { ReactivateAccountDto } from '../dto/reactivate-account.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
-import { UsersService } from '../users.service';
+import { UsersService } from '../services/users.service';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('USERS')

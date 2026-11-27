@@ -3,7 +3,7 @@
   currentRequestId,
   runWithRequestId,
   sanitizeRequestId,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 import {
   Injectable,
   Logger,

@@ -65,31 +65,31 @@ const API_LEGACY_EXCEPTIONS = new Set([
 const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
   "apps/api/src/modules/products/consumers/inventory.consumer.ts",
-  "apps/api/src/modules/auth/admin-auth.service.ts",
-  "apps/api/src/modules/auth/auth.service.ts",
-  "apps/api/src/modules/auth/sessions/refresh-session.service.ts",
-  "apps/api/src/modules/categories/categories.service.ts",
-  "apps/api/src/modules/discounts/voucher-claims.service.ts",
+  "apps/api/src/modules/auth/services/admin-auth.service.ts",
+  "apps/api/src/modules/auth/services/auth.service.ts",
+  "apps/api/src/modules/auth/services/refresh-session.service.ts",
+  "apps/api/src/modules/categories/services/categories.service.ts",
+  "apps/api/src/modules/discounts/services/voucher-claims.service.ts",
   "apps/api/src/modules/notifications/listeners/notification.listener.ts",
-  "apps/api/src/modules/orders/orders.service.ts",
-  "apps/api/src/modules/payments/payments.service.ts",
-  "apps/api/src/modules/products/product-variants.service.ts",
-  "apps/api/src/modules/products/products.service.ts",
-  "apps/api/src/modules/recommendations/personalized-feed.service.ts",
-  "apps/api/src/modules/referrals/referral.service.ts",
-  "apps/api/src/modules/vendors/vendor-follows.service.ts",
-  "apps/api/src/modules/wallets/wallet.service.ts",
+  "apps/api/src/modules/orders/services/orders.service.ts",
+  "apps/api/src/modules/payments/services/payments.service.ts",
+  "apps/api/src/modules/products/services/product-variants.service.ts",
+  "apps/api/src/modules/products/services/products.service.ts",
+  "apps/api/src/modules/recommendations/services/personalized-feed.service.ts",
+  "apps/api/src/modules/referrals/services/referral.service.ts",
+  "apps/api/src/modules/vendors/services/vendor-follows.service.ts",
+  "apps/api/src/modules/wallets/services/wallet.service.ts",
 ]);
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
 const API_DIRECT_AUDIT_ALLOWED = new Map([
   ["apps/api/src/modules/announcements/services/admin-announcements.service.ts", 2],
-  ["apps/api/src/modules/products/products.service.ts", 1],
-  ["apps/api/src/modules/users/users.service.ts", 1],
+  ["apps/api/src/modules/products/services/products.service.ts", 1],
+  ["apps/api/src/modules/users/services/users.service.ts", 1],
 ]);
 const DIRECT_AUDIT_CALL = /this\.(?:auditLog|audit)\s*\.\s*(?:log|logWithRequest)\s*\(/g;
 
-const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/database/transaction-runner.ts";
+const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/database/transaction-runner.service.ts";
 for (const file of walk(API_SRC)) {
   const r = rel(file);
   const isSpec = /\.spec\.ts$/.test(r) || r.includes("/test/");

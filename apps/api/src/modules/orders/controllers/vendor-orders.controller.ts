@@ -25,7 +25,7 @@ import {
 
 import { UpdateOrderStatusDto } from '@api/modules/orders/dto/update-order-status.dto';
 import { VendorOrderResponseDto } from '@api/modules/orders/dto/vendor-order-response.dto';
-import { OrdersService } from '@api/modules/orders/orders.service';
+import { OrdersService } from '@api/modules/orders/services/orders.service';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';

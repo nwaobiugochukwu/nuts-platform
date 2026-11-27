@@ -27,7 +27,7 @@ import { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
 import { UpdateVariantStockDto } from '@api/modules/products/dto/update-variant-stock.dto';
 import { UpdateVariantDto } from '@api/modules/products/dto/update-variant.dto';
 import { VariantStockUpdateResponseDto } from '@api/modules/products/dto/variant-stock-update-response.dto';
-import { ProductVariantsService } from '@api/modules/products/product-variants.service';
+import { ProductVariantsService } from '@api/modules/products/services/product-variants.service';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';

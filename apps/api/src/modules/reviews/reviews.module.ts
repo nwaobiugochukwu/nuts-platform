@@ -3,7 +3,7 @@ import {
   ProductReviewsCanonicalController,
   ReviewsController,
 } from './controllers/reviews.controller';
-import { ReviewsService } from './reviews.service';
+import { ReviewsService } from './services/reviews.service';
 
 @Module({
   controllers: [ReviewsController, ProductReviewsCanonicalController],

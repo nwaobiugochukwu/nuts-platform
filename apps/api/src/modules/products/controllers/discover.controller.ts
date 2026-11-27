@@ -16,7 +16,7 @@ import { CursorPaginationMetaDto } from '@api/common/utils/cursor-pagination.uti
 
 import { ProductCardDto } from '../dto/product-card.dto';
 import { QueryProductDto } from '../dto/query-product.dto';
-import { ProductsService } from '../products.service';
+import { ProductsService } from '../services/products.service';
 
 @ApiTags('DISCOVER')
 @ApiExtraModels(ApiResponseDto, CursorPaginationMetaDto, ProductCardDto)

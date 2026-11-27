@@ -28,7 +28,7 @@ import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { Public } from '@api/common/decorators/public.decorator';
-import { PaymentsService } from '../payments.service';
+import { PaymentsService } from '../services/payments.service';
 
 import { RefundPaymentDto } from '../dto';
 

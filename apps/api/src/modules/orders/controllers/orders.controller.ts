@@ -25,7 +25,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { OrdersService } from '../orders.service';
+import { OrdersService } from '../services/orders.service';
 
 import { CheckoutResponseDto } from '../dto/checkout-response.dto';
 import { CheckoutDto } from '../dto/checkout.dto';
@@ -36,7 +36,7 @@ import { PaginationQueryDto } from '@api/common/dto/pagination-query.dto';
 import { ROLE } from '@prisma/client';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import type { RequestWithUser } from '@api/common/interfaces/request-with-user.interface';
+import type { RequestWithUser } from '@api/common/types/request-with-user.types';
 
 @ApiTags('ORDERS')
 @ApiBearerAuth()

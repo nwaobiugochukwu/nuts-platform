@@ -3,26 +3,26 @@ import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { AdminAnalyticsController } from './controllers/admin-analytics.controller';
-import { AdminAnalyticsService } from './admin/admin-analytics.service';
-import { AdminAnalyticsAuditService } from './admin/admin-analytics-audit.service';
-import { AdminAnalyticsProductsService } from './admin/admin-analytics-products.service';
-import { AdminAnalyticsPromotionsService } from './admin/admin-analytics-promotions.service';
-import { AdminAnalyticsRevenueService } from './admin/admin-analytics-revenue.service';
-import { AdminAnalyticsUsersService } from './admin/admin-analytics-users.service';
+import { AdminAnalyticsService } from './services/admin-analytics.service';
+import { AdminAnalyticsAuditService } from './services/admin-analytics-audit.service';
+import { AdminAnalyticsProductsService } from './services/admin-analytics-products.service';
+import { AdminAnalyticsPromotionsService } from './services/admin-analytics-promotions.service';
+import { AdminAnalyticsRevenueService } from './services/admin-analytics-revenue.service';
+import { AdminAnalyticsUsersService } from './services/admin-analytics-users.service';
 import { VendorAnalyticsController } from './controllers/vendor-analytics.controller';
-import { VendorAnalyticsService } from './vendors/vendor-analytics.service';
-import { ProductViewsService } from './tracking/product-views/product-views.service';
-import { SearchTrackingService } from './tracking/search-tracking/search-tracking.service';
+import { VendorAnalyticsService } from './services/vendor-analytics.service';
+import { ProductViewsService } from './services/product-views.service';
+import { SearchTrackingService } from './services/search-tracking.service';
 import { AnalyticsConsumer } from './consumers/analytics.consumer';
-import { VendorSummaryCron } from './jobs/vendor-summary.cron';
+import { VendorSummaryJob } from './jobs/vendor-summary.job';
 import { AnalyticsEventsController } from './controllers/analytics-events.controller';
-import { RecommendationEventsService } from './tracking/recommendation-events.service';
-import { RecommendationEventsRetentionCron } from './jobs/recommendation-events-retention.cron';
-import { RecentProductViewRetentionCron } from './jobs/recent-product-view-retention.cron';
-import { AnalyticsEventRetentionCron } from './jobs/analytics-event-retention.cron';
+import { RecommendationEventsService } from './services/recommendation-events.service';
+import { RecommendationEventsRetentionJob } from './jobs/recommendation-events-retention.job';
+import { RecentProductViewRetentionJob } from './jobs/recent-product-view-retention.job';
+import { AnalyticsEventRetentionJob } from './jobs/analytics-event-retention.job';
 import { MarketplaceEventsController } from './controllers/marketplace-events.controller';
-import { MarketplaceEventsService } from './tracking/marketplace-events.service';
-import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
+import { MarketplaceEventsService } from './services/marketplace-events.service';
+import { MarketplaceAnalyticsService } from './services/marketplace-analytics.service';
 
 @Module({
   imports: [PrismaModule, RedisModule, CacheModule],
@@ -45,10 +45,10 @@ import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
     RecommendationEventsService,
     MarketplaceEventsService,
     MarketplaceAnalyticsService,
-    RecommendationEventsRetentionCron,
-    RecentProductViewRetentionCron,
-    AnalyticsEventRetentionCron,
-    VendorSummaryCron,
+    RecommendationEventsRetentionJob,
+    RecentProductViewRetentionJob,
+    AnalyticsEventRetentionJob,
+    VendorSummaryJob,
     AnalyticsConsumer,
   ],
   exports: [

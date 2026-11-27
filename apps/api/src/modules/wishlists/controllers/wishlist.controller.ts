@@ -31,7 +31,7 @@ import { AddToWishlistDto, WishlistResponseDto } from '../dto/wishlist.dto';
 
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { WishlistService } from '../wishlist.service';
+import { WishlistService } from '../services/wishlist.service';
 
 @ApiTags('WISHLIST')
 @ApiBearerAuth('JWT-auth')

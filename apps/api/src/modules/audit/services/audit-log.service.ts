@@ -3,8 +3,8 @@ import { Prisma } from '@prisma/client';
 import type { IncomingMessage } from 'http';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { currentProcessRole } from '@api/config/process-role';
-import { currentRequestId } from '@api/common/request-context/request-context';
+import { currentProcessRole } from '@api/config/process-role.config';
+import { currentRequestId } from '@api/common/request-context/request-context.util';
 import {
   extractIpAddress,
   extractUserAgent,

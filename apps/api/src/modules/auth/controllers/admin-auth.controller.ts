@@ -25,10 +25,10 @@ import {
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
 import type { Request, Response } from 'express';
-import { AuthCookieService } from '@api/modules/auth/cookies/auth-cookie.service';
+import { AuthCookieService } from '@api/modules/auth/services/auth-cookie.service';
 import { LoginDto } from '@api/modules/auth/dto/login.dto';
 import { JwtRefreshGuard } from '@api/modules/auth/guards/jwt-refresh.guard';
-import type { RefreshJwtPayload } from '@api/modules/auth/types/refresh-jwt-payload.type';
+import type { RefreshJwtPayload } from '@api/modules/auth/types/refresh-jwt-payload.types';
 import { AccountLockGuard } from '@api/modules/security/guards/account-lock.guard';
 import {
   RefreshTokenThrottle,
@@ -43,7 +43,7 @@ import {
   extractIpAddress,
   extractUserAgent,
 } from '@api/common/utils/request.util';
-import { AdminAuthService } from '../admin-auth.service';
+import { AdminAuthService } from '../services/admin-auth.service';
 import { AdminAuthResponseDto } from '../dto/admin-auth-response.dto';
 import { AdminAuthUserDto } from '../dto/admin-auth-user.dto';
 import { AdminRegisterDto } from '../dto/admin-register.dto';

@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   EmailProvider,
   SendEmailOptions,
-} from '@api/common/interfaces/email-provider.interface';
+} from '@api/common/types/email-provider.types';
 
 interface BrevoAddress {
   email: string;

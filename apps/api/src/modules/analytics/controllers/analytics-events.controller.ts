@@ -10,15 +10,15 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { ProductViewsService } from '../tracking/product-views/product-views.service';
-import { SearchTrackingService } from '../tracking/search-tracking/search-tracking.service';
+import { ProductViewsService } from '../services/product-views.service';
+import { SearchTrackingService } from '../services/search-tracking.service';
 import { TrackEventDto } from '../dto/track-event.dto';
 import {
   RecommendationEventDto,
   RecommendationEventsBatchDto,
-} from '../tracking/recommendation-events.dto';
-import { RecommendationEventsService } from '../tracking/recommendation-events.service';
-import { MarketplaceEventsService } from '../tracking/marketplace-events.service';
+} from '../dto/recommendation-events.dto';
+import { RecommendationEventsService } from '../services/recommendation-events.service';
+import { MarketplaceEventsService } from '../services/marketplace-events.service';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { StoreViewDto } from '../tracking/dto/store-view.dto';
 import { randomUUID } from 'node:crypto';

@@ -24,8 +24,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
-import { AuthService } from '../auth.service';
-import { AuthCookieService } from '../cookies/auth-cookie.service';
+import { AuthService } from '../services/auth.service';
+import { AuthCookieService } from '../services/auth-cookie.service';
 
 import {
   AuthApiResponseDto,
@@ -62,8 +62,8 @@ import {
 
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 
-import type { AuthenticatedUser } from '../types/authenticated-user.type';
-import type { RefreshJwtPayload } from '../types/refresh-jwt-payload.type';
+import type { AuthenticatedUser } from '../types/authenticated-user.types';
+import type { RefreshJwtPayload } from '../types/refresh-jwt-payload.types';
 import { ROLE } from '@prisma/client';
 import { AUTH_REFRESH_COOKIE } from '../constants/auth-cookies.constants';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';

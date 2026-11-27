@@ -18,10 +18,10 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { NormalizeInputPipe } from './common/pipes/normalize-input.pipe';
 import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
 import { setupSwagger } from './swagger.setup';
-import { currentProcessRole } from './config/process-role';
-import { stopCronsUnlessJobsRole } from './config/role-runtime';
+import { currentProcessRole } from './config/process-role.config';
+import { stopCronsUnlessJobsRole } from './config/role-runtime.util';
 import { MetricsService } from './infrastructure/observability/metrics/metrics.service';
-import { startMetricsServer } from './infrastructure/observability/metrics/metrics-server';
+import { startMetricsServer } from './infrastructure/observability/metrics/metrics-server.util';
 import { createHttpMetricsMiddleware } from './infrastructure/observability/metrics/http-metrics.middleware';
 
 async function bootstrap() {

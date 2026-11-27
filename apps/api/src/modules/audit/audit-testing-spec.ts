@@ -1,5 +1,5 @@
-import { runWithRequestId } from '@api/common/request-context/request-context';
-import type { AuditAnnotation } from '@api/common/request-context/request-context';
+import { runWithRequestId } from '@api/common/request-context/request-context.util';
+import type { AuditAnnotation } from '@api/common/request-context/request-context.util';
 import { currentAuditDetails } from './utils/audit-details.util';
 
 /**

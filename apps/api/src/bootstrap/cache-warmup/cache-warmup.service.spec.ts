@@ -1,7 +1,7 @@
-import { CategoriesService } from '@api/modules/categories/categories.service';
-import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
-import { ProductsService } from '@api/modules/products/products.service';
-import { VendorsService } from '@api/modules/vendors/vendors.service';
+import { CategoriesService } from '@api/modules/categories/services/categories.service';
+import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { ProductsService } from '@api/modules/products/services/products.service';
+import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import { ConfigService } from '@nestjs/config';
 import { ModuleRef } from '@nestjs/core';
 import { CacheWarmupService } from './cache-warmup.service';

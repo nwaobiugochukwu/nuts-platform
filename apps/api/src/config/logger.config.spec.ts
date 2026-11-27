@@ -1,4 +1,4 @@
-import { runWithRequestId } from '@api/common/request-context/request-context';
+import { runWithRequestId } from '@api/common/request-context/request-context.util';
 import { logProgram, pinoLoggerConfig } from './logger.config';
 
 describe('logProgram', () => {

@@ -1,4 +1,4 @@
-import { roleCan } from '@api/config/process-role';
+import { roleCan } from '@api/config/process-role.config';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';

@@ -1,6 +1,6 @@
 ﻿import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
-import type { RequestWithUser } from '@api/common/interfaces/request-with-user.interface';
+import type { RequestWithUser } from '@api/common/types/request-with-user.types';
 
 /**
  * Resolves to `true` ONLY when an authenticated ADMIN sends the

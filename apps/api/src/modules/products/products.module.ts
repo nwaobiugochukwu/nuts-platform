@@ -17,9 +17,9 @@ import {
   VendorProductVariantsCanonicalController,
   VendorProductVariantsController,
 } from './controllers/vendor-product-variants.controller';
-import { ProductsService } from './products.service';
-import { ProductVariantsService } from './product-variants.service';
-import { LowStockCron } from './jobs/low-stock.cron';
+import { ProductsService } from './services/products.service';
+import { ProductVariantsService } from './services/product-variants.service';
+import { LowStockJob } from './jobs/low-stock.job';
 
 @Module({
   imports: [PrismaModule, RedisModule, SearchModule, NotificationsModule],
@@ -37,7 +37,7 @@ import { LowStockCron } from './jobs/low-stock.cron';
   providers: [
     ProductsService,
     ProductVariantsService,
-    LowStockCron,
+    LowStockJob,
     InventoryConsumer,
   ],
   exports: [ProductsService, ProductVariantsService],

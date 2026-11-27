@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '../../cache/redis.constants';
-import { roleCan } from '../../../config/process-role';
+import { roleCan } from '../../../config/process-role.config';
 import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '../../messaging/rabbitmq/rabbitmq.constants';
 import { readTemporalConfig } from '../../workflows/temporal.config';

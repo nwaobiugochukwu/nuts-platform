@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   currentRequestId,
   runWithRequestId,
-} from '@api/common/request-context/request-context';
+} from '@api/common/request-context/request-context.util';
 import { RabbitMQService } from './rabbitmq.service';
 
 describe('RabbitMQService', () => {

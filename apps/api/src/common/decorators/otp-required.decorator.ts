@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import type { OtpPurpose } from '@api/modules/auth/otp/otp.service';
+import type { OtpPurpose } from '@api/modules/auth/services/otp.service';
 
 export const OTP_REQUIRED_KEY = 'otpRequired';
 

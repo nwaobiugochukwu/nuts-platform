@@ -10,7 +10,7 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { HeartbeatService, stateFromAge } from '../health/heartbeat.service';
-import { currentProcessRole } from '../../../config/process-role';
+import { currentProcessRole } from '../../../config/process-role.config';
 
 /** Request and transaction latency buckets, in seconds. */
 export const LATENCY_BUCKETS = [
