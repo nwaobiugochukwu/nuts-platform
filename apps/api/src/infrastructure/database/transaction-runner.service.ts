@@ -11,6 +11,7 @@ import {
   buildAuditEvent,
   type BuildAuditEventInput,
 } from '@api/infrastructure/messaging/events/audit-event.util';
+import type { PublishEventInput } from '@api/infrastructure/messaging/events/event-envelope.types';
 
 export type TransactionPreset = 'default' | 'short' | 'critical';
 
@@ -53,6 +54,11 @@ export interface TransactionContext {
     eventType: string,
     payload: Record<string, unknown>,
   ): Promise<void>;
+  /**
+   * Publishes a domain event in the standard envelope, in this transaction: it exists if and only
+   * if the change does, and is never sent for a change that rolled back. Prefer this over `emit`.
+   */
+  publish<T extends object>(input: PublishEventInput<T>): Promise<void>;
   /**
    * Records a critical audit event in this transaction (outbox), so it exists
    * if and only if the change does. Use for money, permissions and sign-in;
@@ -316,6 +322,12 @@ export class TransactionRunnerService {
           payload,
           { wakeRelay: false },
         );
+        if (!hooks.commit.includes(this.wakeRelayHook)) {
+          hooks.commit.push(this.wakeRelayHook);
+        }
+      },
+      publish: async (input) => {
+        await this.outbox.appendEnvelope(tx, input, { wakeRelay: false });
         if (!hooks.commit.includes(this.wakeRelayHook)) {
           hooks.commit.push(this.wakeRelayHook);
         }

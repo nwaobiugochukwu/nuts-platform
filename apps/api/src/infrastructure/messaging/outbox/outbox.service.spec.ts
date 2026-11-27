@@ -53,4 +53,56 @@ describe('OutboxService request ids', () => {
     service.wakeRelay();
     expect(relay.notifyNewEvent).toHaveBeenCalledTimes(2);
   });
+
+  describe('appendEnvelope', () => {
+    const event = {
+      type: 'order.shipped',
+      aggregate: { type: 'order', id: 'o1' },
+      payload: { orderId: 'o1' },
+    };
+
+    it('stores the whole envelope as the payload, with the row id as the event id', async () => {
+      const { service, tx, create } = build();
+
+      const eventId = await runWithRequestId('req-env-0001', () =>
+        service.appendEnvelope(tx as never, event, { wakeRelay: false }),
+      );
+
+      const data = create.mock.calls[0][0].data;
+      expect(data.id).toBe(eventId);
+      expect(data).toMatchObject({
+        aggregateType: 'order',
+        aggregateId: 'o1',
+        eventType: 'order.shipped',
+        status: 'PENDING',
+      });
+      expect(data.payload).toMatchObject({
+        eventId,
+        type: 'order.shipped',
+        version: 1,
+        aggregate: { type: 'order', id: 'o1' },
+        actor: { type: 'system' },
+        requestId: 'req-env-0001',
+        payload: { orderId: 'o1' },
+      });
+    });
+
+    it('refuses an event type that breaks the naming rule, writing nothing', async () => {
+      const { service, tx, create } = build();
+
+      await expect(
+        service.appendEnvelope(tx as never, { ...event, type: 'OrderShipped' }),
+      ).rejects.toThrow(/<aggregate>\.<fact>/);
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it('wakes the relay unless told not to', async () => {
+      const { service, tx, relay } = build();
+
+      await service.appendEnvelope(tx as never, event);
+      expect(relay.notifyNewEvent).toHaveBeenCalledTimes(1);
+      await service.appendEnvelope(tx as never, event, { wakeRelay: false });
+      expect(relay.notifyNewEvent).toHaveBeenCalledTimes(1);
+    });
+  });
 });

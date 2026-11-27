@@ -74,7 +74,11 @@ describe('transactionBackoffMs', () => {
 describe('TransactionRunnerService', () => {
   const tx = { marker: 'tx' } as unknown as Prisma.TransactionClient;
   let prisma: { $transaction: jest.Mock };
-  let outbox: { appendEvent: jest.Mock; wakeRelay: jest.Mock };
+  let outbox: {
+    appendEvent: jest.Mock;
+    appendEnvelope: jest.Mock;
+    wakeRelay: jest.Mock;
+  };
   let runner: TransactionRunnerService;
 
   beforeEach(() => {
@@ -85,6 +89,7 @@ describe('TransactionRunnerService', () => {
     };
     outbox = {
       appendEvent: jest.fn().mockResolvedValue(undefined),
+      appendEnvelope: jest.fn().mockResolvedValue('e-1'),
       wakeRelay: jest.fn(),
     };
     runner = new TransactionRunnerService(prisma as never, outbox as never);
@@ -176,6 +181,55 @@ describe('TransactionRunnerService', () => {
       { wakeRelay: false },
     );
     expect(order).toEqual(['work', 'commit', 'wake']);
+  });
+
+  it('publishes a domain event in the transaction and wakes the relay only after commit', async () => {
+    const order: string[] = [];
+    outbox.wakeRelay.mockImplementation(() => order.push('wake'));
+    prisma.$transaction.mockImplementation(async (fn) => {
+      const value = await fn(tx);
+      order.push('commit');
+      return value;
+    });
+    const event = {
+      type: 'order.shipped',
+      aggregate: { type: 'order', id: 'o1' },
+      payload: { orderId: 'o1' },
+    };
+
+    await runner.run(
+      async (ctx) => {
+        await ctx.publish(event);
+        order.push('work');
+      },
+      { name: 't.publish' },
+    );
+
+    expect(outbox.appendEnvelope).toHaveBeenCalledWith(tx, event, {
+      wakeRelay: false,
+    });
+    expect(order).toEqual(['work', 'commit', 'wake']);
+  });
+
+  it('does not wake the relay for a published event when the transaction rolls back', async () => {
+    prisma.$transaction.mockImplementation(async (fn) => {
+      await fn(tx);
+      throw new Error('constraint violated');
+    });
+
+    await expect(
+      runner.run(
+        async (ctx) => {
+          await ctx.publish({
+            type: 'order.shipped',
+            aggregate: { type: 'order', id: 'o1' },
+            payload: {},
+          });
+        },
+        { name: 't.rollback' },
+      ),
+    ).rejects.toThrow('constraint violated');
+    expect(outbox.wakeRelay).not.toHaveBeenCalled();
   });
 
   it('records critical audit events in the transaction via the outbox', async () => {

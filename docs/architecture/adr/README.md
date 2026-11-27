@@ -18,4 +18,5 @@ The [template](0000-template.md) is available for new decisions.
 - Link the ADR from the owning domain, platform, or scaling guide once it is relevant to implementation.
 - Keep implementation status in the source-of-truth guide; an ADR records why a decision was made, not every detail of current behavior.
 - [ADR 0005: Code layout, naming, and database naming](0005-code-layout-naming-and-database-naming.md) — accepted; domain modules with standard folders, fixed file kinds, one alias, enforced by the architecture check; database naming rule for new tables.
+- [ADR 0007: The event backbone: envelope, naming, publishing and queues](0007-event-backbone-envelope-naming-and-queues.md) — accepted; one envelope, `<aggregate>.<fact>` names, `ctx.publish` in the transaction, one queue per consumer bound to exact keys.
 - [ADR 0006: Outbox retry, ordering, and who owns the relay](0006-outbox-retry-ordering-and-relay-ownership.md) — accepted; backoff and a dead status, consumers tolerate any order and duplicates, the worker role owns the relay.

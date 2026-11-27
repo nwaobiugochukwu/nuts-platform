@@ -13,9 +13,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import {
+  OBSOLETE_BINDINGS,
+  QUEUE_BINDINGS,
   RABBITMQ_EXCHANGES,
   RABBITMQ_QUEUES,
-  RABBITMQ_ROUTING_KEYS,
 } from './rabbitmq.constants';
 import {
   getErrorCode,
@@ -210,90 +211,15 @@ export class RabbitMQService implements OnModuleInit, OnModuleDestroy {
         },
       };
 
-      await this.channel.assertQueue(RABBITMQ_QUEUES.EMAILS, queueOptions);
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.EMAILS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_QUEUES.EMAILS,
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.EMAILS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'email.*',
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.EMAILS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'order.*',
-      );
-
-      await this.channel.assertQueue(
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-        queueOptions,
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'notification.*',
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'order.*',
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.NOTIFICATIONS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'payment.*',
-      );
-
-      await this.channel.assertQueue(RABBITMQ_QUEUES.ANALYTICS, queueOptions);
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.ANALYTICS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_ROUTING_KEYS.ANALYTICS_EVENT,
-      );
-
-      await this.channel.assertQueue(
-        RABBITMQ_QUEUES.VENDOR_EVENTS,
-        queueOptions,
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.VENDOR_EVENTS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED,
-      );
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.VENDOR_EVENTS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED,
-      );
-
-      await this.channel.assertQueue(RABBITMQ_QUEUES.INVENTORY, queueOptions);
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.INVENTORY,
-        RABBITMQ_EXCHANGES.TOPIC,
-        'inventory.*',
-      );
-
-      await this.channel.assertQueue(RABBITMQ_QUEUES.AUDIT, queueOptions);
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.AUDIT,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_ROUTING_KEYS.AUDIT_EVENT,
-      );
-
-      await this.channel.assertQueue(RABBITMQ_QUEUES.WORKFLOWS, queueOptions);
-      await this.channel.bindQueue(
-        RABBITMQ_QUEUES.WORKFLOWS,
-        RABBITMQ_EXCHANGES.TOPIC,
-        RABBITMQ_ROUTING_KEYS.WORKFLOW_START,
-      );
+      for (const [queue, keys] of Object.entries(QUEUE_BINDINGS)) {
+        await this.channel.assertQueue(queue, queueOptions);
+        for (const key of keys) {
+          await this.channel.bindQueue(queue, RABBITMQ_EXCHANGES.TOPIC, key);
+        }
+      }
+      for (const { queue, key } of OBSOLETE_BINDINGS) {
+        await this.channel.unbindQueue(queue, RABBITMQ_EXCHANGES.TOPIC, key);
+      }
 
       // Retry queues: a failed message waits in one (no consumer, expires after its delay) and
       // is dead-lettered back to its work queue through the default exchange.
