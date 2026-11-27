@@ -4,7 +4,7 @@ import { ROLE } from '@prisma/client';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
-import { StoreViewDto } from '../tracking/dto/store-view.dto';
+import { StoreViewDto } from '../dto/store-view.dto';
 import { MarketplaceEventsService } from '../services/marketplace-events.service';
 
 @ApiTags('MARKETPLACE ANALYTICS EVENTS')

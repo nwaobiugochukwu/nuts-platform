@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
-import { MarketplaceAnalyticsSummaryDto } from '../../dto/marketplace-analytics.dto';
+import { MarketplaceAnalyticsSummaryDto } from './marketplace-analytics.dto';
 
 export class VendorAnalyticsOrderStatusCountDto {
   @ApiProperty({

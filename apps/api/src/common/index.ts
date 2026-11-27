@@ -6,7 +6,6 @@ export * from './filters/global-exception.filter';
 
 // Guards
 export * from './guards/jwt-auth.guard';
-export * from './guards/otp.guard';
 export * from './guards/roles.guard';
 
 // Interceptors

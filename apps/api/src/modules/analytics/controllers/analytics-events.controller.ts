@@ -20,7 +20,7 @@ import {
 import { RecommendationEventsService } from '../services/recommendation-events.service';
 import { MarketplaceEventsService } from '../services/marketplace-events.service';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
-import { StoreViewDto } from '../tracking/dto/store-view.dto';
+import { StoreViewDto } from '../dto/store-view.dto';
 import { randomUUID } from 'node:crypto';
 
 interface StoreViewEventPayload {

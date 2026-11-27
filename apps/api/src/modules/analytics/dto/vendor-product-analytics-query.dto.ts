@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsInt, Max, Min } from 'class-validator';
-import { AnalyticsQueryDto } from '../../dto/analytics-query.dto';
+import { AnalyticsQueryDto } from './analytics-query.dto';
 
 export class VendorProductAnalyticsQueryDto extends AnalyticsQueryDto {
   @Type(() => Number)

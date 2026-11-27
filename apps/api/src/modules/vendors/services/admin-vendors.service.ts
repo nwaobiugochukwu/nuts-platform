@@ -8,7 +8,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   VENDOR_STORE,
   VENDOR_STORE_PRODUCTS,
-} from '@api/common/constants/cache.constant';
+} from '@api/common/constants/cache.constants';
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
 import { QueryAdminVendorsDto } from '../dto/query-admin-vendors.dto';

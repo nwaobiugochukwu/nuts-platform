@@ -16,7 +16,7 @@ import { getErrorMessage } from '@api/common/utils/error-details.util';
 import {
   NotificationPreferencesService,
   NotificationCategory,
-} from '../services/preferences.service';
+} from '../services/notification-preferences.service';
 import type {
   OrderCancelledPayload,
   OrderDeliveredPayload,

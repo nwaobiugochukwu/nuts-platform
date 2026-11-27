@@ -13,7 +13,7 @@ import { AdminAuthService } from './services/admin-auth.service';
 import { OtpService } from './services/otp.service';
 import { AuthSessionService } from './services/auth-session.service';
 import { RefreshSessionService } from './services/refresh-session.service';
-import { AuthCookiesModule } from './auth-cookie.module';
+import { AuthCookiesModule } from './auth-cookies.module';
 import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 import { JwtStrategy } from './strategies/access/jwt.strategy';
 import { GoogleAuthService } from './services/google-auth.service';

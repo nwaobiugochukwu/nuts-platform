@@ -1,7 +1,7 @@
 import { ROLE } from '@prisma/client';
 
-import { RecommendationEventsService } from '../services/recommendation-events.service';
-import { SearchTrackingService } from '../services/search-tracking.service';
+import { RecommendationEventsService } from './recommendation-events.service';
+import { SearchTrackingService } from './search-tracking.service';
 
 describe('behavioural signals refresh recommendations', () => {
   describe('RecommendationEventsService', () => {

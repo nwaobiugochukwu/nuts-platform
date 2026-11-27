@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import './instrument';
+import './bootstrap/instrument';
 
 import { NestFactory } from '@nestjs/core';
 import { createServer } from 'node:http';

@@ -7,9 +7,9 @@
  *
  * Rules
  *  API  1. `common/` and `infrastructure/` are lower layers: they must not import
- *          `modules/*` (known legacy exceptions are listed in API_LEGACY_EXCEPTIONS
- *          and may only shrink).
- *       2. A module never reaches into another module's `controllers/` or `jobs/`.
+ *          `modules/*`. There are no exceptions.
+ *       2. A module never reaches into another module's `controllers/`, `jobs/`,
+ *          `consumers/` or `listeners/`.
  *          Only providers (services), DTOs, constants and types are shared.
  *       3. Database transactions are opened only through `TransactionRunner`
  *          (infrastructure/database). Files that still call `$transaction`
@@ -22,6 +22,13 @@
  *          directly. The few calls that run outside any request (scheduled or
  *          background code) are listed in API_DIRECT_AUDIT_ALLOWED with their exact
  *          count, and may only shrink.
+ *       6. Layout and naming (scripts/architecture-layout-rules.mjs): every file is
+ *          `<kebab-name>.<allowed-kind>.ts`; a service, controller, module, consumer,
+ *          job, guard, interceptor, pipe, filter, middleware, listener or strategy
+ *          exports a class named after its file; a module holds only its `*.module.ts`
+ *          files and the standard folders; consumers live in `modules/<domain>/consumers`
+ *          (or `infrastructure/workflows`); `@api/*` is the only internal alias.
+ *          Known exceptions are listed in API_LAYOUT_LEGACY and may only shrink.
  *  WEB  3. One import alias: `@/`. No relative imports that climb out of a layer
  *          directory more than two levels (use `@/`).
  *       4. Shared UI layers (`components/ui|form|data|feedback|modal|navigation|theme`)
@@ -32,6 +39,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  checkAlias, checkClassName, checkConsumerLocation, checkFileName, checkModuleEntry,
+} from "./architecture-layout-rules.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const violations = [];
@@ -51,14 +61,6 @@ const rel = (p) => path.relative(root, p).split(path.sep).join("/");
 
 // ── API ───────────────────────────────────────────────────────────────────────
 const API_SRC = path.join(root, "apps/api/src");
-// Legacy inversions (lower layer -> module). Do not add to this list; remove entries.
-const API_LEGACY_EXCEPTIONS = new Set([
-  "apps/api/src/common/guards/registrations.guard.ts",
-  "apps/api/src/common/guards/maintenance-mode.guard.ts",
-  "apps/api/src/common/guards/otp.guard.ts",
-  "apps/api/src/common/decorators/otp-required.decorator.ts",
-  "apps/api/src/common/middleware/maintenance-mode.middleware.ts",
-]);
 
 // Files that still open transactions with `prisma.$transaction` directly. Convert them to
 // `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
@@ -87,6 +89,8 @@ const API_DIRECT_AUDIT_ALLOWED = new Map([
   ["apps/api/src/modules/products/services/products.service.ts", 1],
   ["apps/api/src/modules/users/services/users.service.ts", 1],
 ]);
+// Layout/naming exceptions that still exist. Do not add to this set; fix the file and remove it.
+const API_LAYOUT_LEGACY = new Set([]);
 const DIRECT_AUDIT_CALL = /this\.(?:auditLog|audit)\s*\.\s*(?:log|logWithRequest)\s*\(/g;
 
 const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/database/transaction-runner.service.ts";
@@ -113,14 +117,25 @@ for (const file of walk(API_SRC)) {
   if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
     violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
   }
+  if (!r.includes("/test/")) {
+    const fromSrc = r.slice("apps/api/src/".length);
+    const problems = [
+      ...checkFileName(fromSrc),
+      ...(isSpec ? [] : checkClassName(fromSrc, fs.readFileSync(file, "utf8"))),
+      ...checkConsumerLocation(fromSrc),
+      ...(layer === "modules" ? checkModuleEntry(fromSrc.split("/").slice(2).join("/")) : []),
+    ];
+    if (!API_LAYOUT_LEGACY.has(r)) for (const problem of problems) violations.push(`[api:6] ${r}: ${problem}`);
+  }
   for (const spec of importsOf(file)) {
+    for (const problem of checkAlias(spec)) violations.push(`[api:6] ${r}: ${problem}`);
     if (!spec.startsWith("@api/modules/")) continue;
-    if (!isSpec && (layer === "common" || layer === "infrastructure") && !API_LEGACY_EXCEPTIONS.has(r)) {
+    if (!isSpec && (layer === "common" || layer === "infrastructure")) {
       violations.push(`[api:1] ${r} (lower layer) imports ${spec}`);
     }
     const target = spec.split("/")[2];
     const own = layer === "modules" ? r.split("/")[4] : null;
-    if (layer === "modules" && own && target !== own && /\/(controllers|jobs)\//.test(spec) && !isSpec) {
+    if (layer === "modules" && own && target !== own && /\/(controllers|jobs|consumers|listeners)\//.test(spec) && !isSpec) {
       violations.push(`[api:2] ${r} imports another module's internals: ${spec}`);
     }
   }

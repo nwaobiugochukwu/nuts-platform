@@ -4,7 +4,7 @@ import {
   TopCategoryDto,
   TopProductDto,
   TopVendorDto,
-} from '../admin/dto/admin-analytics-summary.dto';
+} from '../dto/admin-analytics-summary.dto';
 
 @Injectable()
 export class AdminAnalyticsProductsService {

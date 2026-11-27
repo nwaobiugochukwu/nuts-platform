@@ -12,7 +12,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuditModule } from './modules/audit/audit.module';
 import { PerformanceInterceptor } from './common/interceptors/performance.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { OtpGuard } from './common/guards/otp.guard';
+import { OtpGuard } from './modules/auth/guards/otp.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
 

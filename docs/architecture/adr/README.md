@@ -17,3 +17,4 @@ The [template](0000-template.md) is available for new decisions.
 - Use `Proposed` while the choice is under review, `Accepted` after the decision, and `Superseded` or `Deprecated` when it no longer governs the system.
 - Link the ADR from the owning domain, platform, or scaling guide once it is relevant to implementation.
 - Keep implementation status in the source-of-truth guide; an ADR records why a decision was made, not every detail of current behavior.
+- [ADR 0005: Code layout, naming, and database naming](0005-code-layout-naming-and-database-naming.md) — accepted; domain modules with standard folders, fixed file kinds, one alias, enforced by the architecture check; database naming rule for new tables.

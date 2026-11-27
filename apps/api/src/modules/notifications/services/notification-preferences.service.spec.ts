@@ -1,5 +1,5 @@
 import { ROLE } from '@prisma/client';
-import { NotificationPreferencesService } from './preferences.service';
+import { NotificationPreferencesService } from './notification-preferences.service';
 
 describe('NotificationPreferencesService', () => {
   let service: NotificationPreferencesService;

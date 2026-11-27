@@ -13,7 +13,7 @@ import {
   CATEGORY_BY_SLUG,
   CATEGORY_TREE,
   CATEGORY_TTL,
-} from '@api/common/constants/cache.constant';
+} from '@api/common/constants/cache.constants';
 import { mapPrismaError } from '@api/common/utils/prisma-error.util';
 import { generateSlug } from '@api/common/utils/slug.util';
 import {

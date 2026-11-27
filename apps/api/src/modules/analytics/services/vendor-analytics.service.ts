@@ -7,12 +7,12 @@ import {
   parseDateRange,
 } from '@api/common/utils/date-range.util';
 import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
-import { VendorProductAnalyticsQueryDto } from '../vendors/dto/vendor-product-analytics-query.dto';
+import { VendorProductAnalyticsQueryDto } from '../dto/vendor-product-analytics-query.dto';
 import {
   RANGE_DAYS,
   VendorAnalyticsQueryDto,
-} from '../vendors/dto/vendor-analytics-query.dto';
-import { VendorAnalyticsSummaryDto } from '../vendors/dto/vendor-analytics-summary.dto';
+} from '../dto/vendor-analytics-query.dto';
+import { VendorAnalyticsSummaryDto } from '../dto/vendor-analytics-summary.dto';
 
 const PAID_PAYMENT_STATUSES = [
   PaymentStatus.SUCCESS,

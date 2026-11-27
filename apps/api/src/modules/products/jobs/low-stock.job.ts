@@ -10,7 +10,7 @@ import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { LOW_STOCK } from '@api/common/constants';
 import { generateJobId } from '@api/common/utils';
 import { NotificationsService } from '@api/modules/notifications/services/notifications.service';
-import { NotificationPreferencesService } from '@api/modules/notifications/services/preferences.service';
+import { NotificationPreferencesService } from '@api/modules/notifications/services/notification-preferences.service';
 
 interface LowStockEmailJob {
   vendorId: string;

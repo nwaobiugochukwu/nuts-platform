@@ -20,7 +20,7 @@ import { fillAnalyticsDateGaps } from '@api/common/utils/date-range.util';
 import {
   DailyTrendDto,
   OrderStatusCountDto,
-} from '../admin/dto/admin-analytics-summary.dto';
+} from '../dto/admin-analytics-summary.dto';
 
 const REVENUE_PAYMENT_STATUSES = [
   PaymentStatus.SUCCESS,

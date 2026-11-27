@@ -1,7 +1,7 @@
 ﻿import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { fillAnalyticsDateGaps } from '@api/common/utils/date-range.util';
-import { ActivityAnalyticsDto } from '../admin/dto/admin-analytics-summary.dto';
+import { ActivityAnalyticsDto } from '../dto/admin-analytics-summary.dto';
 
 @Injectable()
 export class AdminAnalyticsAuditService {

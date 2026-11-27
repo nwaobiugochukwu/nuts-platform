@@ -18,10 +18,10 @@ import { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.ty
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
-import { WebPushService } from '../services/push.service';
-import { SubscribePushDto } from '../push/dto/subscribe-push.dto';
-import { UnsubscribePushDto } from '../push/dto/unsubscribe-push.dto';
-import { NotificationPreferencesService } from '../services/preferences.service';
+import { WebPushService } from '../services/web-push.service';
+import { SubscribePushDto } from '../dto/subscribe-push.dto';
+import { UnsubscribePushDto } from '../dto/unsubscribe-push.dto';
+import { NotificationPreferencesService } from '../services/notification-preferences.service';
 
 @ApiTags('NOTIFICATIONS - PUSH')
 @Controller('notifications/push')

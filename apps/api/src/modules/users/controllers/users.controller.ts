@@ -32,7 +32,7 @@ import { OtpService } from '@api/modules/auth/services/otp.service';
 import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
-import { OtpRequired } from '@api/common/decorators/otp-required.decorator';
+import { OtpRequired } from '@api/modules/auth/decorators/otp-required.decorator';
 import { Public } from '@api/common/decorators/public.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
