@@ -8,6 +8,7 @@ import {
   OrderPaymentCanonicalController,
   PaymentsController,
 } from './controllers/payments.controller';
+import { OrderConfirmationEmailConsumer } from './consumers/order-confirmation-email.consumer';
 import { PaymentWebhookConsumer } from './consumers/payment-webhook.consumer';
 import { PaymentsService } from './services/payments.service';
 import { WebhookInboxService } from './services/webhook-inbox.service';
@@ -21,7 +22,12 @@ import { WebhookInboxService } from './services/webhook-inbox.service';
     MailModule,
   ],
   controllers: [PaymentsController, OrderPaymentCanonicalController],
-  providers: [PaymentsService, WebhookInboxService, PaymentWebhookConsumer],
+  providers: [
+    PaymentsService,
+    WebhookInboxService,
+    PaymentWebhookConsumer,
+    OrderConfirmationEmailConsumer,
+  ],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

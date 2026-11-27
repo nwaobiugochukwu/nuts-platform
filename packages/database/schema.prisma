@@ -168,6 +168,7 @@ model User {
   userWallet             UserWallet?
   wishlistItems          WishlistItem[]
   authSessions           UserAuthSession[]
+  knownDevices           UserKnownDevice[]
 
   @@index([isActive])
   @@index([isEmailVerified])
@@ -1322,4 +1323,21 @@ model WebhookInbox {
   @@unique([provider, eventKey])
   @@index([status, receivedAt])
   @@map("webhook_inbox")
+}
+
+/// A browser and system a customer has signed in from (see DeviceTrackingService).
+model UserKnownDevice {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  /// sha256 of browser and operating system; never includes the IP address.
+  deviceHash  String   @map("device_hash")
+  label       String
+  lastIp      String?  @map("last_ip")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceHash])
+  @@map("user_known_devices")
 }

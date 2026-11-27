@@ -16,6 +16,7 @@ describe('RefreshSessionService user sessions', () => {
   };
 
   let service: RefreshSessionService;
+  let config: { getOrThrow: jest.Mock };
   let prisma: {
     $transaction: jest.Mock;
     user: { findUnique: jest.Mock; updateMany: jest.Mock };
@@ -59,7 +60,7 @@ describe('RefreshSessionService user sessions', () => {
       signAsync: jest.fn().mockResolvedValue('signed-token'),
       verifyAsync: jest.fn(),
     };
-    const config = {
+    config = {
       getOrThrow: jest.fn((key: string) => {
         const values: Record<string, string> = {
           JWT_ISSUER: 'nuts-test',
@@ -79,6 +80,27 @@ describe('RefreshSessionService user sessions', () => {
       jwtService as never,
       config as never,
     );
+  });
+
+  it('records the sign-in device after the session is created, and a failure there cannot fail the sign-in', async () => {
+    const devices = { recordSignIn: jest.fn().mockResolvedValue(false) };
+    const withDevices = new RefreshSessionService(
+      prisma as never,
+      jwtService as never,
+      config as never,
+      undefined,
+      undefined,
+      devices as never,
+    );
+
+    await withDevices.issueUserSession(user);
+
+    expect(prisma.userAuthSession.create).toHaveBeenCalledTimes(1);
+    expect(devices.recordSignIn).toHaveBeenCalledWith({
+      id: 'user-1',
+      email: 'user@example.com',
+      firstName: 'Test',
+    });
   });
 
   it('creates independent refresh sessions for separate logins on the same account', async () => {

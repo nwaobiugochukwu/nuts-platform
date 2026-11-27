@@ -8,7 +8,8 @@ import {
 import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-import { EmailService } from '@api/infrastructure/mail/email.service';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
@@ -47,10 +48,10 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
-    private readonly emailService: EmailService,
     private readonly referralService: ReferralService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
+    private readonly outbox: OutboxService,
     private readonly googleAuthService?: GoogleAuthService,
   ) {}
 
@@ -146,8 +147,28 @@ export class AuthService {
           );
         }
 
+        // The welcome email is sent by a consumer of this event; it exists only if the
+        // account does.
+        await this.outbox.appendEnvelope(
+          tx,
+          {
+            type: DomainEvents.USER_REGISTERED,
+            aggregate: { type: 'user', id: createdUser.id },
+            actor: { type: 'user', id: createdUser.id },
+            payload: {
+              userId: createdUser.id,
+              email: createdUser.email,
+              firstName: createdUser.firstName,
+              authProvider: 'LOCAL',
+              hasReferral: Boolean(referral),
+            },
+          },
+          { wakeRelay: false },
+        );
+
         return createdUser;
       });
+      this.outbox.wakeRelay();
 
       /*
        * Session creation happens AFTER registration commits.
@@ -164,11 +185,6 @@ export class AuthService {
           hasReferral: Boolean(referral),
         },
       });
-
-      this.fireAndForget(
-        this.emailService.sendWelcomeEmail(email, dto.firstName ?? ''),
-        'welcome email',
-      );
 
       return session;
     } catch (error) {
@@ -456,6 +472,23 @@ export class AuthService {
           );
         }
 
+        await this.outbox.appendEnvelope(
+          tx,
+          {
+            type: DomainEvents.USER_REGISTERED,
+            aggregate: { type: 'user', id: created.id },
+            actor: { type: 'user', id: created.id },
+            payload: {
+              userId: created.id,
+              email: created.email,
+              firstName: created.firstName,
+              authProvider: 'GOOGLE',
+              hasReferral: Boolean(referral),
+            },
+          },
+          { wakeRelay: false },
+        );
+
         return created;
       })
       .catch((error: unknown) => {
@@ -477,10 +510,7 @@ export class AuthService {
       payload: { authProvider: 'GOOGLE' },
     });
 
-    this.fireAndForget(
-      this.emailService.sendWelcomeEmail(payload.email, payload.firstName),
-      'welcome email',
-    );
+    this.outbox.wakeRelay();
 
     return session;
   }
@@ -649,16 +679,38 @@ export class AuthService {
     const password = await bcrypt.hash(dto.newPassword, BCRYPT_COST_FACTOR);
 
     try {
-      const user = await this.prisma.user.update({
-        where: { email },
-        data: {
-          password,
-        },
-        select: {
-          id: true,
-          firstName: true,
-        },
+      // The new password and the "password changed" event commit together; the confirmation
+      // email is sent by a consumer of the event.
+      const user = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.user.update({
+          where: { email },
+          data: {
+            password,
+          },
+          select: {
+            id: true,
+            firstName: true,
+          },
+        });
+        await this.outbox.appendEnvelope(
+          tx,
+          {
+            type: DomainEvents.USER_PASSWORD_CHANGED,
+            aggregate: { type: 'user', id: updated.id },
+            actor: { type: 'user', id: updated.id },
+            payload: {
+              userId: updated.id,
+              email,
+              firstName: updated.firstName,
+              role: 'USER',
+              via: 'password-reset',
+            },
+          },
+          { wakeRelay: false },
+        );
+        return updated;
       });
+      this.outbox.wakeRelay();
 
       // Revoke ALL sessions atomically (UserAuthSession + account-level tokens + Redis stamp)
       await this.refreshSessionService.revokeAllUserSessions(user.id);
@@ -667,14 +719,6 @@ export class AuthService {
         entityId: user.id,
         userId: user.id,
       });
-
-      this.fireAndForget(
-        this.emailService.sendPasswordResetSuccessEmail(
-          email,
-          user.firstName ?? '',
-        ),
-        'password-reset confirmation email',
-      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

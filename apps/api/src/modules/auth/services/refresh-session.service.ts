@@ -16,6 +16,7 @@ import type Redis from 'ioredis';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { AuthSessionService } from './auth-session.service';
+import { DeviceTrackingService } from './device-tracking.service';
 
 import {
   ADMIN_REFRESH_SELECT,
@@ -57,6 +58,7 @@ export class RefreshSessionService {
     configService: ConfigService,
     @Optional() private readonly authSessionService?: AuthSessionService,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis?: Redis,
+    @Optional() private readonly devices?: DeviceTrackingService,
   ) {
     this.jwtIssuer = configService.getOrThrow<string>('JWT_ISSUER');
     this.accessAudience = configService.getOrThrow<string>(
@@ -115,6 +117,14 @@ export class RefreshSessionService {
           expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
         },
       });
+    });
+
+    // A sign-in from a device this customer has not used before triggers a security email.
+    // It never holds up or fails the sign-in itself.
+    await this.devices?.recordSignIn({
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
     });
 
     return { user: this.toAuthUserDto(user), tokens };
