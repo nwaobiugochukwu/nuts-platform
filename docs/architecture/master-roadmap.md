@@ -94,13 +94,13 @@ Status key: **done**, **todo**, **you** (an action only you can take), **decide*
 
 | ID | Item | Status |
 |---|---|---|
-| 2.1 | Referral service (money) [H5] | todo |
-| 2.2 | All consumers: email, inventory, analytics, notifications, vendor-follow, audit, workflow-start (success, failure, redelivery) | todo |
-| 2.3 | The 11 cron jobs without tests, starting with unpaid orders, abandoned carts and vendor summary | todo |
-| 2.4 | Outbox relay under failure: broker down, publish rejected, crash between publish and settle, two relays at once | todo |
-| 2.5 | End-to-end money flow test: checkout, pay, webhook, ship, deliver, earnings, refund | todo |
-| 2.6 | Smoke test that every route in the OpenAPI document answers without a 5xx (the sweep I ran by hand) | todo |
-| 2.7 | Coverage thresholds in CI, set at today's level and raised over time | todo |
+| 2.1 | Referral service (money) [H5] | done (28 tests) |
+| 2.2 | All consumers: email, inventory, analytics, notifications, vendor-follow, audit, workflow-start (success, failure, redelivery) | done (all 7 consumers; two known defects pinned as failing tests) |
+| 2.3 | The 11 cron jobs without tests, starting with unpaid orders, abandoned carts and vendor summary | done (all 12 jobs and the shared lock; one known defect pinned) |
+| 2.4 | Outbox relay under failure: broker down, publish rejected, crash between publish and settle, two relays at once | done except two relays at once, which needs a real database |
+| 2.5 | End-to-end money flow test: checkout, pay, webhook, ship, deliver, earnings, refund | done (the existing suite repaired and now run in CI) |
+| 2.6 | Smoke test that every route in the OpenAPI document answers without a 5xx (the sweep I ran by hand) | done (`npm run smoke:routes`, usable after a deploy) |
+| 2.7 | Coverage thresholds in CI, set at today's level and raised over time | done (CI runs `test:api:ci`: global floors 42/30/30/42 and higher floors on the covered areas; baseline in the audit) |
 
 **Done when:** every consumer, cron and money service has tests, and CI enforces them.
 

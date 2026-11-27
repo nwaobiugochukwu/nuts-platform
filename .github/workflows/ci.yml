@@ -167,7 +167,7 @@ jobs:
         run: npm run db:generate
 
       - name: Run Backend Unit & Validation Tests
-        run: npm run test:api
+        run: npm run test:api:ci
 
   test-frontend-auth:
     name: Frontend Authentication Tests

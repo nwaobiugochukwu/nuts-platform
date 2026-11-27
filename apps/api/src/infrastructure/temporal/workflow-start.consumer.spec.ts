@@ -1,67 +1,82 @@
+import { RABBITMQ_QUEUES } from '../rabbitmq/rabbitmq.constants';
+import { fakeRabbit, withRole } from '../rabbitmq/consumer-harness-spec';
 import { WorkflowStartConsumer } from './workflow-start.consumer';
 
 describe('WorkflowStartConsumer', () => {
-  const original = { ...process.env };
-  afterEach(() => {
-    process.env = { ...original };
+  let harness: ReturnType<typeof fakeRabbit>;
+  let temporal: { enabled: boolean; startWorkflow: jest.Mock };
+  let consumer: WorkflowStartConsumer;
+  const request = {
+    workflowType: 'orderPayment',
+    workflowId: 'order-payment:o1',
+    taskQueue: 'nuts',
+  };
+
+  beforeEach(() => {
+    harness = fakeRabbit();
+    temporal = {
+      enabled: true,
+      startWorkflow: jest.fn().mockResolvedValue({ started: true }),
+    };
+    consumer = new WorkflowStartConsumer(harness.rabbit, temporal as never);
+    jest
+      .spyOn((consumer as any).logger, 'warn')
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn((consumer as any).logger, 'debug')
+      .mockImplementation(() => undefined);
   });
 
-  function build(enabled: boolean) {
-    let handler: (message: unknown) => Promise<void> = () => Promise.resolve();
-    const rabbit = {
-      consume: jest.fn((_queue: string, fn: typeof handler) => {
-        handler = fn;
-        return Promise.resolve();
-      }),
-    };
-    const temporal = {
-      enabled,
-      startWorkflow: jest
-        .fn()
-        .mockResolvedValue({ started: true, workflowId: 'w' }),
-    };
-    const consumer = new WorkflowStartConsumer(
-      rabbit as never,
-      temporal as never,
-    );
-    return { consumer, rabbit, temporal, run: (m: unknown) => handler(m) };
+  async function handle(payload: unknown) {
+    await consumer.onModuleInit();
+    return harness.handlerFor(RABBITMQ_QUEUES.WORKFLOWS)(payload);
   }
 
-  it('consumes the workflows queue and starts what it is told to', async () => {
-    delete process.env.PROCESS_ROLE;
-    const { consumer, rabbit, temporal, run } = build(true);
-    await consumer.onModuleInit();
-    expect(rabbit.consume).toHaveBeenCalledWith(
-      'q.nuts.workflows',
-      expect.any(Function),
-    );
-    const message = {
-      workflowType: 'T',
-      workflowId: 'order-payment:1',
-      taskQueue: 'nuts-payments',
-      args: [1],
-    };
-    await run(message);
-    expect(temporal.startWorkflow).toHaveBeenCalledWith(message);
+  it('starts the requested workflow', async () => {
+    await handle(request);
+
+    expect(temporal.startWorkflow).toHaveBeenCalledWith(request);
   });
 
-  it('ignores malformed messages', async () => {
-    delete process.env.PROCESS_ROLE;
-    const { consumer, temporal, run } = build(true);
+  it('does not consume while Temporal is disabled', async () => {
+    temporal.enabled = false;
+
     await consumer.onModuleInit();
-    await run({ workflowType: 'T' });
-    expect(temporal.startWorkflow).not.toHaveBeenCalled();
+
+    expect(harness.consume).not.toHaveBeenCalled();
   });
 
-  it('does not consume when Temporal is disabled or the role has no consumers', async () => {
-    delete process.env.PROCESS_ROLE;
-    const disabled = build(false);
-    await disabled.consumer.onModuleInit();
-    expect(disabled.rabbit.consume).not.toHaveBeenCalled();
+  it('does not consume in the api program', async () => {
+    await withRole('api', () => consumer.onModuleInit());
 
-    process.env.PROCESS_ROLE = 'api';
-    const api = build(true);
-    await api.consumer.onModuleInit();
-    expect(api.rabbit.consume).not.toHaveBeenCalled();
+    expect(harness.consume).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no payload', undefined],
+    ['no workflow type', { workflowId: 'w', taskQueue: 'q' }],
+    ['no workflow id', { workflowType: 't', taskQueue: 'q' }],
+    ['no task queue', { workflowType: 't', workflowId: 'w' }],
+  ])(
+    'skips a malformed request (%s) without failing it',
+    async (_label, payload) => {
+      await expect(handle(payload)).resolves.toBeUndefined();
+      expect(temporal.startWorkflow).not.toHaveBeenCalled();
+    },
+  );
+
+  it('treats an already-started workflow as a harmless duplicate', async () => {
+    temporal.startWorkflow.mockResolvedValue({
+      started: false,
+      reason: 'already_started',
+    });
+
+    await expect(handle(request)).resolves.toBeUndefined();
+  });
+
+  it('lets a Temporal failure fail the message so it is retried', async () => {
+    temporal.startWorkflow.mockRejectedValue(new Error('temporal unreachable'));
+
+    await expect(handle(request)).rejects.toThrow('temporal unreachable');
   });
 });

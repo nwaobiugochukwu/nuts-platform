@@ -50,7 +50,8 @@
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f api",
     "start:dev": "npm run dev",
-    "start:staging": "cross-env NODE_ENV=staging TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/main"
+    "start:staging": "cross-env NODE_ENV=staging TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/main",
+    "test:ci": "jest --coverage --coverageReporters=text-summary && npm run test:workflows"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.12",
@@ -217,6 +218,50 @@
       "^@api/modules/health/(.*)$": "<rootDir>/modules/health/$1",
       "^@api/modules/(.*)$": "<rootDir>/modules/$1",
       "^@api/(.*)$": "<rootDir>/$1"
+    },
+    "coverageThreshold": {
+      "global": {
+        "statements": 42,
+        "branches": 30,
+        "functions": 30,
+        "lines": 42
+      },
+      "./src/infrastructure/outbox/": {
+        "statements": 90,
+        "branches": 90,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/modules/referrals/": {
+        "statements": 90,
+        "branches": 90,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/common/audit-log/": {
+        "statements": 90,
+        "branches": 80,
+        "functions": 85,
+        "lines": 90
+      },
+      "./src/common/request-context/": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/infrastructure/transaction/": {
+        "statements": 80,
+        "branches": 75,
+        "functions": 70,
+        "lines": 80
+      },
+      "./src/infrastructure/rabbitmq/": {
+        "statements": 60,
+        "branches": 60,
+        "functions": 50,
+        "lines": 60
+      }
     }
   }
 }
