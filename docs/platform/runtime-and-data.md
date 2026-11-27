@@ -88,7 +88,7 @@ Controllers should document the actual response envelope, auth requirement, quer
 
 ## Deployment and runtime configuration
 
-The root workspace uses npm workspaces and Turborepo. Docker builds the API and web applications separately. The web production image uses Next standalone output and runs as a non-root user. Compose production runs api-migrate once before api-prod and client-prod; it also expects Nginx TLS files at nginx/certs/origin.pem and nginx/certs/origin-key.pem.
+The root workspace uses npm workspaces. Docker builds the API and web applications separately. The web production image uses Next standalone output and runs as a non-root user. Compose production runs api-migrate once before api-prod and client-prod; it also expects Nginx TLS files at nginx/certs/origin.pem and nginx/certs/origin-key.pem.
 
 GitHub Actions CI validates the lockfile, runs lint and typecheck, runs API and web authentication test suites, and builds both applications. The workflow named deploy builds and pushes SHA and environment-tagged images to GitHub Container Registry after successful CI; it does not roll those images onto a host or verify a live rollout. Manual production image publishing is restricted to the `main` ref. Host deployment, health verification, and rollback remain external operational steps and should be documented with the selected hosting platform.
 

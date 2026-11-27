@@ -155,7 +155,7 @@ nuts-platform/
 ├── scripts/             # Repo tooling: doc link check, architecture guardrails
 ├── docs/                # Domain guides, architecture, operations, scaling
 ├── docker-compose.yml   # Multi-profile orchestration (dev, staging, prod)
-└── package.json         # Turbopack and npm workspaces orchestration
+└── package.json         # npm workspaces and the root scripts
 ```
 
 The API (`apps/api/src/modules`) and web app (`apps/web/src/components/domain`) are both organised by business domain, with one-way layering enforced in CI by `npm run check:architecture`. See [Code organization and dependency rules](docs/architecture/code-organization.md).
