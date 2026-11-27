@@ -19,7 +19,7 @@
     "dev:worker": "node scripts/wait-for-dist.mjs dist/worker.js && cross-env PM2_HOME=./.pm2/worker pm2-runtime ecosystem.dev.config.cjs --only worker",
     "dev:jobs": "node scripts/wait-for-dist.mjs dist/worker.js && cross-env PM2_HOME=./.pm2/jobs pm2-runtime ecosystem.dev.config.cjs --only jobs",
     "dev:single": "cross-env PM2_HOME=./.pm2/single pm2-runtime ecosystem.dev.config.cjs --only tsc,all",
-    "dev:role": "npm run compile && cross-env PM2_HOME=./.pm2/role sh -c 'pm2-runtime ecosystem.dev.config.cjs --only tsc,$DEV_LABEL'",
+    "dev:role": "npm run db:generate && npm run compile && cross-env PM2_HOME=./.pm2/role sh -c 'pm2-runtime ecosystem.dev.config.cjs --only tsc,$DEV_LABEL'",
     "typecheck": "node ../../node_modules/@typescript/native/lib/tsc.js --noEmit",
     "prestart:debug": "npm run build",
     "start:debug": "cross-env PM2_HOME=./.pm2/debug pm2-runtime ecosystem.dev.config.cjs --only tsc,debug",

@@ -33,18 +33,6 @@ services:
       timeout: 5s
       retries: 5
 
-  redisinsight:
-    image: redis/redisinsight:latest
-    container_name: nuts_dev_redisinsight
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    volumes:
-      - nuts_dev_redisinsight_data:/data
-    depends_on:
-      redis:
-        condition: service_healthy
-
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: nuts_dev_rabbitmq
@@ -72,10 +60,6 @@ volumes:
   nuts_dev_redis_data:
     external: true
     name: nuts_dev_redis_data
-
-  nuts_dev_redisinsight_data:
-    external: true
-    name: nuts_dev_redisinsight_data
 
   nuts_dev_rabbitmq_data:
     external: true

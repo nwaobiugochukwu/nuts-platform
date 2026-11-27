@@ -31,6 +31,9 @@ x-api-dev-common: &api-dev-common
   volumes:
     - ./apps/api/src:/app/apps/api/src
     - ./apps/api/prisma.config.ts:/app/apps/api/prisma.config.ts:ro
+    # The schema is read at start (npm run db:generate in dev:role), so a schema change
+    # needs a container restart, not an image rebuild.
+    - ./packages/database:/app/packages/database:ro
 
 x-api-dev-env: &api-dev-env
   <<: *api-env
