@@ -7,6 +7,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { LOW_STOCK } from '@api/common/constants';
 import { generateJobId } from '@api/common/utils';
 import { NotificationsService } from '@api/modules/notifications/services/notifications.service';
@@ -70,6 +71,14 @@ export class LowStockJob {
     timeZone: 'Africa/Lagos',
   })
   async handleLowStock(): Promise<void> {
+    // One instance at a time: the "already sent" check below is read-then-write,
+    // so two instances running together would both send.
+    await runWithCronLock(this.redis, 'cron:lock:low-stock', 10 * 60_000, () =>
+      this.scanLowStock(),
+    );
+  }
+
+  private async scanLowStock(): Promise<void> {
     const startedAt = Date.now();
     const threshold = LOW_STOCK.THRESHOLD;
     const duplicateWindowSeconds = LOW_STOCK.DUPLICATE_WINDOW_HOURS * 60 * 60;

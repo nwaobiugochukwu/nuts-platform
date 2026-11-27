@@ -10,7 +10,7 @@ describe('LowStockJob', () => {
   };
   let rabbitmq: { publish: jest.Mock };
   let templates: { lowStockAlert: jest.Mock };
-  let redis: { get: jest.Mock; set: jest.Mock };
+  let redis: { get: jest.Mock; set: jest.Mock; eval: jest.Mock };
   let notifications: { create: jest.Mock };
   let preferences: { canSend: jest.Mock };
   let cron: LowStockJob;
@@ -36,6 +36,7 @@ describe('LowStockJob', () => {
     redis = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(1),
     };
     notifications = { create: jest.fn().mockResolvedValue(undefined) };
     preferences = { canSend: jest.fn().mockResolvedValue(true) };
@@ -174,6 +175,15 @@ describe('LowStockJob', () => {
       expect.any(Object),
     );
     expect((cron as any).logger.warn).toHaveBeenCalled();
+  });
+
+  it('does nothing when another instance holds the lock', async () => {
+    redis.set.mockResolvedValueOnce(null);
+
+    await cron.handleLowStock();
+
+    expect(prisma.product.findMany).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
   it('logs and rethrows a failure so the scheduler records the run as failed', async () => {

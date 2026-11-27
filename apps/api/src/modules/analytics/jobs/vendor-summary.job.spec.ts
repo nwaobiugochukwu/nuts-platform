@@ -7,7 +7,7 @@ describe('VendorSummaryJob', () => {
   let prisma: { $queryRaw: jest.Mock; vendor: { findMany: jest.Mock } };
   let rabbitmq: { publish: jest.Mock };
   let templates: { weeklyVendorSummary: jest.Mock };
-  let redis: { get: jest.Mock; set: jest.Mock };
+  let redis: { get: jest.Mock; set: jest.Mock; eval: jest.Mock };
   let cron: VendorSummaryJob;
   const weekStartStr = '2026-11-20';
 
@@ -34,6 +34,7 @@ describe('VendorSummaryJob', () => {
     redis = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(1),
     };
     cron = new VendorSummaryJob(
       prisma as never,
@@ -169,6 +170,16 @@ describe('VendorSummaryJob', () => {
       (c) => c[0] === RABBITMQ_QUEUES.EMAILS,
     );
     expect(emails.map((c) => c[1].to)).toEqual(['two@shop.com']);
+  });
+
+  it('does nothing when another instance holds the lock', async () => {
+    redis.set.mockResolvedValueOnce(null);
+
+    await cron.handleWeeklySummary();
+
+    expect(prisma.vendor.findMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
   });
 
   it('logs a failure and rethrows it so the scheduler records the run as failed', async () => {
