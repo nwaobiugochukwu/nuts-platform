@@ -10,16 +10,16 @@ Related: [how the system works](how-it-works.md), [how production teams run serv
 
 | Area | Decision | Why |
 |---|---|---|
-| Programs | **Staging on Render: two services.** Service 1 runs api, worker and jobs together as three separate PM2 processes (`PM2_APP=api,worker,jobs`, not `all`, which is one process). Service 2 runs web. The Temporal worker joins as a third service later. | Fits the budget. A crash in one process is restarted by PM2 without touching the others. The weakness is that the container itself (memory, a deploy) stops all three; each program becomes its own service when the budget allows. |
+| Programs | **Staging today: one Render service for the backend running everything as one process (`PM2_APP=all`), plus one for web.** The target is api, worker and jobs as three separate processes (`PM2_APP=api,worker,jobs`), then each as its own service. | Measured on 2026-11-26: the three processes need about 980 MB together (api about 390 MB, worker about 400 MB, jobs starting at 120 MB). The free 512 MB instance cannot hold them, and Render kept restarting it. Three processes need an instance of about 1 to 2 GB; until then staging stays on `all`. |
 | One image | One image per commit, started in different roles (`PM2_APP`); the Temporal worker has its own image because its native library needs a different base. | Build once, run the same thing everywhere. |
 | Supervisor | PM2 stays inside each container in every environment. | Same restart behaviour in development and on the platform. |
 | Environments | Development and staging only until launch. | There is no production yet. |
 | Local development | **Docker Compose** is the main way (`npm run dev`): one container per program, started in health order, a log view and a restart per service. The no-Docker launcher stays as `npm run dev:local`. | It is the most common practice and the closest to staging. |
-| Hosting | **Render.** The backend service must be an always-on paid instance: free services sleep after 15 minutes without traffic, which would stop the worker and jobs. Exactly one copy of it must run, because jobs must never run twice. | Free web services sleep and Render's free plan does not include background workers. |
+| Hosting | **Render.** The backend must be an always-on paid instance for the worker and jobs to be reliable (free services sleep after 15 minutes without traffic). Exactly one copy must run, because jobs must never run twice. | Free web services sleep and Render's free plan does not include background workers. |
 | Data | Managed Postgres (Supabase), Redis (Redis Cloud), hosted RabbitMQ, Temporal Cloud for staging and production. | Teams do not run their own data stores at this size. |
 | Observability | Metrics, dashboard and alerts locally; Grafana Cloud on staging; an uptime monitor; Sentry alerts. | Silent failure is the worst failure. |
 
-**Open decisions:** whether to retire the no-Docker launcher and VS Code tasks once Compose has been used for a while. Still to check before relying on the layout: how much memory the three backend processes need together (to pick the instance size), and pointing Render's health check at `/api/v1/health/background` so a dead worker or jobs process is noticed.
+**Open decisions:** which paid Render instance size runs the backend (needed for the three-process layout); whether to retire the no-Docker launcher and VS Code tasks once Compose has been used for a while.
 
 ## 2. How the application runs
 
@@ -45,25 +45,186 @@ Everything on `feat/release1-hardening`:
 
 Not verified: the VS Code tabs and the full Docker dev profile. Nothing in this batch changes behaviour on staging beyond the migration and the audit pipeline.
 
-## 4. The batches
+## 4. The final list
 
-Who acts: **you** create accounts, keys and click in the hosting dashboard; **I** write the files.
+Status key: **done**, **todo**, **you** (an action only you can take), **decide** (a decision is needed). IDs in brackets point to the [audit](event-driven-and-resilience-audit.md): E event-driven, R resilience, L layout, H health sweep.
 
-| # | Batch | What happens | Status |
-|---|---|---|---|
-| 0 | Foundation and local parity | Section 3 | pushed with this change |
-| 1 | Development like production | Compose is now the main dev command (one container per program, health order, per-service logs and restart, Temporal included). Verified once: api, worker, jobs and web all became healthy. Remaining: use it for a while, then decide whether to retire the no-Docker launcher and VS Code tasks | mostly done |
-| 2 | Review and merge | You merge #155, #156 to #161 and the release branch into `development`, one at a time, CI green between. Do not merge `development` into `staging` before this | after push |
-| 3 | Staging on Render (two services) | I first test `PM2_APP=api,worker,jobs` here: killing the worker must leave the api and jobs running. You then create the backend service (always-on paid instance, one copy, `PM2_APP=api,worker,jobs`, a connection budget split across the three) and the web service, point the health check at `/api/v1/health/background`, and run `scripts/verify-deploy.sh` | after merge |
-| 4 | Watching staging | You create Grafana Cloud, an uptime monitor, a Sentry alert, a log destination and `METRICS_TOKEN`. I write the collector config and its service template and the alert import steps | after batch 3 |
-| 5 | A gate on every deploy | I add a GitHub Action that runs `verify-deploy.sh` after a merge to `staging` and fails loudly, plus a dependency scan and Dependabot; one image per commit. You add the secrets | after batch 3 |
-| 6 | Temporal on staging | You create the Temporal Cloud namespace and API key. I add the dedicated worker Dockerfile, its service entry, env wiring and a smoke check. Done when a sample workflow started inside a transaction runs and survives a worker restart | after batch 4 |
-| 7 | Money code made safe | One reviewed PR per slice: payments, then wallets and payouts, then orders and refunds, then the remaining files; unify audit with `ctx.audit`; remove the legacy allowlist in the architecture check | after batch 5 |
-| 8 | Processes move to Temporal | Behind flags, each beside its old job for a week: order payment expiry (W1), refunds (W2), announcements (W6), abandoned carts (W7), account deletion (W8) | after batches 6 and 7 |
-| 9 | Delivery | The delivery plan's phases 1 to 4: parcels, hub, Lagos pricing and ETA, rider tracking, proof of delivery | after batch 8 |
-| 10 | Polish | Personalisation polish (quality-weighted starter shelf, "Why am I seeing this", cold start), plus the backlog | last |
+### Why this order
 
-Each batch ends with something you can see and a check that must pass before the next one starts.
+1. **Safety net first** (phases 1 and 2): fix security, align the database with the schema, and add tests and CI gates, so every later change is checked.
+2. **Move files before changing behaviour** (phase 3): a mechanical move that touches about 240 files conflicts with every other change. Doing it early means all later work lands in its final place. This swaps the order I gave you earlier (layout used to come after messaging).
+3. **Make messaging reliable before putting more on it** (phases 4 and 5): moving work onto queues that drop a message after one failure would make things worse.
+4. **Money code after the event backbone** (phase 6): payments, wallets and orders are converted once, onto the final event model.
+5. **Temporal and delivery last** (phases 8 to 10): they rebuild payment, refund and delivery logic and need a proven foundation.
+6. **Staging is paused** until development is healthy; its steps are in the staging track and can resume at any point you choose.
+
+### Phase 0. Done
+
+| ID | Item | Status |
+|---|---|---|
+| 0.1 | Foundation: transaction runner, PM2 roles, metrics, alerts and dashboard, async audit pipeline, Temporal foundation, request ids, dead-letter tool | done |
+| 0.2 | Local parity: `npm run dev` on Docker Compose in health order, a log command per service, local Prometheus and Grafana, ordered no-Docker launcher | done |
+| 0.3 | #155 to #161 and the release branch merged into `development`; `development` merged into `staging` (#164) | done |
+| 0.4 | Fixes: "Not interested" constraint, card discount tags, push-service warning, Compose RabbitMQ conflict, metrics ports | done |
+| 0.5 | Audits and plan written (this document, the audit) | done, **uncommitted** |
+
+### Phase 1. Development health (security and correctness)
+
+| ID | Item | Status |
+|---|---|---|
+| 1.1 | Upgrade vulnerable dependencies until `npm audit --omit=dev` shows no critical or high: Next.js, express chain (`proxy-addr`, `body-parser`), `multer` and `@nestjs/platform-express`, `compression`, `nanoid`, `sharp`, `postcss`, `prisma` [H1] | todo |
+| 1.2 | Remove unused direct dependencies: `zod`, `@sentry/node`, `@temporalio/activity`, `@temporalio/common`; remove the dead `BULLMQ_PREFIX` config [H8] | todo |
+| 1.3 | CI: fail on high or critical advisories; Dependabot (weekly, grouped); local secret scan before commit | todo |
+| 1.4 | Pin Node: `.nvmrc` and `engines` (Docker and CI already use 22) | todo |
+| 1.5 | One corrective migration: drop the `CREATOR` role value, create the two missing indexes, rename the legacy `creators_*` indexes and the foreign key, remove the duplicate search indexes, and declare the trigram indexes as raw-SQL-managed so a future `migrate dev` cannot drop them [H2] | todo |
+| 1.6 | CI check that the migrations and `schema.prisma` produce no drift (with the trigram list allowed) | todo |
+| 1.7 | Scope the `QueueWithoutConsumers` alert so it ignores `q.nuts.workflows` while Temporal is off [H3] | todo |
+| 1.8 | Warm the caches on start (campaigns, discover, category previews, categories) [H4] | todo |
+| 1.9 | Paystack IP filter: use the proxy-aware `req.ip`, not the client header; keep the HMAC check as the real protection [H6] | todo |
+| 1.10 | Process-level `unhandledRejection` and `uncaughtException` handlers in api, worker, jobs (log, report to Sentry, flush, exit) [H7] | todo |
+| 1.11 | Fix the root README quickstart (storefront is 5173; the new `npm run dev`); prune and group the ~60 root scripts [H9] | todo |
+| 1.12 | The lint warning in `request-context.ts`; the hard-coded `poolMax: 0` in the startup log (log the real `DB_CONNECTION_LIMIT`) [H11] | todo |
+| 1.13 | Timing breakdown in the slow-request log; investigate `auth/refresh` (bcrypt on 4 threads, `UV_THREADPOOL_SIZE`) and the `for-you` feed with a signed-in session [H10] | todo |
+| 1.14 | Branch hygiene: delete the 65 remote branches already merged into `development` and the old `feat/release1-hardening`; document the branch protection and required checks | todo |
+| 1.15 | Add `nuts_*` metric for each circuit breaker and an alert when one is open (also in phase 4) | todo |
+
+**Done when:** the audit is clean, drift is zero, CI blocks new advisories, and the dev stack starts with no error or warning other than known provider issues.
+
+### Phase 2. Tests where there are none, and quality gates
+
+| ID | Item | Status |
+|---|---|---|
+| 2.1 | Referral service (money) [H5] | todo |
+| 2.2 | All consumers: email, inventory, analytics, notifications, vendor-follow, audit, workflow-start (success, failure, redelivery) | todo |
+| 2.3 | The 11 cron jobs without tests, starting with unpaid orders, abandoned carts and vendor summary | todo |
+| 2.4 | Outbox relay under failure: broker down, publish rejected, crash between publish and settle, two relays at once | todo |
+| 2.5 | End-to-end money flow test: checkout, pay, webhook, ship, deliver, earnings, refund | todo |
+| 2.6 | Smoke test that every route in the OpenAPI document answers without a 5xx (the sweep I ran by hand) | todo |
+| 2.7 | Coverage thresholds in CI, set at today's level and raised over time | todo |
+
+**Done when:** every consumer, cron and money service has tests, and CI enforces them.
+
+### Phase 3. Code layout to the production standard (audit section 6)
+
+| ID | Item | Status |
+|---|---|---|
+| 3.1 | One alias scheme (`@api/*`); delete the unused families and the legacy aliases [L3] | todo |
+| 3.2 | Rename `infrastructure` into `database`, `cache`, `messaging`, `mail`, `storage`, `observability`, `resilience`, `workflows`; `configuration` becomes `config` [L1, L6, L8] | todo |
+| 3.3 | Consumers into their domains (analytics, products, notifications); audit into one module [L1, L2] | todo |
+| 3.4 | Auth owns customer, vendor and admin authentication, tokens, account lock and the single cookie module; `modules/admin` split into announcements, platform and staff [L4, L9, L10] | todo |
+| 3.5 | One module layout (`controllers/ services/ dto/ consumers/ events/ jobs/`), plural and singular rule, shared types in one place [L4, L5, L6] | todo |
+| 3.6 | File kinds fixed: `cron` to `job`, `type` to `types`, `response` to `dto`, no file without a kind [L11] | todo |
+| 3.7 | Architecture check enforces layers, deep imports, file and class names, consumer location | todo |
+| 3.8 | Database naming: **decision recorded** (my recommendation: keep existing columns, snake_case for every new table and column, written as an ADR) [L12] | decide |
+
+**Done when:** the architecture check passes with the new rules and no behaviour changed (all tests green, the Docker image builds, the stack starts).
+
+### Phase 4. Messaging reliability (audit R3 to R18)
+
+| ID | Item | Status |
+|---|---|---|
+| 4.1 | Outbox: `next_attempt_at` with exponential backoff and jitter; terminal `DEAD` status; replay for dead rows; alert on dead rows [R3] | todo |
+| 4.2 | Outbox: per-aggregate ordering, or declare every consumer order-tolerant [R4] | todo |
+| 4.3 | One owner for the relay and the wake-on-commit design written down [R18] | todo |
+| 4.4 | Consumers: retry queues with delays (10 s, 1 min, 10 min), an attempt counter header, dead-letter after the last attempt [R6] | todo |
+| 4.5 | Classify transient versus permanent errors; permanent go straight to the dead-letter queue [R7] | todo |
+| 4.6 | Idempotent consumers: processed-event record per consumer (the email consumer first) [R8] | todo |
+| 4.7 | Open circuit means delay and retry, not dead-letter [R13] | todo |
+| 4.8 | Circuit breakers: count only timeouts, network errors, 5xx and 429; protect Cloudinary; retry with backoff and jitter for repeatable calls; a gauge and alert per breaker [R9 to R12] | todo |
+| 4.9 | Per-queue prefetch and a handler timeout [R15] | todo |
+| 4.10 | Fix the inventory consumer race with an atomic increment [R21] | todo |
+| 4.11 | Dead-letter alerting by queue and age; runbook entry for replay | todo |
+
+**Done when:** killing a consumer, the broker or a provider mid-flight loses nothing and sends nothing twice (proved by the phase 2 tests).
+
+### Phase 5. Event backbone and the full event catalog (audit sections 1 and 5)
+
+| ID | Item | Status |
+|---|---|---|
+| 5.1 | Backbone: one envelope, `<aggregate>.<fact>` naming, versioning, publishing through the transaction runner, a queue per consumer, delete the dead routing keys [R19, R20] | todo |
+| 5.2 | Move the 8 in-process events onto the backbone with their existing consumers [R19] | todo |
+| 5.3 | Webhook inbox: verify, store the raw event once, answer 200, process through the queue [E13] | todo |
+| 5.4 | Emails through the queue: OTP, welcome, password reset, password changed, order confirmation with PDF, new-device login [E1, E2, E3] | todo |
+| 5.5 | Referral rewards as an event with an idempotency key [E4] | todo |
+| 5.6 | User, vendor, catalog, review, cart, promotion and wallet events from the catalog (about 70 in all) | todo |
+| 5.7 | Tracking buffers: recommendation, marketplace and search events batched through the analytics queue; debounce cache invalidation [E5, E7] | todo |
+| 5.8 | Rating aggregate on the product by event [E9]; analytics rollups [E8]; precomputed feeds [E6] | todo |
+| 5.9 | Cache invalidation by event, uploads by signed direct upload and webhook, verify announcement fan-out [E10, E11, E12] | todo |
+| 5.10 | Cron and timer work reviewed: what becomes a delayed event now, what waits for Temporal | todo |
+
+**Done when:** every catalog event is published through the outbox in its transaction, has at least one consumer or a recorded reason it has none, and the in-process event emitter is no longer used for business events.
+
+### Phase 6. Money code made safe
+
+| ID | Item | Status |
+|---|---|---|
+| 6.1 | Payments onto the transaction runner and `ctx.emit` / `ctx.audit`; split the file by use case | todo |
+| 6.2 | Wallets and vendor payouts, including settlement | todo |
+| 6.3 | Orders and refunds; split the file by use case | todo |
+| 6.4 | The remaining 12 services converted; remove the legacy allowlist in the architecture check | todo |
+| 6.5 | Split the other very large services (products, discounts, search) by use case [L7] | todo |
+| 6.6 | Idempotency review of every write that moves money or stock (keys, unique constraints, replays) | todo |
+| 6.7 | Personalisation polish: quality-weighted starter shelf, "Why am I seeing this", tiered cold start | todo |
+
+**Done when:** the architecture check's legacy list is empty and payments, wallets and refunds write critical audit events atomically.
+
+### Phase 7. Production readiness (my additions; veto any you do not want)
+
+| ID | Item | Status |
+|---|---|---|
+| 7.1 | Runbooks: dead-letter replay, stuck outbox, Redis down, RabbitMQ down, Brevo down, Paystack down, bad migration | todo |
+| 7.2 | SLOs and alert tuning from the dashboard (latency, error rate, queue age) | todo |
+| 7.3 | Load-test baseline (checkout, feeds, search) and a recorded capacity limit | todo |
+| 7.4 | Chaos checks: kill worker, jobs, api, broker, Redis during traffic | todo |
+| 7.5 | Backup and restore drill for the database | todo |
+| 7.6 | Secrets inventory and rotation plan; PII and log redaction review; data retention and account deletion policy | todo |
+| 7.7 | API deprecation: remove the legacy route aliases on a published date | todo |
+| 7.8 | ADRs for the decisions in this plan (event model, layout, naming, hosting, Temporal) | todo |
+
+### Phase 8. Temporal
+
+| ID | Item | Status |
+|---|---|---|
+| 8.1 | Temporal worker in the dev stack; its target stops showing "down"; a sample workflow survives a worker restart | todo |
+| 8.2 | W1 order payment expiry behind a flag, beside the old job for a week, then the job is removed | todo |
+| 8.3 | W2 refunds, W6 announcements, W7 abandoned carts, W8 account deletion, each the same way | todo |
+| 8.4 | Fulfillment on Temporal | todo |
+
+### Phase 9. Delivery operation
+
+| ID | Item | Status |
+|---|---|---|
+| 9.1 | Parcels and the hub (delivery plan phase 1) | todo |
+| 9.2 | Lagos pricing and ETA (phase 2) | todo |
+| 9.3 | Rider tracking (phase 3) | todo |
+| 9.4 | Proof of delivery (phase 4) | todo |
+
+### Phase 10. Polish
+
+| ID | Item | Status |
+|---|---|---|
+| 10.1 | The font mismatch (needs your screenshot or the page name) [H12] | you |
+| 10.2 | Remaining backlog and any slow screens the metrics show | todo |
+
+### Staging track (paused; resumes when you say, or after phase 5 at the latest)
+
+| ID | Item | Status |
+|---|---|---|
+| S1 | Render api back to one process: delete `PM2_APP`, `DB_CONNECTION_LIMIT=10`; run `scripts/verify-deploy.sh` | you |
+| S2 | Check the web service's health check (a 429 was reported) and the api's "Instance failed" message | you, then me |
+| S3 | Keys saved in the Render env group (done by you; names in the Render guide) | you |
+| S4 | Collector that sends staging metrics to Grafana Cloud, dashboard import, alerts | me |
+| S5 | GitHub Action that runs `verify-deploy.sh` after each merge to `staging`; one image built per commit and promoted, not rebuilt | me |
+| S6 | Add the staging outbound addresses to Brevo's authorised IPs (or turn the block off) | you |
+| S7 | A paid instance of 1 to 2 GB, then `PM2_APP=api,worker,jobs`, then each program as its own service; `AUTO_MIGRATE=false` on worker and jobs | you decide the size, me the config |
+| S8 | Temporal Cloud worker image, service entry, smoke check | me, then you |
+| S9 | Log destination decision | you |
+
+### Your own items, any time
+
+1. Add your current IP to Brevo's authorised IPs, then replay any dead-lettered emails with `npm run dlq -- replay --dry-run` first.
+2. Send a screenshot or page name for the font mismatch.
+3. Say "commit" when you want these documents saved.
 
 ## 5. Switches that undo things quickly
 
@@ -80,7 +241,7 @@ Each was weighed and **not adopted for now**. The last column is the signal that
 
 | Direction | Why not now | Revisit when |
 |---|---|---|
-| **Each program as its own service** | Needs more paid services than the budget allows; the single-container layout above is the chosen compromise | When the budget allows: then api, worker and jobs each get their own service |
+| **Each program as its own service** | Needs more paid services than the budget allows; for now the backend runs in one service (one process, or three once the instance has about 1 to 2 GB) | When the budget allows: then api, worker and jobs each get their own service |
 | **Free hosting tiers** (Render free, others) | Free services sleep when idle, background workers are not part of Render's free plan, and instance hours run out. A sleeping worker does no work | Only for throwaway demos |
 | **AWS (ECS on Fargate or EC2)** | New accounts get credits and a six-month plan, then it is paid; the setup work (networking, load balancer, registry) is large for a team this size | When staging outgrows the first host, or a requirement (region, compliance, private networking) demands it |
 | **Kubernetes** | Operational weight far beyond the need | Many services, many teams, or autoscaling needs |
@@ -96,6 +257,6 @@ Rule used throughout: split or add something when a measured problem justifies i
 
 ## 7. What I need from you
 
-1. Say "go" when you want me to test the three-process layout (start of batch 3).
-2. Say "go" for batch 1 when you want it.
-3. After batch 3: the monitoring accounts and keys listed in batch 4.
+1. **Decision 3.8** (database naming): I recommend keeping existing columns and applying snake_case to every new table and column, recorded as an ADR.
+2. Say "commit" for the documents, then "go" for phase 1.
+3. Anything in phase 7 you want removed.

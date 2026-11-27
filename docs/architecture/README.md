@@ -138,6 +138,7 @@ The Redis/RabbitMQ path applies to product views; other event types can write di
 - [Hub fulfillment and delivery plan](hub-fulfillment-and-delivery-plan.md) (proposed)
 - [How the system works](how-it-works.md) (plain-language tour)
 - [How production teams run several services](how-production-teams-run-services.md)
+- [Event-driven and resilience audit](event-driven-and-resilience-audit.md)
 - [Master roadmap](master-roadmap.md) (the final plan, batches and future directions considered)
 - [Platform reliability plan](platform-reliability-plan.md) (proposed)
 - [Code organization and dependency rules](code-organization.md)
