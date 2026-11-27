@@ -39,7 +39,7 @@ import { VendorReactivateDto } from '../dto/vendor-reactivate.dto';
 import { VendorProfileDto } from '../dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '../dto/vendor-status-response.dto';
 import { VendorsService } from '../vendors.service';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('VENDORS - ACCOUNT')
 @Controller('vendors')

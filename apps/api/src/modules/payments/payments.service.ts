@@ -37,13 +37,13 @@ import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/ra
 
 import { generateStatusNote } from '@api/modules/orders/constants/order-status.constants';
 
-import { DomainEvents } from '@api/common/events/domain-events';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events';
 
 import type {
   OrderProcessingPayload,
   PaymentConfirmedPayload,
   PaymentFailedPayload,
-} from '@api/common/events/event-payloads';
+} from '@api/infrastructure/messaging/events/event-payloads';
 
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
 import {

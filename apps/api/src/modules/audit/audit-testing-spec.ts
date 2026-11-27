@@ -1,6 +1,6 @@
 import { runWithRequestId } from '@api/common/request-context/request-context';
 import type { AuditAnnotation } from '@api/common/request-context/request-context';
-import { currentAuditDetails } from './audit-details';
+import { currentAuditDetails } from './utils/audit-details.util';
 
 /**
  * Test helper: runs `fn` as if inside a request and returns what the service

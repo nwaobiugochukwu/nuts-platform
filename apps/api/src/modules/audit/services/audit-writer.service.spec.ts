@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import { AuditWriter, toAuditRow } from './audit-writer';
-import type { AuditEvent } from './audit-event';
+import { AuditWriterService, toAuditRow } from './audit-writer.service';
+import type { AuditEvent } from '../../../infrastructure/messaging/events/audit-event.util';
 
 const event = (id: string, extra: Partial<AuditEvent> = {}): AuditEvent => ({
   eventId: id,
@@ -17,13 +17,13 @@ function fkError() {
   });
 }
 
-describe('AuditWriter', () => {
+describe('AuditWriterService', () => {
   let createMany: jest.Mock;
-  let writer: AuditWriter;
+  let writer: AuditWriterService;
 
   beforeEach(() => {
     createMany = jest.fn().mockResolvedValue({ count: 1 });
-    writer = new AuditWriter({ auditLog: { createMany } } as never);
+    writer = new AuditWriterService({ auditLog: { createMany } } as never);
   });
 
   it('maps an event to a row with its own occurrence time', () => {

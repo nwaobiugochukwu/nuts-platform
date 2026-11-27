@@ -13,6 +13,7 @@ import { VendorAnalyticsController } from './controllers/vendor-analytics.contro
 import { VendorAnalyticsService } from './vendors/vendor-analytics.service';
 import { ProductViewsService } from './tracking/product-views/product-views.service';
 import { SearchTrackingService } from './tracking/search-tracking/search-tracking.service';
+import { AnalyticsConsumer } from './consumers/analytics.consumer';
 import { VendorSummaryCron } from './jobs/vendor-summary.cron';
 import { AnalyticsEventsController } from './controllers/analytics-events.controller';
 import { RecommendationEventsService } from './tracking/recommendation-events.service';
@@ -48,6 +49,7 @@ import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
     RecentProductViewRetentionCron,
     AnalyticsEventRetentionCron,
     VendorSummaryCron,
+    AnalyticsConsumer,
   ],
   exports: [
     AdminAnalyticsService,

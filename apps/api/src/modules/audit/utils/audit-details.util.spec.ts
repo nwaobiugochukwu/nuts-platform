@@ -1,5 +1,9 @@
 import { runWithRequestId } from '@api/common/request-context/request-context';
-import { auditAlso, auditDetails, currentAuditDetails } from './audit-details';
+import {
+  auditAlso,
+  auditDetails,
+  currentAuditDetails,
+} from './audit-details.util';
 
 describe('auditDetails', () => {
   it('does nothing outside a request', () => {

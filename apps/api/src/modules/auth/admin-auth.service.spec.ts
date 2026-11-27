@@ -13,7 +13,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import { AdminVendorsService } from '@api/modules/vendors/admin-vendors.service';
-import { captureAudit } from '@api/common/audit-log/audit-testing';
+import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 
 const p2025 = () =>
   new Prisma.PrismaClientKnownRequestError('Record not found', {

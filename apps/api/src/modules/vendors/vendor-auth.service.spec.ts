@@ -6,7 +6,7 @@ import {
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { VendorAuthService } from './vendor-auth.service';
-import { captureAudit } from '@api/common/audit-log/audit-testing';
+import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 
 describe('VendorAuthService', () => {
   let service: VendorAuthService;

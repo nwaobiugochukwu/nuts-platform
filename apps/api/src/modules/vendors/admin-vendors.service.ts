@@ -12,7 +12,7 @@ import {
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
 import { QueryAdminVendorsDto } from './dto/query-admin-vendors.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const vendorSelect = {
   id: true,

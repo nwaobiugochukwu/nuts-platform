@@ -43,7 +43,7 @@ import { ReactivateAccountDto } from '../dto/reactivate-account.dto';
 import { UpdateUserDto } from '../dto/update-user.dto';
 import { UserResponseDto } from '../dto/user-response.dto';
 import { UsersService } from '../users.service';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('USERS')
 @Controller('account')

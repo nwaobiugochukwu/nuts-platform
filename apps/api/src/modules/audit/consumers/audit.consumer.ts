@@ -2,9 +2,9 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { roleCan } from '@api/config/process-role';
-import { Batcher } from './audit-batcher';
-import type { AuditEvent } from './audit-event';
-import { AuditWriter } from './audit-writer';
+import { Batcher } from '../utils/audit-batcher.util';
+import type { AuditEvent } from '../../../infrastructure/messaging/events/audit-event.util';
+import { AuditWriterService } from '../services/audit-writer.service';
 
 /**
  * Writes queued audit events to the database in small batches. A message is
@@ -18,7 +18,7 @@ export class AuditConsumer implements OnModuleInit {
 
   constructor(
     private readonly rabbitmq: RabbitMQService,
-    private readonly writer: AuditWriter,
+    private readonly writer: AuditWriterService,
   ) {
     this.batcher = new Batcher<AuditEvent>({
       maxSize: 50,

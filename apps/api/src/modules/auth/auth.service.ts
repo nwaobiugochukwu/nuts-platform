@@ -32,7 +32,10 @@ import { RefreshSessionService } from './sessions/refresh-session.service';
 import type { RefreshJwtPayload } from './types/refresh-jwt-payload.type';
 import type { AuthenticatedUser } from './types/authenticated-user.type';
 import { parseSuspension } from '@api/modules/users/utils/suspension.util';
-import { auditDetails, auditAlso } from '@api/common/audit-log/audit-details';
+import {
+  auditDetails,
+  auditAlso,
+} from '@api/modules/audit/utils/audit-details.util';
 
 @Injectable()
 export class AuthService {

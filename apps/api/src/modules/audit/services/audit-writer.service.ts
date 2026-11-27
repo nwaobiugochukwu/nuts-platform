@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import type { AuditEvent } from './audit-event';
+import type { AuditEvent } from '../../../infrastructure/messaging/events/audit-event.util';
 
 type AuditRow = Prisma.AuditLogCreateManyInput;
 
@@ -28,8 +28,8 @@ export function toAuditRow(event: AuditEvent): AuditRow {
 
 /** Writes audit events to the append-only audit_logs table. Idempotent on eventId. */
 @Injectable()
-export class AuditWriter {
-  private readonly logger = new Logger(AuditWriter.name);
+export class AuditWriterService {
+  private readonly logger = new Logger(AuditWriterService.name);
 
   constructor(private readonly prisma: PrismaService) {}
 

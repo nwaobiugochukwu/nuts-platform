@@ -9,7 +9,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 
 // ── Framework & Core ──────────────────────────────────────
-import { AuditLogModule } from './common/audit-log/audit-log.module';
+import { AuditModule } from './modules/audit/audit.module';
 import { PerformanceInterceptor } from './common/interceptors/performance.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { OtpGuard } from './common/guards/otp.guard';
@@ -99,7 +99,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     }),
 
     // ── Infrastructure Layer ──────────────────────────────
-    AuditLogModule,
+    AuditModule,
     PrismaModule,
     RedisModule,
     CacheModule,

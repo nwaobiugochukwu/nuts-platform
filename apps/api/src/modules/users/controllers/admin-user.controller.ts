@@ -42,7 +42,7 @@ import { UserListItemResponseDto } from '@api/modules/users/dto/user-list-item-r
 import { UserResponseDto } from '@api/modules/users/dto/user-response.dto';
 import { UsersService } from '@api/modules/users/users.service';
 import { OtpService } from '@api/modules/auth/otp/otp.service';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @Roles(ROLE.ADMIN)
 @ApiTags('ADMIN - USERS')

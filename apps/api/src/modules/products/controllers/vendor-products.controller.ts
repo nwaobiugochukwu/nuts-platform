@@ -49,7 +49,7 @@ import {
   ApiResponseDto,
   PaginationMetaDto,
 } from '@api/common/dto/api-response.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('VENDOR - PRODUCTS')
 @ApiBearerAuth('JWT-auth')

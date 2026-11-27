@@ -9,8 +9,11 @@ import {
   extractIpAddress,
   extractUserAgent,
 } from '@api/common/utils/request.util';
-import { AuditWriter } from './audit-writer';
-import { buildAuditEvent, type AuditEvent } from './audit-event';
+import { AuditWriterService } from './audit-writer.service';
+import {
+  buildAuditEvent,
+  type AuditEvent,
+} from '../../../infrastructure/messaging/events/audit-event.util';
 
 export type AuditPayload = Prisma.InputJsonValue | typeof Prisma.JsonNull;
 
@@ -66,7 +69,7 @@ export class AuditLogService implements OnModuleDestroy {
   private flushing = false;
 
   constructor(
-    private readonly writer: AuditWriter,
+    private readonly writer: AuditWriterService,
     @Optional() private readonly rabbitmq?: RabbitMQService,
   ) {}
 

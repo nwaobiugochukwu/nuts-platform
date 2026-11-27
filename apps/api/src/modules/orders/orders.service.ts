@@ -67,14 +67,14 @@ import {
   releaseDiscountUsage,
 } from '@api/modules/discounts/discount-funding';
 
-import { DomainEvents } from '@api/common/events/domain-events';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events';
 
 import type {
   OrderCancelledPayload,
   OrderDeliveredPayload,
   OrderShippedPayload,
-} from '@api/common/events/event-payloads';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+} from '@api/infrastructure/messaging/events/event-payloads';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);

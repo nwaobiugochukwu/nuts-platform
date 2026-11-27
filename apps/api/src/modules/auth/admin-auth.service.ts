@@ -22,7 +22,7 @@ import {
 import { AdminAuthUserDto } from './dto/admin-auth-user.dto';
 import { AdminRegisterDto } from './dto/admin-register.dto';
 import { LoginDto } from '@api/modules/auth/dto/login.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 @Injectable()
 export class AdminAuthService {

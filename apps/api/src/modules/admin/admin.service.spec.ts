@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { captureAudit } from '@api/common/audit-log/audit-testing';
+import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 
 describe('AdminService', () => {
   let service: AdminService;

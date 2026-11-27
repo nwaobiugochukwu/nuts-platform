@@ -19,10 +19,10 @@ import {
   AUDIT_METADATA,
   type AuditContext,
   type AuditOptions,
-} from './audit.decorator';
-import { currentAuditDetails } from './audit-details';
-import { AuditLogService } from './audit-log.service';
-import { buildAuditEvent } from './audit-event';
+} from '../decorators/audit.decorator';
+import { currentAuditDetails } from '../utils/audit-details.util';
+import { AuditLogService } from '../services/audit-log.service';
+import { buildAuditEvent } from '../../../infrastructure/messaging/events/audit-event.util';
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;

@@ -8,7 +8,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
-import { DomainEvents } from '@api/common/events/domain-events';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events';
 
 const FOLLOWED_VENDOR_SELECT = {
   id: true,

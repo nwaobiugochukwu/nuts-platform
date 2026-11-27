@@ -20,7 +20,7 @@ import {
   PlatformConfigResponseDto,
   UpdatePlatformConfigDto,
 } from './dto/admin-platform-config.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const PLATFORM_CONFIG_CACHE_KEY = 'platform:config:governance';
 

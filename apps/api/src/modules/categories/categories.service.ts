@@ -23,7 +23,7 @@ import {
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { MoveCategoryDto } from './dto/move-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 @Injectable()
 export class CategoriesService {

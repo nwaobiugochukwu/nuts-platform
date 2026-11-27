@@ -1,4 +1,4 @@
-import { redactForAudit } from '@api/common/audit-log/audit-event';
+import { redactForAudit } from '@api/infrastructure/messaging/events/audit-event.util';
 import { RABBITMQ_EXCHANGES, RABBITMQ_QUEUES } from './rabbitmq.constants';
 
 /** A message as returned by amqplib's `channel.get`. */

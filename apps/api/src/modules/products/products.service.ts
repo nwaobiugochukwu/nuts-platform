@@ -30,7 +30,7 @@ import {
   type CursorPayload,
 } from '@api/common/utils/cursor-pagination.util';
 
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
+import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
 import { SearchService } from '@api/modules/search/search.service';
 
 import { AdminCreateProductDto } from './dto/admin-create-product.dto';
@@ -47,7 +47,7 @@ import { VendorProductResponseDto } from './dto/vendor-product-response.dto';
 
 import type { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
 import type { VariantSummaryDto } from '@api/modules/products/dto/variant-response.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 /* ============================================================================
  * SHARED SELECTS

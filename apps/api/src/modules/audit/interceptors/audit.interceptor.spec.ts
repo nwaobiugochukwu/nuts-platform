@@ -1,8 +1,12 @@
 import { HttpException, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { lastValueFrom, of, throwError, type Observable } from 'rxjs';
-import { Audit, AUDIT_METADATA, type AuditOptions } from './audit.decorator';
-import { auditAlso, auditDetails } from './audit-details';
+import {
+  Audit,
+  AUDIT_METADATA,
+  type AuditOptions,
+} from '../decorators/audit.decorator';
+import { auditAlso, auditDetails } from '../utils/audit-details.util';
 import { runWithRequestId } from '@api/common/request-context/request-context';
 import { AuditInterceptor } from './audit.interceptor';
 

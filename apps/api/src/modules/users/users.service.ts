@@ -16,7 +16,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   AuditLogService,
   type AuditChanges,
-} from '@api/common/audit-log/audit-log.service';
+} from '@api/modules/audit/services/audit-log.service';
 import { BCRYPT_COST_FACTOR } from '@api/common/constants/bcrypt.constants';
 import { DEFAULT_ACCOUNT_DELETION_GRACE_DAYS } from './constants/account-lifecycle.constants';
 
@@ -41,7 +41,7 @@ import {
 } from '@api/common/utils/cursor-pagination.util';
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const USER_ACTIVE_CACHE_TTL = 45;
 const PURGE_BATCH_SIZE = 100;

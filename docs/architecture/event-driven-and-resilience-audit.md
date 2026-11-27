@@ -251,7 +251,7 @@ Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cooki
 | `infrastructure/resilience` | `infrastructure/resilience/` |
 | `infrastructure/workflows` | `infrastructure/workflows/` |
 | `config` | `config/` |
-| `common/events` (event names and payloads) | `infrastructure/messaging/events/` |
+| `common/events` (event names and payloads) | `infrastructure/messaging/events/` (the `audit.event` message contract, `audit-event.util.ts`, lives there too because the transaction runner and the dead-letter tool use it) |
 | `modules/vendors/vendor-auth.service.ts`, `modules/auth/admin-auth.service.ts` | `modules/auth/services/` (`customer-auth`, `vendor-auth`, `admin-auth`) |
 | `modules/vendors/admin-vendors.service.ts` | `modules/vendors/services/` |
 | `modules/security/services/token.service.ts`, `account-lock.service.ts` | `modules/auth/services/` |

@@ -13,7 +13,7 @@ import {
   Prisma,
   ROLE,
 } from '@prisma/client';
-import { AuditLogService } from '@api/common/audit-log/audit-log.service';
+import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { NotificationsService } from '@api/modules/notifications/notifications.service';
 import {
@@ -23,7 +23,7 @@ import {
   UpdateAdminAnnouncementDto,
   type CampaignAnnouncementAudience,
 } from './dto/admin-announcement.dto';
-import { auditDetails } from '@api/common/audit-log/audit-details';
+import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 
 const DELIVERY_BATCH_SIZE = 200;
 const PUBLISH_LEASE_MS = 15 * 60 * 1000;

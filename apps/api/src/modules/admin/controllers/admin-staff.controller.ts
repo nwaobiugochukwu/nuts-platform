@@ -23,7 +23,7 @@ import {
   QueryAdminStaffDto,
   UpdateAdminStaffStatusDto,
 } from '../dto/admin-staff.dto';
-import { Audit } from '@api/common/audit-log/audit.decorator';
+import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('ADMIN - STAFF GOVERNANCE')
 @ApiBearerAuth()
