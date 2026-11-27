@@ -3,7 +3,10 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { productViewEventId } from '@api/common/utils/product-view-event-id.util';
-import { RecommendationRefreshService } from '../services/recommendation-refresh.service';
+import {
+  RecommendationRefreshService,
+  type FeedActor,
+} from '../services/recommendation-refresh.service';
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.service';
 import {
@@ -28,6 +31,8 @@ export interface AnalyticsQueuePayload {
   event?: TrackedMarketplaceEvent;
   /** Shopper ids whose cached recommendations should be refreshed once the rows are stored. */
   refreshFor?: Array<string | null | undefined>;
+  /** Who the feed belongs to, so it can be recomputed and warmed after the refresh. */
+  refreshActor?: FeedActor;
   id?: string;
   productId?: string;
   userId?: string | null;
@@ -188,13 +193,19 @@ export class AnalyticsConsumer implements OnModuleInit {
                 skipDuplicates: true,
               }),
             );
-            this.refresh.schedule(...(payload.refreshFor ?? []));
+            this.refresh.schedule(
+              payload.refreshFor ?? [],
+              payload.refreshActor,
+            );
           } else if (
             payload.type === 'recommendation_events' &&
             payload.events?.length
           ) {
             await this.storeRecommendationEvents(payload.events);
-            this.refresh.schedule(...(payload.refreshFor ?? []));
+            this.refresh.schedule(
+              payload.refreshFor ?? [],
+              payload.refreshActor,
+            );
           } else if (payload.type === 'marketplace_event' && payload.event) {
             const event = payload.event;
             await this.storeRows(() =>

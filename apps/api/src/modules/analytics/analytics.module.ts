@@ -56,6 +56,7 @@ import { MarketplaceAnalyticsService } from './services/marketplace-analytics.se
     AnalyticsConsumer,
   ],
   exports: [
+    RecommendationRefreshService,
     AdminAnalyticsService,
     AdminAnalyticsRevenueService,
     AdminAnalyticsProductsService,

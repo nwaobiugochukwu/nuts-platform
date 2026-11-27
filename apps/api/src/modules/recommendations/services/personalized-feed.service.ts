@@ -3,9 +3,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { roleCan } from '@api/config/process-role.config';
+import { RecommendationRefreshService } from '@api/modules/analytics/services/recommendation-refresh.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { ProductsService } from '@api/modules/products/services/products.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -29,13 +32,30 @@ import {
 export const NOT_INTERESTED_EVENT = 'NOT_INTERESTED';
 
 @Injectable()
-export class PersonalizedFeedService {
+export class PersonalizedFeedService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly products: ProductsService,
     private readonly popular: PopularProductsService,
     @Optional() private readonly cacheService?: CacheService,
+    @Optional() private readonly refresh?: RecommendationRefreshService,
   ) {}
+
+  /**
+   * In the worker, after a shopper's burst of clicks has been stored and their cached feed
+   * cleared, recompute it here so the shopper's next read is a cache hit instead of a
+   * multi-second recompute on the request.
+   */
+  onModuleInit(): void {
+    if (!roleCan('consumers')) return;
+    this.refresh?.registerWarmer((actor) =>
+      this.forYou(
+        actor.userId ?? undefined,
+        actor.sessionId ?? undefined,
+        actor.visitorId ?? undefined,
+      ),
+    );
+  }
 
   async forYou(userId?: string, sessionId?: string, visitorId?: string) {
     const actorKey = userId ?? visitorId ?? sessionId ?? 'anonymous';

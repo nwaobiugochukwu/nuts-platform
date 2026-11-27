@@ -60,6 +60,25 @@ describe('tracking producers: queue first, database as the fallback', () => {
       expect(cache.invalidateRecommendations).not.toHaveBeenCalled();
     });
 
+    it('names the signed-in shopper so the worker can recompute their feed ahead of the next read', async () => {
+      await service().record('u1', click, ROLE.USER);
+
+      expect(queue.enqueue.mock.calls[0][0].refreshActor).toEqual({
+        userId: 'u1',
+        sessionId: 's1',
+      });
+    });
+
+    it('does not name a guest: their feed is keyed by a visitor id these events do not carry', async () => {
+      await service().record(undefined, click, undefined);
+
+      expect(queue.enqueue.mock.calls[0][0].refreshFor).toEqual([
+        undefined,
+        's1',
+      ]);
+      expect(queue.enqueue.mock.calls[0][0]).not.toHaveProperty('refreshActor');
+    });
+
     it('asks for no refresh for impressions, which do not change what to recommend', async () => {
       await service().record('u1', impression, ROLE.USER);
 
@@ -148,6 +167,16 @@ describe('tracking producers: queue first, database as the fallback', () => {
       );
       expect(prisma.searchQuery.create).not.toHaveBeenCalled();
       expect(cache.invalidateRecommendations).not.toHaveBeenCalled();
+    });
+
+    it('names the signed-in searcher in full, so their feed can be recomputed after the search', async () => {
+      await service().trackSearch('red shoes', 3, 'u1', 's1', 'v1', 'cache-u1');
+
+      expect(queue.enqueue.mock.calls[0][0].refreshActor).toEqual({
+        userId: 'u1',
+        sessionId: 's1',
+        visitorId: 'v1',
+      });
     });
 
     it('falls back to the synchronous write and an immediate refresh when the broker is down', async () => {

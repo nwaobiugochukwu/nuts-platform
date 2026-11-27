@@ -39,6 +39,7 @@ export class RecommendationEventsService {
     events: RecommendationEventDto[],
   ): Promise<boolean> {
     if (!this.queue) return Promise.resolve(false);
+    const refreshes = events.some((e) => e.eventType !== 'IMPRESSION');
     return this.queue.enqueue({
       type: 'recommendation_events',
       events: events.map((event) => ({
@@ -55,9 +56,20 @@ export class RecommendationEventsService {
         sessionId: event.sessionId,
       })),
       // Impressions do not change what to recommend; clicks, dismissals and category views do.
-      refreshFor: events.some((e) => e.eventType !== 'IMPRESSION')
+      refreshFor: refreshes
         ? [cacheUserId, ...events.map((e) => e.sessionId)]
         : [],
+      // Only a signed-in shopper's feed is recomputed ahead of time: for a guest the feed is
+      // keyed by a visitor id these events do not carry, so a recompute here could land under
+      // the wrong key.
+      ...(refreshes && cacheUserId
+        ? {
+            refreshActor: {
+              userId: cacheUserId,
+              sessionId: events[0]?.sessionId,
+            },
+          }
+        : {}),
     });
   }
 

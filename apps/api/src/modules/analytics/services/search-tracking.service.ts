@@ -37,6 +37,7 @@ export class SearchTrackingService {
       sessionId: sessionId ?? null,
       timestamp: Date.now(),
       refreshFor: [userId, cacheUserId, sessionId, visitorId],
+      ...(userId ? { refreshActor: { userId, sessionId, visitorId } } : {}),
     });
     if (queued) {
       if (resultsCount === 0) {
