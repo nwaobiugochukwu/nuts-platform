@@ -1,7 +1,7 @@
 ﻿import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { WishlistService } from './wishlist.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 describe('WishlistService', () => {

@@ -1,6 +1,6 @@
-﻿import { roleCan } from '@api/infrastructure/configuration/process-role';
+﻿import { roleCan } from '@api/config/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { RABBITMQ_QUEUES } from './rabbitmq.constants';
 import { RabbitMQService } from './rabbitmq.service';
 import {

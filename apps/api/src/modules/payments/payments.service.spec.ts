@@ -4,11 +4,11 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { WalletService } from '@api/modules/wallets/wallet.service';
-import { CircuitBreakerService } from '@api/infrastructure/resiliency/circuit-breaker.service';
+import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import { PaymentsService } from './payments.service';
 
 const mockCircuitBreakerService = {

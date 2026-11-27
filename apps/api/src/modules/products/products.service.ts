@@ -6,7 +6,7 @@ import {
 import { OrderStatus, Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 import {
   PRODUCT_BY_SLUG,

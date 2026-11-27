@@ -7,10 +7,10 @@ import {
   Registry,
   collectDefaultMetrics,
 } from 'prom-client';
-import { PrismaService } from '../prisma/prisma.service';
-import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
+import { PrismaService } from '../../database/prisma.service';
+import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { HeartbeatService, stateFromAge } from '../health/heartbeat.service';
-import { currentProcessRole } from '../configuration/process-role';
+import { currentProcessRole } from '../../../config/process-role';
 
 /** Request and transaction latency buckets, in seconds. */
 export const LATENCY_BUCKETS = [

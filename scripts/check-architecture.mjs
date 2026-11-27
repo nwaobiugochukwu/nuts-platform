@@ -12,9 +12,9 @@
  *       2. A module never reaches into another module's `controllers/` or `jobs/`.
  *          Only providers (services), DTOs, constants and types are shared.
  *       3. Database transactions are opened only through `TransactionRunner`
- *          (infrastructure/transaction). Files that still call `$transaction`
+ *          (infrastructure/database). Files that still call `$transaction`
  *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
- *       4. Temporal workflow files (`infrastructure/temporal/workflows/`) are deterministic
+ *       4. Temporal workflow files (`infrastructure/workflows/workflows/`) are deterministic
  *          sandbox code: they may import only `@temporalio/workflow`, relative pure
  *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
  *       5. Audit events are declared with `@Audit(...)` on the controller method and
@@ -63,8 +63,8 @@ const API_LEGACY_EXCEPTIONS = new Set([
 // Files that still open transactions with `prisma.$transaction` directly. Convert them to
 // `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
 const API_RAW_TRANSACTION_LEGACY = new Set([
-  "apps/api/src/infrastructure/outbox/outbox.relay.ts",
-  "apps/api/src/infrastructure/rabbitmq/inventory.consumer.ts",
+  "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
+  "apps/api/src/infrastructure/messaging/rabbitmq/inventory.consumer.ts",
   "apps/api/src/modules/auth/admin-auth.service.ts",
   "apps/api/src/modules/auth/auth.service.ts",
   "apps/api/src/modules/auth/sessions/refresh-session.service.ts",
@@ -89,12 +89,12 @@ const API_DIRECT_AUDIT_ALLOWED = new Map([
 ]);
 const DIRECT_AUDIT_CALL = /this\.(?:auditLog|audit)\s*\.\s*(?:log|logWithRequest)\s*\(/g;
 
-const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/transaction/transaction-runner.ts";
+const TRANSACTION_RUNNER_FILE = "apps/api/src/infrastructure/database/transaction-runner.ts";
 for (const file of walk(API_SRC)) {
   const r = rel(file);
   const isSpec = /\.spec\.ts$/.test(r) || r.includes("/test/");
   const layer = r.split("/")[3]; // apps/api/src/<layer>/...
-  if (!isSpec && r.startsWith("apps/api/src/infrastructure/temporal/workflows/")) {
+  if (!isSpec && r.startsWith("apps/api/src/infrastructure/workflows/workflows/")) {
     const source = fs.readFileSync(file, "utf8");
     for (const m of source.matchAll(/^\s*import\s+(type\s+)?[^;]*?from\s+["']([^"']+)["']/gm)) {
       const [, typeOnly, spec] = m;

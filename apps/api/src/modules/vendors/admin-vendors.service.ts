@@ -4,7 +4,7 @@ import { VendorProfileDto } from '@api/modules/vendors/dto/vendor-response.dto';
 import { VendorStatusResponseDto } from '@api/modules/vendors/dto/vendor-status-response.dto';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   VENDOR_STORE,
   VENDOR_STORE_PRODUCTS,

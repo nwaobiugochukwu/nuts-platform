@@ -3,7 +3,7 @@
 - **Status:** Proposed (decisions below, awaiting go-ahead); implementation not started. See the [platform reliability plan](../platform-reliability-plan.md).
 - **Date:** 2026-11-25
 - **Owners:** Platform engineering
-- **Related code:** [`main.ts`](../../../apps/api/src/main.ts), [`app.module.ts`](../../../apps/api/src/app.module.ts), [`rabbitmq/`](../../../apps/api/src/infrastructure/rabbitmq), [`outbox/`](../../../apps/api/src/infrastructure/outbox), [`audit-log.service.ts`](../../../apps/api/src/common/audit-log/audit-log.service.ts)
+- **Related code:** [`main.ts`](../../../apps/api/src/main.ts), [`app.module.ts`](../../../apps/api/src/app.module.ts), [`rabbitmq/`](../../../apps/api/src/infrastructure/messaging/rabbitmq), [`outbox/`](../../../apps/api/src/infrastructure/messaging/outbox), [`audit-log.service.ts`](../../../apps/api/src/common/audit-log/audit-log.service.ts)
 
 ## Context
 

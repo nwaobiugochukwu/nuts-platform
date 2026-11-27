@@ -7,7 +7,7 @@
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { PaymentsService } from '@api/modules/payments/payments.service';
 import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import { ReferralService } from '@api/modules/referrals/referral.service';

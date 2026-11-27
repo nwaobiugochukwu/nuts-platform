@@ -6,9 +6,9 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import bcrypt from 'bcrypt';
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '../src/infrastructure/redis/redis.constants';
-import { RedlockService } from '../src/infrastructure/redis/redlock.service';
+import { PrismaService } from '../src/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '../src/infrastructure/cache/redis.constants';
+import { RedlockService } from '../src/infrastructure/cache/redlock.service';
 import { OtpService } from '../src/modules/auth/otp/otp.service';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 

@@ -21,9 +21,9 @@ import { customAlphabet } from 'nanoid';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { CART_CACHE_PREFIX } from '@api/modules/cart/cart.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { PaymentsService } from '@api/modules/payments/payments.service';
 import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import { ReferralService } from '@api/modules/referrals/referral.service';

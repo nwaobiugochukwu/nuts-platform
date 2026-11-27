@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { parseDateRange } from '@api/common/utils/date-range.util';
 import { RANGE_DAYS } from '../vendors/dto/vendor-analytics-query.dto';
 import { AdminAnalyticsAuditService } from './admin-analytics-audit.service';

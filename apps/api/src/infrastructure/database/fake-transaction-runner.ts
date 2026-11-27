@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import type { StartWorkflowInput } from '../temporal/temporal-client.service';
+import type { StartWorkflowInput } from '../workflows/temporal-client.service';
 import type {
   TransactionContext,
   TransactionOptions,

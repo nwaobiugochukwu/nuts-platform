@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { IncomingMessage } from 'http';
-import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
-import { currentProcessRole } from '@api/infrastructure/configuration/process-role';
+import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { currentProcessRole } from '@api/config/process-role';
 import { currentRequestId } from '@api/common/request-context/request-context';
 import {
   extractIpAddress,

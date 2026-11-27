@@ -13,7 +13,7 @@ import { timingSafeEqual } from 'crypto';
 import { RefreshSessionService } from '@api/modules/auth/sessions/refresh-session.service';
 import type { AuthSession } from '@api/modules/auth/types/auth.types';
 import { ADMIN_AUTH_SELECT } from '@api/modules/auth/auth.selects';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import {
   BCRYPT_COST_FACTOR,

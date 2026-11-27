@@ -2,11 +2,11 @@ import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
   RABBITMQ_QUEUES,
   RABBITMQ_ROUTING_KEYS,
-} from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+} from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import {
   fakeRabbit,
   withRole,
-} from '@api/infrastructure/rabbitmq/consumer-harness-spec';
+} from '@api/infrastructure/messaging/rabbitmq/consumer-harness-spec';
 import { VendorFollowConsumer } from './vendor-follow.consumer';
 
 const message = (routingKey: string) => ({ fields: { routingKey } });

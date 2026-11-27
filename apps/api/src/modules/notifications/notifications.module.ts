@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
-import { RabbitMQModule } from '@api/infrastructure/rabbitmq/rabbitmq.module';
+import { RabbitMQModule } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.module';
 import { NotificationsConsumer } from './consumers/notifications.consumer';
 import { NotificationListener } from './listeners/notification.listener';
 import { NotificationsController } from './controllers/notifications.controller';

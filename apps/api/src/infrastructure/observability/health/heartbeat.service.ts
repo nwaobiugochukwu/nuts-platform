@@ -7,11 +7,11 @@ import {
   Optional,
 } from '@nestjs/common';
 import type Redis from 'ioredis';
-import { REDIS_CLIENT } from '../redis/redis.constants';
-import { roleCan } from '../configuration/process-role';
-import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
-import { RABBITMQ_QUEUES } from '../rabbitmq/rabbitmq.constants';
-import { readTemporalConfig } from '../temporal/temporal.config';
+import { REDIS_CLIENT } from '../../cache/redis.constants';
+import { roleCan } from '../../../config/process-role';
+import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
+import { RABBITMQ_QUEUES } from '../../messaging/rabbitmq/rabbitmq.constants';
+import { readTemporalConfig } from '../../workflows/temporal.config';
 
 /** The background programs whose absence would otherwise go unnoticed. */
 export type BackgroundTarget = 'worker' | 'jobs';

@@ -7,7 +7,7 @@
 } from '@nestjs/common';
 import { Category, CategoryStatus, Prisma } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   CATEGORY_BY_PATH,
   CATEGORY_BY_SLUG,

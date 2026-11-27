@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Prisma } from '@prisma/client';
 import { AdminAuthService } from './admin-auth.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import { AdminVendorsService } from '@api/modules/vendors/admin-vendors.service';

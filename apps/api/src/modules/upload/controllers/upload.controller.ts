@@ -18,11 +18,11 @@ import {
 import { ROLE } from '@prisma/client';
 import { StrictThrottle } from '@api/common/decorators/custom-throttler.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import type { CloudinaryFile } from '@api/infrastructure/cloudinary/cloudinary.service';
+import type { CloudinaryFile } from '@api/infrastructure/storage/cloudinary.service';
 import {
   CloudinaryService,
   ImageOptions,
-} from '@api/infrastructure/cloudinary/cloudinary.service';
+} from '@api/infrastructure/storage/cloudinary.service';
 
 const MAX_IMAGES = 6;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;

@@ -16,7 +16,7 @@ import {
   Prisma,
 } from '@prisma/client';
 
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { randomBytes } from 'node:crypto';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';

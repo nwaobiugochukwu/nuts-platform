@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import webpush, { PushSubscription as WebPushSubscription } from 'web-push';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 
 export interface PushNotificationPayload {

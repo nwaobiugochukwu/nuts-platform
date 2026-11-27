@@ -6,4 +6,4 @@ import { CircuitBreakerService } from './circuit-breaker.service';
   providers: [CircuitBreakerService],
   exports: [CircuitBreakerService],
 })
-export class ResiliencyModule {}
+export class ResilienceModule {}

@@ -10,8 +10,8 @@ import {
 import { Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { TransactionRunner } from '@api/infrastructure/transaction/transaction-runner';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunner } from '@api/infrastructure/database/transaction-runner';
 import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import type { DiscountLineItem } from '@api/modules/discounts/discount-eligibility';
 import { UsersService } from '@api/modules/users/users.service';

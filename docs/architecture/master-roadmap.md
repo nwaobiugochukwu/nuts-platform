@@ -109,7 +109,7 @@ Status key: **done**, **todo**, **you** (an action only you can take), **decide*
 | ID | Item | Status |
 |---|---|---|
 | 3.1 | One alias scheme (`@api/*`); delete the unused families and the legacy aliases [L3] | done (every import is `@api/common|infrastructure|modules/<dir>`; one `@api/*` mapping in tsconfig, runtime config and Jest) |
-| 3.2 | Rename `infrastructure` into `database`, `cache`, `messaging`, `mail`, `storage`, `observability`, `resilience`, `workflows`; `configuration` becomes `config` [L1, L6, L8] | todo |
+| 3.2 | Rename `infrastructure` into `database`, `cache`, `messaging`, `mail`, `storage`, `observability`, `resilience`, `workflows`; `configuration` becomes `config` [L1, L6, L8] | done in two parts: `database`, `cache`, `messaging/{rabbitmq,outbox}`, `storage`, `observability/{metrics,health}`, `resilience`, `workflows` and `config` exist and the cache warm-up moved to `bootstrap/`; `request-context` and `events` move with step 4 (audit), because `common` still depends on them |
 | 3.3 | Consumers into their domains (analytics, products, notifications); audit into one module [L1, L2] | todo |
 | 3.4 | Auth owns customer, vendor and admin authentication, tokens, account lock and the single cookie module; `modules/admin` split into announcements, platform and staff [L4, L9, L10] | todo |
 | 3.5 | One module layout (`controllers/ services/ dto/ consumers/ events/ jobs/`), plural and singular rule, shared types in one place [L4, L5, L6] | todo |

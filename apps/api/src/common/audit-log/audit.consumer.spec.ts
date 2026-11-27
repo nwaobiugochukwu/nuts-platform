@@ -1,8 +1,8 @@
-import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import {
   fakeRabbit,
   withRole,
-} from '@api/infrastructure/rabbitmq/consumer-harness-spec';
+} from '@api/infrastructure/messaging/rabbitmq/consumer-harness-spec';
 import { AuditConsumer } from './audit.consumer';
 
 describe('AuditConsumer', () => {

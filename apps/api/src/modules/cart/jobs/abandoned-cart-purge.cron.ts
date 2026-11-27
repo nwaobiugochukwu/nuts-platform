@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.module';
-import { runWithCronLock } from '@api/infrastructure/redis/cron-lock';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.module';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock';
 
 const RETENTION_DAYS = 30;
 const BATCH_SIZE = 1_000;

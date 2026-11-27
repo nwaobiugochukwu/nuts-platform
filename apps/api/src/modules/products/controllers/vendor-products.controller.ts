@@ -32,7 +32,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CreateProductDto } from '@api/modules/products/dto/create-product.dto';
 import { ProductReactivateResponseDto } from '@api/modules/products/dto/product-reactivate-response.dto';
 import { QueryProductDto } from '@api/modules/products/dto/query-product.dto';

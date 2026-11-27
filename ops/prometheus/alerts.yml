@@ -1,6 +1,6 @@
 # Prometheus alert rules for the NUTS platform.
 # Load with `rule_files` (self-hosted) or import into Grafana Cloud alerting.
-# Metric names come from apps/api/src/infrastructure/metrics.
+# Metric names come from apps/api/src/infrastructure/observability/metrics.
 groups:
   - name: nuts-pipeline
     rules:

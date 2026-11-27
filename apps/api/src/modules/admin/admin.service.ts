@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { BCRYPT_COST_FACTOR } from '@api/common/constants/bcrypt.constants';
 import {

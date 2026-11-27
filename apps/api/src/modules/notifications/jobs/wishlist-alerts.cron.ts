@@ -9,8 +9,8 @@ import {
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { NotificationsService } from '../notifications.service';
 
 const LOCK_KEY = 'lock:cron:wishlist-alerts';

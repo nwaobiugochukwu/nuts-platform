@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { AuditLogModule } from '@api/common/audit-log/audit-log.module';
 import { NotificationsModule } from '@api/modules/notifications/notifications.module';

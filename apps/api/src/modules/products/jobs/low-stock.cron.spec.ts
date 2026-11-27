@@ -1,6 +1,6 @@
 import { NotificationType, ROLE } from '@prisma/client';
 import { LOW_STOCK } from '@api/common/constants';
-import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { LowStockCron } from './low-stock.cron';
 
 describe('LowStockCron', () => {

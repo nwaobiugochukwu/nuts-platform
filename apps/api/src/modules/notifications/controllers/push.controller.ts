@@ -13,7 +13,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AuthenticatedUser } from '@api/modules/auth/types/authenticated-user.type';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';

@@ -9,15 +9,15 @@
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { Public } from '@api/common/decorators/public.decorator';
 import type { Response } from 'express';
 import Redis from 'ioredis';
 import {
   HeartbeatService,
   type BackgroundStatus,
-} from '@api/infrastructure/health/heartbeat.service';
+} from '@api/infrastructure/observability/health/heartbeat.service';
 
 @ApiTags('HEALTH')
 @Public()
