@@ -65,34 +65,35 @@ describe('PaystackIpMiddleware', () => {
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it('allows requests with x-forwarded-for matching Paystack IP', () => {
-      const req = createMockReq({ 'x-forwarded-for': '52.49.173.169' });
+    it('allows a request whose edge header (true-client-ip) is a Paystack IP', () => {
+      const req = createMockReq(
+        { 'true-client-ip': '52.49.173.169' },
+        '10.31.172.142',
+      );
 
       middleware.use(req, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it('handles comma-separated x-forwarded-for behind a reverse proxy/load balancer', () => {
-      // In production Nginx: client_ip, proxy1_ip, proxy2_ip
-      const req = createMockReq({
-        'x-forwarded-for': '52.214.14.220, 10.0.1.50, 172.18.0.2',
-      });
+    it('allows a request whose cf-connecting-ip is a Paystack IP', () => {
+      const req = createMockReq(
+        { 'cf-connecting-ip': ' 52.214.14.220 ' },
+        '172.68.1.1',
+      );
 
       middleware.use(req, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
-    it('handles whitespace variations in x-forwarded-for header', () => {
-      const req = createMockReq({
-        'x-forwarded-for': '  52.31.139.75  , 192.168.1.1',
-      });
+    it('uses the proxy-resolved req.ip when there is no edge header', () => {
+      const req = createMockReq({}, '52.31.139.75');
 
       middleware.use(req, mockRes, mockNext);
       expect(mockNext).toHaveBeenCalledTimes(1);
     });
 
     it('blocks requests from unauthorized IPs in production', () => {
-      const req = createMockReq({ 'x-forwarded-for': '185.220.101.5' });
+      const req = createMockReq({ 'true-client-ip': '185.220.101.5' });
 
       expect(() => middleware.use(req, mockRes, mockNext)).toThrow(
         UnauthorizedException,
@@ -100,16 +101,28 @@ describe('PaystackIpMiddleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('blocks requests with spoofed forwarded IP where client is not Paystack', () => {
-      // Attacker appends spoofed header
-      const req = createMockReq({
-        'x-forwarded-for': '198.51.100.1, 52.31.139.75',
-      });
+    it('ignores a forged x-forwarded-for that names a Paystack IP', () => {
+      // The caller writes the leftmost x-forwarded-for value, so it proves nothing.
+      const req = createMockReq(
+        { 'x-forwarded-for': '52.31.139.75', 'true-client-ip': '198.51.100.1' },
+        '198.51.100.1',
+      );
 
       expect(() => middleware.use(req, mockRes, mockNext)).toThrow(
         UnauthorizedException,
       );
       expect(mockNext).not.toHaveBeenCalled();
+    });
+
+    it('ignores x-forwarded-for entirely when the real peer is not Paystack', () => {
+      const req = createMockReq(
+        { 'x-forwarded-for': '52.214.14.220' },
+        '203.0.113.9',
+      );
+
+      expect(() => middleware.use(req, mockRes, mockNext)).toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('bypasses IP check in production when using sk_test_ key for testing', () => {
