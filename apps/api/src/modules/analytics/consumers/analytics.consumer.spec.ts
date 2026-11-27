@@ -148,7 +148,21 @@ describe('AnalyticsConsumer', () => {
       expect(prisma.searchQuery.createMany.mock.calls[0][0].data[0].id).toBe(
         'search-1',
       );
-      expect(refresh.schedule).toHaveBeenCalledWith('u1', 's1');
+      expect(refresh.schedule).toHaveBeenCalledWith(['u1', 's1'], undefined);
+    });
+
+    it('hands the shopper to the refresh so their feed can be recomputed', async () => {
+      await handle({
+        type: 'search',
+        query: 'red shoes',
+        refreshFor: ['u1'],
+        refreshActor: { userId: 'u1', sessionId: 's1' },
+      });
+
+      expect(refresh.schedule).toHaveBeenCalledWith(['u1'], {
+        userId: 'u1',
+        sessionId: 's1',
+      });
     });
 
     it('does not refresh the feed when the row could not be stored', async () => {
@@ -179,7 +193,7 @@ describe('AnalyticsConsumer', () => {
         data: events,
         skipDuplicates: true,
       });
-      expect(refresh.schedule).toHaveBeenCalledWith('u1', 's1');
+      expect(refresh.schedule).toHaveBeenCalledWith(['u1', 's1'], undefined);
     });
 
     it('keeps the good events when one points at a row that no longer exists', async () => {
