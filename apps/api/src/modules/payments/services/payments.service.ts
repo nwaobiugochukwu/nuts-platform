@@ -5,6 +5,7 @@
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Inject,
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -29,6 +30,9 @@ import { CART_CACHE_PREFIX } from '@api/modules/cart/services/cart.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import type Redis from 'ioredis';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/services/users.service';
@@ -115,6 +119,7 @@ export class PaymentsService {
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly outbox: OutboxService,
     @Optional() private readonly cacheService?: CacheService,
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis?: Redis,
   ) {}
 
   private async invalidateCartCache(userId: string): Promise<void> {
@@ -775,6 +780,18 @@ export class PaymentsService {
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async reconcilePendingRefunds(): Promise<void> {
+    // The per-refund claim below is not exclusive, so two instances would both ask Paystack
+    // about the same refund. The lock keeps it to one.
+    if (!this.redis) return this.reconcilePendingRefundsOnce();
+    await runWithCronLock(
+      this.redis,
+      'cron:lock:refund-reconcile',
+      4 * 60_000,
+      () => this.reconcilePendingRefundsOnce(),
+    );
+  }
+
+  private async reconcilePendingRefundsOnce(): Promise<void> {
     if (this.isReconcilingRefunds) return;
     this.isReconcilingRefunds = true;
     try {

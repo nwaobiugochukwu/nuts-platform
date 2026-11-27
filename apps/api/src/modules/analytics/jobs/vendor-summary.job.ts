@@ -7,6 +7,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { VENDOR_SUMMARY } from '@api/common/constants';
 import { generateJobId } from '@api/common/utils';
 
@@ -45,6 +46,17 @@ export class VendorSummaryJob {
     timeZone: 'Africa/Lagos',
   })
   async handleWeeklySummary(): Promise<void> {
+    // One instance at a time: the "already sent" check below is read-then-write,
+    // so two instances running together would both send.
+    await runWithCronLock(
+      this.redis,
+      'cron:lock:vendor-summary',
+      30 * 60_000,
+      () => this.sendWeeklySummaries(),
+    );
+  }
+
+  private async sendWeeklySummaries(): Promise<void> {
     const startedAt = Date.now();
 
     const weekEnd = new Date();

@@ -9,7 +9,7 @@ describe('AbandonedCartJob', () => {
   let prisma: { cart: { findMany: jest.Mock; update: jest.Mock } };
   let rabbitmq: { publish: jest.Mock };
   let templates: { abandonedCartReminder: jest.Mock };
-  let redis: { get: jest.Mock; set: jest.Mock };
+  let redis: { get: jest.Mock; set: jest.Mock; eval: jest.Mock };
   let cron: AbandonedCartJob;
 
   const cart = (overrides: Record<string, unknown> = {}) => ({
@@ -35,6 +35,7 @@ describe('AbandonedCartJob', () => {
     redis = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK'),
+      eval: jest.fn().mockResolvedValue(1),
     };
     cron = new AbandonedCartJob(
       prisma as never,
@@ -171,7 +172,27 @@ describe('AbandonedCartJob', () => {
       await cron.handleAbandonedCarts();
 
       expect(prisma.cart.update).not.toHaveBeenCalled();
-      expect(redis.set).not.toHaveBeenCalled();
+      const remembered = redis.set.mock.calls.filter(
+        ([key]) => !String(key).startsWith('cron:lock:'),
+      );
+      expect(remembered).toHaveLength(0);
     },
   );
+
+  it('does nothing when another instance holds the lock', async () => {
+    redis.set.mockResolvedValueOnce(null);
+
+    await cron.handleAbandonedCarts();
+
+    expect(prisma.cart.findMany).not.toHaveBeenCalled();
+    expect(redis.eval).not.toHaveBeenCalled();
+  });
+
+  it('does nothing, rather than run unprotected, when Redis is unreachable', async () => {
+    redis.set.mockRejectedValueOnce(new Error('redis down'));
+
+    await cron.handleAbandonedCarts();
+
+    expect(prisma.cart.findMany).not.toHaveBeenCalled();
+  });
 });
