@@ -14,7 +14,6 @@ describe('PaymentsService.reconcilePendingRefunds lock', () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
       undefined,
       redis as never,
     );

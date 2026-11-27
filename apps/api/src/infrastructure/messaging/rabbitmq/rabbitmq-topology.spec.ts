@@ -102,13 +102,23 @@ describe('queue bindings as a design rule', () => {
     expect(new Set(allKeys).size).toBe(allKeys.length);
   });
 
-  it('does not collide with a domain event name unless the consumer is meant to receive that event', () => {
+  it('binds a domain event name only on the queue that owns reacting to it', () => {
     const events = new Set<string>(Object.values(DomainEvents));
-    const overlap = allKeys.filter((key) => events.has(key));
-    // vendor.followed and vendor.unfollowed are domain events the vendor-events queue consumes.
-    expect(overlap.sort()).toEqual([
-      RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED,
-      RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED,
-    ]);
+    const owners = new Map<string, string>();
+    for (const [queue, keys] of Object.entries(QUEUE_BINDINGS)) {
+      for (const key of keys) if (events.has(key)) owners.set(key, queue);
+    }
+
+    expect(Object.fromEntries(owners)).toEqual({
+      [RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
+      [RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
+      [DomainEvents.ORDER_PROCESSING]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.ORDER_SHIPPED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.ORDER_DELIVERED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.ORDER_CANCELLED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.PAYMENT_CONFIRMED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.PAYMENT_FAILED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+      [DomainEvents.REFERRAL_REWARD_CREDITED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+    });
   });
 });

@@ -3,7 +3,6 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
@@ -78,15 +77,6 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     }),
     LoggerModule.forRoot(pinoLoggerConfig()),
     ScheduleModule.forRoot(),
-    EventEmitterModule.forRoot({
-      wildcard: false,
-      delimiter: '.',
-      newListener: false,
-      removeListener: false,
-      maxListeners: 20,
-      verboseMemoryLeak: false,
-      ignoreErrors: false,
-    }),
     ThrottlerModule.forRootAsync({
       inject: ['REDIS_CLIENT'],
       useFactory: (redis: import('ioredis').default) => ({

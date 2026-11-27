@@ -8,7 +8,6 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   NotificationPriority,
   NotificationType,
@@ -362,7 +361,6 @@ export class OrdersService {
     private readonly referralService: ReferralService,
     private readonly paymentsService: PaymentsService,
     private readonly walletService: WalletService,
-    private readonly eventEmitter: EventEmitter2,
     private readonly outbox: OutboxService,
     config: ConfigService,
     @Optional() private readonly cacheService?: CacheService,
@@ -1356,6 +1354,14 @@ export class OrdersService {
             );
           }
 
+          // The fact the email and notification consumers react to, committed with the change.
+          await this.publishStatusChangeEvent(
+            tx,
+            current.id,
+            nextStatus,
+            current.userId,
+          );
+
           /**
            * Vendor earnings are credited when payment succeeds.
            * They are therefore only settled after delivery.
@@ -1419,14 +1425,8 @@ export class OrdersService {
         });
     }
 
-    this.emitStatusChangeEvents(orderId, nextStatus, orderUserId).catch(
-      (error) => {
-        this.logger.error(
-          `Failed to emit order status event for ${orderId}`,
-          error,
-        );
-      },
-    );
+    // The status-change event was written to the outbox in the transaction; wake the relay now.
+    this.outbox.wakeRelay();
 
     return orderId;
   }
@@ -2838,7 +2838,12 @@ export class OrdersService {
   // DOMAIN EVENTS
   // ---------------------------------------------------------------------------
 
-  private async emitStatusChangeEvents(
+  /**
+   * Writes the order.shipped, order.delivered or order.cancelled event to the outbox in the same
+   * transaction as the status change, so it is never lost and never sent for a rolled-back change.
+   */
+  private async publishStatusChangeEvent(
+    tx: Prisma.TransactionClient,
     orderId: string,
     nextStatus: OrderStatus,
     orderUserId: string | undefined,
@@ -2847,8 +2852,8 @@ export class OrdersService {
       return;
     }
 
-    try {
-      const order = await this.prisma.order.findUnique({
+    {
+      const order = await tx.order.findUnique({
         where: {
           id: orderId,
         },
@@ -2928,7 +2933,15 @@ export class OrdersService {
             items,
           };
 
-          this.eventEmitter.emit(DomainEvents.ORDER_SHIPPED, payload);
+          await this.outbox.appendEnvelope(
+            tx,
+            {
+              type: DomainEvents.ORDER_SHIPPED,
+              aggregate: { type: 'order', id: order.id },
+              payload,
+            },
+            { wakeRelay: false },
+          );
 
           break;
         }
@@ -2943,7 +2956,15 @@ export class OrdersService {
             items,
           };
 
-          this.eventEmitter.emit(DomainEvents.ORDER_DELIVERED, payload);
+          await this.outbox.appendEnvelope(
+            tx,
+            {
+              type: DomainEvents.ORDER_DELIVERED,
+              aggregate: { type: 'order', id: order.id },
+              payload,
+            },
+            { wakeRelay: false },
+          );
 
           break;
         }
@@ -2963,16 +2984,19 @@ export class OrdersService {
             items,
           };
 
-          this.eventEmitter.emit(DomainEvents.ORDER_CANCELLED, payload);
+          await this.outbox.appendEnvelope(
+            tx,
+            {
+              type: DomainEvents.ORDER_CANCELLED,
+              aggregate: { type: 'order', id: order.id },
+              payload,
+            },
+            { wakeRelay: false },
+          );
 
           break;
         }
       }
-    } catch (error) {
-      this.logger.error(
-        `Failed to emit status event for order ${orderId}`,
-        error,
-      );
     }
   }
 }
