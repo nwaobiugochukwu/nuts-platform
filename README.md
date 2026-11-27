@@ -1172,11 +1172,10 @@ Governs platform-wide marketing campaigns, vendor promotions, targeted vouchers,
 
 ### Prerequisites
 
-- Node.js 22+
-- Docker & Docker Compose
-- npm 11+
+- Node.js 22.12 or newer 22.x (`.nvmrc` pins 22; `npm` enforces it) and npm 11
+- Docker and Docker Compose
 
-### Step 1: Clone & Install Dependencies
+### Step 1: Clone and install dependencies
 
 ```bash
 git clone https://github.com/nwaobiugochukwu/nuts-platform.git
@@ -1184,24 +1183,26 @@ cd nuts-platform
 npm install
 ```
 
-### Step 2: Boot Infrastructure & Database
+### Step 2: Create your environment files
+
+Copy `apps/api/.env.example` to `apps/api/.env.development` and `apps/web/.env.example` to `apps/web/.env.development`, then fill in the values the comments mark as required.
+
+### Step 3: Start everything
 
 ```bash
-# Starts local PostgreSQL, Redis, and RabbitMQ
-npm run db:up
-
-# Run Prisma schema migrations
-npm run migrate:deploy
-```
-
-### Step 3: Run Development Server
-
-```bash
-# Runs both NestJS API (port 3001) and Next.js Storefront (port 3000) with Turbopack
 npm run dev
 ```
 
-Visit the storefront at `http://localhost:3000` and Swagger docs at `http://localhost:3001/api/docs`.
+This starts PostgreSQL, Redis and RabbitMQ, then runs the api, worker, jobs runner and web app as separate Docker containers, each starting only after the previous one is healthy. It prints a status table and returns your terminal; it does not stream every log into one window.
+
+| What | Where |
+|---|---|
+| Storefront | `http://localhost:5173` |
+| API | `http://localhost:3001/api/v1/health` (Swagger at `http://localhost:3001/api/docs` in development) |
+| One service's logs | `npm run dev:logs:api`, `dev:logs:worker`, `dev:logs:jobs`, `dev:logs:web` |
+| Stop | `npm run dev:down` (the databases keep running; `npm run db:down` stops them) |
+
+The first start builds the images and takes several minutes; later starts take about a minute. Apply database migrations once with `npm run migrate:deploy`. Metrics and dashboards: `npm run obs:up`, then Grafana at `http://localhost:3030`. The full guide, including running the programs without Docker, is [Running and testing locally](docs/operations/local-development.md).
 
 ---
 
