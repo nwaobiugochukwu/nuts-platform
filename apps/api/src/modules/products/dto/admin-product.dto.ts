@@ -1,6 +1,6 @@
 ﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CategoryRefDto } from '@api/common/dto/category-ref.dto';
-import { VariantSummaryDto } from '@api/modules/product-variants/dto/variant-response.dto';
+import { VariantSummaryDto } from '@api/modules/products/dto/variant-response.dto';
 
 export { CategoryRefDto as AdminProductCategoryDto };
 

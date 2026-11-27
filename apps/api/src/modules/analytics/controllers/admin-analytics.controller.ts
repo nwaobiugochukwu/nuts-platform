@@ -8,9 +8,9 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { Message } from '@api/modules/shared/decorators/message.decorator';
-import { Roles } from '@api/modules/shared/decorators/role.decorator';
-import { ApiResponseDto } from '@api/modules/shared/dto/api-response.dto';
+import { Message } from '@api/common/decorators/message.decorator';
+import { Roles } from '@api/common/decorators/role.decorator';
+import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 import { AdminAnalyticsService } from '../admin/admin-analytics.service';
 import { AdminAnalyticsQueryDto } from '../admin/dto/admin-analytics-query.dto';
 import {

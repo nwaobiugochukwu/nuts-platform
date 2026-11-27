@@ -16,7 +16,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { CreateVariantDto } from '@api/modules/product-variants/dto/create-variant.dto';
+import { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
 import { Trim } from '@api/common/decorators/string-trim.decorator';
 import { TrimEmptyToUndefined } from '@api/common/decorators/trim-empty-to-undefined.decorator';
 

@@ -25,10 +25,10 @@ import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
 import { PaymentsService } from '@api/modules/payments/payments.service';
-import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
-import { ReferralService } from '@api/modules/referral/referral.service';
+import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
+import { ReferralService } from '@api/modules/referrals/referral.service';
 import { UsersService } from '@api/modules/users/users.service';
-import { WalletService } from '@api/modules/wallet/wallet.service';
+import { WalletService } from '@api/modules/wallets/wallet.service';
 
 import { AdminOrderResponseDto } from './dto/admin-order-response.dto';
 import { CheckoutResponseDto } from './dto/checkout-response.dto';
@@ -65,7 +65,7 @@ import {
   loadCreditedVendorEarnings,
   loadVendorFundedDiscounts,
   releaseDiscountUsage,
-} from '@api/modules/promotions/discount-funding';
+} from '@api/modules/discounts/discount-funding';
 
 import { DomainEvents } from '@api/common/events/domain-events';
 
