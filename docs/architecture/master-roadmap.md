@@ -173,7 +173,7 @@ Read-only audit of fault isolation, independent scaling, database connections, m
 
 | ID | Item | Status |
 |---|---|---|
-| 6.1 | Payments onto the transaction runner and `ctx.emit` / `ctx.audit`; split the file by use case | todo |
+| 6.1 | Payments onto the transaction runner and `ctx.emit` / `ctx.audit`; split the file by use case | in progress. Step 1 done: everything that talks to Paystack (HTTP through the breaker, response handling, webhook signature check) moved out of the 2,414-line payments service into `PaystackClientService` with its own tests; behaviour unchanged. Next: refunds, then settlement, converting each to the transaction runner as it moves |
 | 6.2 | Wallets and vendor payouts, including settlement | todo |
 | 6.3 | Orders and refunds; split the file by use case | todo |
 | 6.4 | The remaining 12 services converted; remove the legacy allowlist in the architecture check | todo |

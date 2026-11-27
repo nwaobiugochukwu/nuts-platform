@@ -2,7 +2,6 @@
   BadRequestException,
   ConflictException,
   Injectable,
-  InternalServerErrorException,
   Logger,
   NotFoundException,
   Inject,
@@ -23,7 +22,7 @@ import {
   ROLE,
 } from '@prisma/client';
 
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { randomUUID } from 'crypto';
 
 import { CART_CACHE_PREFIX } from '@api/modules/cart/services/cart.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -31,11 +30,10 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { PaystackClientService } from './paystack-client.service';
 import { WebhookInboxService } from './webhook-inbox.service';
-import { withUpstreamStatus } from '@api/infrastructure/resilience/dependency-failure.util';
 import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
-import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
@@ -61,8 +59,6 @@ import {
 import {
   PAYSTACK_SUCCESS_STATUS,
   PAYSTACK_TRANSACTION_INI_URL,
-  PAYSTACK_TRANSACTION_VERIFY_BASE_URL,
-  PAYSTACK_WEBHOOK_CRYPTO_ALGO,
 } from '@api/common/constants/payment.constants';
 
 import {
@@ -74,7 +70,6 @@ import type {
   PaystackApiResponse,
   PaystackInitializeData,
   PaystackInitializePayload,
-  PaystackVerifyData,
   PaystackWebhookEvent,
 } from '../types/paystack.types';
 
@@ -102,21 +97,13 @@ export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
   private isReconcilingRefunds = false;
 
-  /**
-   * External API timeout.
-   *
-   * Without an explicit timeout, an unavailable Paystack connection can
-   * leave an HTTP request hanging for an unnecessarily long period.
-   */
-  private readonly paystackTimeoutMs = 10_000;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
     private readonly emailService: EmailService,
     private readonly walletService: WalletService,
-    private readonly circuitBreaker: CircuitBreakerService,
+    private readonly paystack: PaystackClientService,
     private readonly outbox: OutboxService,
     private readonly webhookInbox: WebhookInboxService,
     @Optional() private readonly cacheService?: CacheService,
@@ -145,7 +132,7 @@ export class PaymentsService {
   ): Promise<InitializePaymentResponseDto> {
     await this.usersService.assertActiveAccount(userId);
 
-    this.assertPaystackConfigured();
+    this.paystack.assertConfigured();
 
     /**
      * orderId is unique in Payment, therefore findUnique is preferable to
@@ -321,7 +308,7 @@ export class PaymentsService {
       payload.callback_url = callbackUrl;
     }
 
-    const result = await this.paystackPost<
+    const result = await this.paystack.post<
       PaystackApiResponse<PaystackInitializeData>
     >(PAYSTACK_TRANSACTION_INI_URL, payload);
 
@@ -427,7 +414,7 @@ export class PaymentsService {
   // ---------------------------------------------------------------------------
 
   async verifyByReference(reference: string): Promise<PaymentResponseDto> {
-    this.assertPaystackConfigured();
+    this.paystack.assertConfigured();
 
     const normalized = reference.trim();
 
@@ -473,9 +460,12 @@ export class PaymentsService {
     rawBody: string,
     signature: string | undefined,
   ): PaystackWebhookEvent {
-    this.assertPaystackConfigured();
+    this.paystack.assertConfigured();
 
-    if (!signature || !this.isValidWebhookSignature(rawBody, signature)) {
+    if (
+      !signature ||
+      !this.paystack.isValidWebhookSignature(rawBody, signature)
+    ) {
       throw new BadRequestException('Invalid Paystack webhook signature.');
     }
 
@@ -658,7 +648,7 @@ export class PaymentsService {
     adminId: string,
     amount?: number,
   ): Promise<PaymentResponseDto> {
-    this.assertPaystackConfigured();
+    this.paystack.assertConfigured();
 
     const claim = await this.prisma.$transaction(
       async (tx) => {
@@ -898,7 +888,7 @@ export class PaymentsService {
     });
 
     try {
-      const lookup = await this.paystackGet<PaystackRefundListResponse>(
+      const lookup = await this.paystack.get<PaystackRefundListResponse>(
         `https://api.paystack.co/refund?reference=${encodeURIComponent(refund.providerReference)}`,
       );
       if (!lookup.status || !Array.isArray(lookup.data)) {
@@ -934,7 +924,7 @@ export class PaymentsService {
           'Paystack transaction reference is missing.',
         );
       }
-      const created = await this.paystackPost<PaystackRefundResponse>(
+      const created = await this.paystack.post<PaystackRefundResponse>(
         'https://api.paystack.co/refund',
         {
           transaction,
@@ -1372,8 +1362,8 @@ export class PaymentsService {
               currency: payment.currency,
               paid_at: new Date().toISOString(),
             },
-          } as Awaited<ReturnType<typeof this.paystackVerify>>)
-        : await this.paystackVerify(reference);
+          } as Awaited<ReturnType<PaystackClientService['verifyTransaction']>>)
+        : await this.paystack.verifyTransaction(reference);
 
     if (
       (!verified?.status ||
@@ -1839,158 +1829,6 @@ export class PaymentsService {
   // ---------------------------------------------------------------------------
   // PAYSTACK HTTP
   // ---------------------------------------------------------------------------
-
-  private async paystackVerify(
-    reference: string,
-  ): Promise<PaystackApiResponse<PaystackVerifyData> | null> {
-    const url =
-      `${PAYSTACK_TRANSACTION_VERIFY_BASE_URL}/` +
-      `${encodeURIComponent(reference)}`;
-
-    try {
-      return await this.paystackGet<PaystackApiResponse<PaystackVerifyData>>(
-        url,
-      );
-    } catch (error) {
-      this.logger.error('Paystack verification request failed', error);
-
-      return null;
-    }
-  }
-
-  private async paystackPost<T>(url: string, body: unknown): Promise<T> {
-    return this.circuitBreaker.executePaystack(async () => {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: this.paystackHeaders(),
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.paystackTimeoutMs),
-      });
-
-      return this.parsePaystackResponse<T>(response);
-    });
-  }
-
-  private async paystackGet<T>(url: string): Promise<T> {
-    // A read: safe to repeat, so a flaky Paystack is retried with backoff before giving up.
-    return this.circuitBreaker.executePaystackRepeatable(async () => {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: this.paystackHeaders(),
-        signal: AbortSignal.timeout(this.paystackTimeoutMs),
-      });
-
-      return this.parsePaystackResponse<T>(response);
-    });
-  }
-
-  private paystackHeaders(): Record<string, string> {
-    const secretKey = this.config
-      .getOrThrow<string>('PAYSTACK_SECRET_KEY')
-      .trim();
-
-    if (!secretKey) {
-      throw new InternalServerErrorException('Paystack is not configured.');
-    }
-
-    return {
-      Authorization: `Bearer ${secretKey}`,
-
-      'Content-Type': 'application/json',
-    };
-  }
-
-  private async parsePaystackResponse<T>(response: Response): Promise<T> {
-    const rawText = await response.text();
-
-    let data: T;
-
-    try {
-      data = JSON.parse(rawText) as T;
-    } catch {
-      this.logger.error('Paystack returned invalid JSON.');
-
-      throw new ServiceUnavailableException('Invalid Paystack API response.');
-    }
-
-    if (!response.ok) {
-      const rawMessage =
-        typeof data === 'object' &&
-        data !== null &&
-        'message' in data &&
-        typeof (
-          data as {
-            message?: unknown;
-          }
-        ).message === 'string'
-          ? (
-              data as {
-                message: string;
-              }
-            ).message
-          : `Paystack returned HTTP ${response.status}.`;
-
-      const authenticationError =
-        response.status === 401 ||
-        response.status === 403 ||
-        /invalid\s*key/i.test(rawMessage);
-
-      if (authenticationError) {
-        this.logger.error('Paystack authentication failed.');
-
-        throw withUpstreamStatus(
-          new ServiceUnavailableException(
-            'Paystack authentication failed. Check PAYSTACK_SECRET_KEY.',
-          ),
-          response.status,
-        );
-      }
-
-      // The caller still gets a 503; the breaker sees the status Paystack really returned.
-      throw withUpstreamStatus(
-        new ServiceUnavailableException(rawMessage),
-        response.status,
-      );
-    }
-
-    return data;
-  }
-
-  // ---------------------------------------------------------------------------
-  // SECURITY
-  // ---------------------------------------------------------------------------
-
-  private isValidWebhookSignature(rawBody: string, signature: string): boolean {
-    try {
-      const secret = this.config
-        .getOrThrow<string>('PAYSTACK_SECRET_KEY')
-        .trim();
-
-      const expected = createHmac(PAYSTACK_WEBHOOK_CRYPTO_ALGO, secret)
-        .update(rawBody)
-        .digest('hex');
-
-      const receivedBuffer = Buffer.from(signature.trim(), 'utf8');
-
-      const expectedBuffer = Buffer.from(expected, 'utf8');
-
-      if (receivedBuffer.length !== expectedBuffer.length) {
-        return false;
-      }
-
-      return timingSafeEqual(receivedBuffer, expectedBuffer);
-    } catch {
-      return false;
-    }
-  }
-
-  private assertPaystackConfigured(): void {
-    const key = this.config.get<string>('PAYSTACK_SECRET_KEY')?.trim();
-
-    if (!key) {
-      throw new InternalServerErrorException('Paystack is not configured.');
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // MONEY

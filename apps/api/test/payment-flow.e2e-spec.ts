@@ -14,6 +14,7 @@ import { RedlockService } from '../src/infrastructure/cache/redlock.service';
 import { OtpService } from '../src/modules/auth/services/otp.service';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 import { PaymentsService } from '../src/modules/payments/services/payments.service';
+import { PaystackClientService } from '../src/modules/payments/services/paystack-client.service';
 import { RabbitMQService } from '../src/infrastructure/messaging/rabbitmq/rabbitmq.service';
 
 describe('Payment Flow End-to-End (e2e)', () => {
@@ -21,6 +22,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
   let mockPrisma: any;
   let mockRedis: any;
   let paymentsService: PaymentsService;
+  let paystackClient: PaystackClientService;
   let rabbitmq: RabbitMQService;
 
   const testUserId = 'u-e2e-customer';
@@ -585,6 +587,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
     await app.init();
 
     paymentsService = moduleFixture.get<PaymentsService>(PaymentsService);
+    paystackClient = moduleFixture.get(PaystackClientService);
     rabbitmq = moduleFixture.get(RabbitMQService);
   });
 
@@ -696,7 +699,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
      */
     it('Phase 4: Initializes Paystack transaction, receiving authorizationUrl and reference', async () => {
       // Mock Paystack initialize API call
-      jest.spyOn<any, any>(paymentsService, 'paystackPost').mockResolvedValue({
+      jest.spyOn(paystackClient, 'post').mockResolvedValue({
         status: true,
         message: 'Authorization url created',
         data: {
@@ -752,9 +755,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
         .digest('hex');
 
       // Simulate Paystack verify API timeout/null to prove cryptographically signed webhook fallback works
-      jest
-        .spyOn<any, any>(paymentsService, 'paystackVerify')
-        .mockResolvedValue(null);
+      jest.spyOn(paystackClient, 'verifyTransaction').mockResolvedValue(null);
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/payments/webhook')

@@ -8,14 +8,15 @@ import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.servi
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
-import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
+import { PaystackClientService } from './paystack-client.service';
 import { PaymentsService } from './payments.service';
 
-const mockCircuitBreakerService = {
-  executePaystack: jest.fn((fn: () => unknown) => fn()),
-  executeEmail: jest.fn((fn: () => unknown) => fn()),
-  executeCloudinary: jest.fn((fn: () => unknown) => fn()),
-  getStatus: jest.fn(),
+const mockPaystackClient = {
+  post: jest.fn(),
+  get: jest.fn(),
+  verifyTransaction: jest.fn(),
+  assertConfigured: jest.fn(),
+  isValidWebhookSignature: jest.fn().mockReturnValue(true),
 };
 
 const mockOutboxService = {
@@ -96,7 +97,7 @@ describe('PaymentsService â€“ refund', () => {
         { provide: WalletService, useValue: mockWalletService },
         { provide: OutboxService, useValue: mockOutboxService },
         { provide: WebhookInboxService, useValue: { receive: jest.fn() } },
-        { provide: CircuitBreakerService, useValue: mockCircuitBreakerService },
+        { provide: PaystackClientService, useValue: mockPaystackClient },
       ],
     }).compile();
 

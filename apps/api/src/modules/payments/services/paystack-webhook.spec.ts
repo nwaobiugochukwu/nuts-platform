@@ -7,6 +7,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
+import { PaystackClientService } from './paystack-client.service';
 import { PaymentsService } from './payments.service';
 
 describe('Paystack Webhook & Payment Verification Security', () => {
@@ -14,6 +15,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
   let mockPrisma: any;
   let mockConfig: any;
   let mockOutbox: any;
+  let paystack: PaystackClientService;
   let mockInbox: any;
   let mockWalletService: any;
   const secretKey = 'sk_test_secret_key_12345';
@@ -81,15 +83,18 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       wakeRelay: jest.fn(),
     };
 
+    paystack = new PaystackClientService(mockConfig, {
+      executePaystack: jest.fn((fn: () => unknown) => fn()),
+      executePaystackRepeatable: jest.fn((fn: () => unknown) => fn()),
+    } as unknown as CircuitBreakerService);
+
     service = new PaymentsService(
       mockPrisma,
       { assertActiveAccount: jest.fn() } as unknown as UsersService,
       mockConfig,
       {} as unknown as EmailService,
       mockWalletService,
-      {
-        executePaystack: jest.fn((fn: () => unknown) => fn()),
-      } as unknown as CircuitBreakerService,
+      paystack,
       mockOutbox,
       mockInbox,
     );
@@ -168,7 +173,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
 
       // Mock Paystack server-side verification API returning matching amount
-      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+      jest.spyOn<any, any>(paystack, 'verifyTransaction').mockResolvedValue({
         status: true,
         data: {
           id: 999888,
@@ -225,7 +230,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         order: { orderNumber: 'ORD-2' },
       };
       mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
-      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+      jest.spyOn<any, any>(paystack, 'verifyTransaction').mockResolvedValue({
         status: true,
         data: { id: 1, status: 'success', amount: 10000, currency: 'NGN' },
       });
@@ -356,7 +361,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         transactionReference: 'TX-REF-300',
       };
       mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
-      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+      jest.spyOn<any, any>(paystack, 'verifyTransaction').mockResolvedValue({
         status: true,
         data: { id: 1, status: 'success', amount: 10000, currency: 'NGN' },
       });
@@ -405,7 +410,9 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
 
       // Paystack verify times out or returns null
-      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue(null);
+      jest
+        .spyOn<any, any>(paystack, 'verifyTransaction')
+        .mockResolvedValue(null);
 
       mockPrisma.payment.updateMany.mockResolvedValue({ count: 1 });
       mockPrisma.order.updateMany.mockResolvedValue({ count: 1 });
@@ -455,7 +462,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       mockPrisma.payment.findUnique.mockResolvedValue(existingPayment);
 
       // Attacker paid only 50 NGN (5,000 kobo)
-      jest.spyOn<any, any>(service, 'paystackVerify').mockResolvedValue({
+      jest.spyOn<any, any>(paystack, 'verifyTransaction').mockResolvedValue({
         status: true,
         data: {
           id: 111,
