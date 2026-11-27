@@ -120,7 +120,6 @@
     "@types/supertest": "^7.0.0",
     "@types/web-push": "^3.6.4",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",

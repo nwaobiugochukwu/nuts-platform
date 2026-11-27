@@ -15,7 +15,6 @@ packages/*/package-lock.json
 **/.nyc_output/
 **/.next/
 **/out/
-**/.turbo/
 **/.cache/
 **/*.tsbuildinfo
 **/next-env.d.ts

@@ -19,7 +19,6 @@
     "dev:local": "node scripts/dev.mjs",
     "dev:local:quiet": "node scripts/dev.mjs --quiet",
     "dev:local:skip-infra": "node scripts/dev.mjs --skip-infra",
-    "dev:parallel": "npm run db:up && turbo run dev:compile dev:api dev:worker dev:jobs dev:web --env-mode=loose --continue=always",
     "dev:compile": "npm run --prefix apps/api dev:compile",
     "dev:api": "npm run --prefix apps/api dev:api",
     "dev:worker": "npm run --prefix apps/api dev:worker",
@@ -70,10 +69,7 @@
     "prod:logs": "docker compose --profile prod logs -f",
     "postinstall": "node scripts/postinstall.js"
   },
-  "devDependencies": {
-    "concurrently": "^10.0.5",
-    "turbo": "^2.11.5"
-  },
+  "devDependencies": {},
   "packageManager": "npm@11.17.0",
   "engines": {
     "node": ">=22.12.0 <23"
