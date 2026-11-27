@@ -44,6 +44,11 @@ const SCORE = {
   MISSING_REFERER_ON_MUTATION: 5,
 } as const;
 
+/** Webhook endpoints that providers call server to server; authenticated by signature. */
+const WEBHOOK_PATHS: ReadonlySet<string> = new Set([
+  '/api/v1/payments/webhook',
+]);
+
 /** Threshold above which a request is classified as a bot */
 const BOT_THRESHOLD = 40;
 
@@ -318,6 +323,13 @@ export class BotDetectionMiddleware implements NestMiddleware {
       req.path === '/health' ||
       req.path.startsWith('/api/v1/health')
     ) {
+      return next();
+    }
+
+    // Provider webhooks are servers, not browsers: they send none of the headers the heuristics
+    // look for. They are authenticated by the provider's signature (checked by the endpoint)
+    // and, for Paystack, by source address, so the heuristics would only block real events.
+    if (req.method === 'POST' && WEBHOOK_PATHS.has(req.path)) {
       return next();
     }
 

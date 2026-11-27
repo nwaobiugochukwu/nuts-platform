@@ -13,6 +13,7 @@ export const RABBITMQ_QUEUES = {
   INVENTORY: 'q.nuts.inventory',
   AUDIT: 'q.nuts.audit',
   ORDER_EVENTS: 'q.nuts.order-events',
+  PAYMENT_WEBHOOKS: 'q.nuts.payment-webhooks',
   WORKFLOWS: 'q.nuts.workflows',
   DLQ: 'q.nuts.dlq',
 } as const;
@@ -58,6 +59,8 @@ export const QUEUE_BINDINGS: Record<
   ],
   [RABBITMQ_QUEUES.INVENTORY]: [RABBITMQ_ROUTING_KEYS.INVENTORY_ADJUST],
   [RABBITMQ_QUEUES.AUDIT]: [RABBITMQ_ROUTING_KEYS.AUDIT_EVENT],
+  // Stored Paystack webhooks waiting to be applied (the webhook inbox).
+  [RABBITMQ_QUEUES.PAYMENT_WEBHOOKS]: [DomainEvents.PAYMENT_WEBHOOK_RECEIVED],
   // Order, payment and referral facts that turn into emails and notifications.
   [RABBITMQ_QUEUES.ORDER_EVENTS]: [
     DomainEvents.ORDER_PROCESSING,
