@@ -97,6 +97,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       paystack,
       mockOutbox,
       mockInbox,
+      {} as never,
     );
   });
 
