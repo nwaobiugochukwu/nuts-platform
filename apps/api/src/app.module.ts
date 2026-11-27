@@ -54,7 +54,9 @@ import { SearchModule } from './modules/search/search.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SecurityModule } from './modules/security/security.module';
 import { HealthModule } from './modules/health/health.module';
-import { AdminModule } from './modules/admin/admin.module';
+import { AnnouncementsModule } from './modules/announcements/announcements.module';
+import { PlatformModule } from './modules/platform/platform.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 
 @Module({
@@ -134,7 +136,9 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     SecurityModule,
     HealthModule,
     CacheWarmupModule,
-    AdminModule,
+    StaffModule,
+    PlatformModule,
+    AnnouncementsModule,
     RecommendationsModule,
   ],
 

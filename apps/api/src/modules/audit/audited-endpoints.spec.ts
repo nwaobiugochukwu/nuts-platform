@@ -2,9 +2,9 @@ import {
   AUDIT_METADATA,
   type AuditOptions,
 } from '@api/modules/audit/decorators/audit.decorator';
-import { AdminAnnouncementsController } from '../admin/controllers/admin-announcements.controller';
-import { AdminPlatformController } from '../admin/controllers/admin-platform.controller';
-import { AdminStaffController } from '../admin/controllers/admin-staff.controller';
+import { AdminAnnouncementsController } from '../announcements/controllers/admin-announcements.controller';
+import { AdminPlatformController } from '../platform/controllers/admin-platform.controller';
+import { AdminStaffController } from '../staff/controllers/admin-staff.controller';
 import { AdminAuthController } from '../auth/controllers/admin-auth.controller';
 import { AuthController } from '../auth/controllers/auth.controller';
 import { AdminCategoryController } from '../categories/controllers/admin-category.controller';
@@ -15,7 +15,7 @@ import { AdminUsersController } from '../users/controllers/admin-user.controller
 import { UsersController } from '../users/controllers/users.controller';
 import { AdminVendorsController } from '../vendors/controllers/admin-vendors.controller';
 import { VendorAccountController } from '../vendors/controllers/vendor-account.controller';
-import { VendorAuthController } from '../vendors/controllers/vendor-auth.controller';
+import { VendorAuthController } from '../auth/controllers/vendor-auth.controller';
 
 /**
  * Every endpoint that records an audit event, with its action. Audit used to be

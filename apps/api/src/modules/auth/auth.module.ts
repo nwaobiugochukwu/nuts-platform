@@ -1,3 +1,5 @@
+import { VendorAuthController } from './controllers/vendor-auth.controller';
+import { VendorAuthService } from './services/vendor-auth.service';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -42,6 +44,7 @@ import { RegistrationsGuard } from '@api/common/guards/registrations.guard';
   providers: [
     AuthService,
     AdminAuthService,
+    VendorAuthService,
     OtpService,
     AuthSessionService,
     RefreshSessionService,
@@ -51,10 +54,11 @@ import { RegistrationsGuard } from '@api/common/guards/registrations.guard';
     JwtRefreshGuard,
     RegistrationsGuard,
   ],
-  controllers: [AuthController, AdminAuthController],
+  controllers: [AuthController, AdminAuthController, VendorAuthController],
   exports: [
     AuthService,
     AdminAuthService,
+    VendorAuthService,
     OtpService,
     AuthCookiesModule,
     GoogleAuthService,

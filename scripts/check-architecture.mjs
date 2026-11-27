@@ -83,7 +83,7 @@ const API_RAW_TRANSACTION_LEGACY = new Set([
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
 const API_DIRECT_AUDIT_ALLOWED = new Map([
-  ["apps/api/src/modules/admin/admin-announcements.service.ts", 2],
+  ["apps/api/src/modules/announcements/services/admin-announcements.service.ts", 2],
   ["apps/api/src/modules/products/products.service.ts", 1],
   ["apps/api/src/modules/users/users.service.ts", 1],
 ]);

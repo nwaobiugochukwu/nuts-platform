@@ -43,12 +43,12 @@ import {
   extractIpAddress,
   extractUserAgent,
 } from '@api/common/utils/request.util';
-import { CreateVendorDto } from '../dto/create-vendor.dto';
-import { VendorGoogleAuthDto } from '../dto/vendor-google-auth.dto';
-import { VendorLoginDto } from '../dto/update-vendor.dto';
-import { VendorResetPasswordDto } from '../dto/vendor-reset-password.dto';
-import { VendorResponseDto } from '../dto/vendor-response.dto';
-import { VendorAuthService } from '../vendor-auth.service';
+import { CreateVendorDto } from '../../vendors/dto/create-vendor.dto';
+import { VendorGoogleAuthDto } from '../../vendors/dto/vendor-google-auth.dto';
+import { VendorLoginDto } from '../../vendors/dto/update-vendor.dto';
+import { VendorResetPasswordDto } from '../../vendors/dto/vendor-reset-password.dto';
+import { VendorResponseDto } from '../../vendors/dto/vendor-response.dto';
+import { VendorAuthService } from '../services/vendor-auth.service';
 import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 
 @ApiTags('VENDORS - AUTH')

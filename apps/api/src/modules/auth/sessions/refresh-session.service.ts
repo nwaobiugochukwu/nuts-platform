@@ -24,7 +24,7 @@ import {
   type AdminAuthRecord,
   type UserAuthRecord,
   type VendorAuthRecord,
-} from '../auth.selects';
+} from '../constants/auth-selects.constants';
 import type {
   AuthSession,
   AuthTokens,

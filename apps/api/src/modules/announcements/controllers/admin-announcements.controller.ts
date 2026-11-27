@@ -15,7 +15,7 @@ import {} from '@api/common/utils/request.util';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
-import { AdminAnnouncementsService } from '../admin-announcements.service';
+import { AdminAnnouncementsService } from '../services/admin-announcements.service';
 import {
   CreateAdminAnnouncementDto,
   QueryAdminAnnouncementsDto,

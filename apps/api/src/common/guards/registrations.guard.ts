@@ -7,10 +7,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import type { PlatformConfigResponseDto } from '@api/modules/admin/dto/admin-platform-config.dto';
-
-/** Cache key must match the constant in AdminService. */
-const PLATFORM_CONFIG_CACHE_KEY = 'platform:config:governance';
+import type { PlatformConfig } from '@api/common/types/platform-config.types';
+import { PLATFORM_CONFIG_CACHE_KEY } from '@api/common/constants/platform-config.constants';
 
 /**
  * Discriminator stored in route metadata by the @RegistrationType() decorator.
@@ -57,11 +55,9 @@ export class RegistrationsGuard implements CanActivate {
     // If no @RegistrationType() decorator is present, skip the guard.
     if (!kind) return true;
 
-    let config: PlatformConfigResponseDto | undefined;
+    let config: PlatformConfig | undefined;
     try {
-      config = await this.cache.get<PlatformConfigResponseDto>(
-        PLATFORM_CONFIG_CACHE_KEY,
-      );
+      config = await this.cache.get<PlatformConfig>(PLATFORM_CONFIG_CACHE_KEY);
     } catch (error) {
       // Fail open on cache errors — a Redis outage must not block sign-ups.
       this.logger.warn(

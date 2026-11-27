@@ -16,7 +16,7 @@ import { Roles } from '@api/common/decorators/role.decorator';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import {} from '@api/common/utils/request.util';
-import { AdminService } from '../admin.service';
+import { StaffService } from '../services/staff.service';
 import {
   AdminStaffResponseDto,
   CreateAdminStaffDto,
@@ -30,13 +30,13 @@ import { Audit } from '@api/modules/audit/decorators/audit.decorator';
 @Roles(ROLE.ADMIN)
 @Controller('admin/staff')
 export class AdminStaffController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(private readonly staffService: StaffService) {}
 
   @Get()
   @ApiOperation({ summary: 'List platform admin staff with pagination' })
   @Message('Admin staff retrieved successfully')
   async getStaffList(@Query() query: QueryAdminStaffDto) {
-    return this.adminService.getStaffList(query);
+    return this.staffService.getStaffList(query);
   }
 
   @Audit({ action: 'ADMIN_STAFF_CREATED', entity: 'Admin' })
@@ -47,7 +47,7 @@ export class AdminStaffController {
   async createStaff(
     @Body() dto: CreateAdminStaffDto,
   ): Promise<AdminStaffResponseDto> {
-    return this.adminService.createStaff(dto);
+    return this.staffService.createStaff(dto);
   }
 
   @Audit({ action: 'ADMIN_STAFF_ACTIVATED', entity: 'Admin', entityId: 'id' })
@@ -59,7 +59,7 @@ export class AdminStaffController {
     @Body() dto: UpdateAdminStaffStatusDto,
     @GetUser('id') performingAdminId: string,
   ): Promise<AdminStaffResponseDto> {
-    return this.adminService.updateStaffStatus(
+    return this.staffService.updateStaffStatus(
       targetAdminId,
       dto,
       performingAdminId,
@@ -70,6 +70,6 @@ export class AdminStaffController {
   @ApiOperation({ summary: 'Get governance audit log events' })
   @Message('Governance audit logs retrieved successfully')
   async getAuditLogs(@Query('limit') limit?: number) {
-    return this.adminService.getGovernanceAuditLogs(limit ? Number(limit) : 50);
+    return this.staffService.getGovernanceAuditLogs(limit ? Number(limit) : 50);
   }
 }
