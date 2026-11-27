@@ -13,6 +13,8 @@ import { VendorAnalyticsController } from './controllers/vendor-analytics.contro
 import { VendorAnalyticsService } from './services/vendor-analytics.service';
 import { ProductViewsService } from './services/product-views.service';
 import { SearchTrackingService } from './services/search-tracking.service';
+import { RecommendationRefreshService } from './services/recommendation-refresh.service';
+import { TrackingQueueService } from './services/tracking-queue.service';
 import { AnalyticsConsumer } from './consumers/analytics.consumer';
 import { VendorSummaryJob } from './jobs/vendor-summary.job';
 import { AnalyticsEventsController } from './controllers/analytics-events.controller';
@@ -42,6 +44,8 @@ import { MarketplaceAnalyticsService } from './services/marketplace-analytics.se
     VendorAnalyticsService,
     ProductViewsService,
     SearchTrackingService,
+    TrackingQueueService,
+    RecommendationRefreshService,
     RecommendationEventsService,
     MarketplaceEventsService,
     MarketplaceAnalyticsService,

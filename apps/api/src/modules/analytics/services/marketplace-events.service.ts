@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
+import { TrackingQueueService } from './tracking-queue.service';
 import { Prisma, ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
@@ -29,7 +30,10 @@ export interface MarketplaceEventInput {
 export class MarketplaceEventsService {
   private readonly logger = new Logger(MarketplaceEventsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly queue?: TrackingQueueService,
+  ) {}
 
   async recordStoreView(
     vendorId: string,
@@ -65,10 +69,31 @@ export class MarketplaceEventsService {
 
   /** Server-owned product/cart/wishlist actions. Analytics failures never fail commerce writes. */
   async record(input: MarketplaceEventInput): Promise<{ accepted: boolean }> {
+    const id = input.id ?? randomUUID();
     try {
+      const queued = await this.queue?.enqueue({
+        type: 'marketplace_event',
+        timestamp: Date.now(),
+        event: {
+          id,
+          eventType: input.eventType,
+          vendorId: input.vendorId ?? null,
+          productId: input.productId ?? null,
+          variantId: input.variantId ?? null,
+          categoryId: input.categoryId ?? null,
+          userId: input.userId ?? null,
+          visitorId: input.visitorId ?? null,
+          sessionId: input.sessionId ?? null,
+          cartId: input.cartId ?? null,
+          quantity: input.quantity ?? null,
+          surface: input.surface ?? null,
+        },
+      });
+      if (queued) return { accepted: true };
+
       await this.prisma.marketplaceEvent.create({
         data: {
-          id: input.id ?? randomUUID(),
+          id,
           eventType: input.eventType,
           vendorId: input.vendorId ?? null,
           productId: input.productId ?? null,

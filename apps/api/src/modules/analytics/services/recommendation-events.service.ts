@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TrackingQueueService } from './tracking-queue.service';
 import type { RecommendationEventDto } from '../dto/recommendation-events.dto';
 
 const CLIENT_TRACKABLE_EVENTS = new Set([
@@ -18,6 +19,7 @@ export class RecommendationEventsService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly cache?: CacheService,
+    @Optional() private readonly queue?: TrackingQueueService,
   ) {}
 
   /** Clicks, dismissals and category views change what we should recommend. */
@@ -28,6 +30,35 @@ export class RecommendationEventsService {
   ) {
     if (!events.some((e) => e.eventType !== 'IMPRESSION')) return;
     await this.cache?.invalidateRecommendations(userId, ...sessionIds);
+  }
+
+  /** Queues the events; true when the broker confirmed them. */
+  private enqueueEvents(
+    effectiveUserId: string | null,
+    cacheUserId: string | undefined,
+    events: RecommendationEventDto[],
+  ): Promise<boolean> {
+    if (!this.queue) return Promise.resolve(false);
+    return this.queue.enqueue({
+      type: 'recommendation_events',
+      events: events.map((event) => ({
+        id: event.id,
+        eventType: event.eventType,
+        surface: event.surface,
+        requestId: event.requestId,
+        rankerVersion: event.rankerVersion,
+        position: event.position,
+        productId: event.productId,
+        vendorId: event.vendorId,
+        categoryId: event.categoryId,
+        userId: effectiveUserId,
+        sessionId: event.sessionId,
+      })),
+      // Impressions do not change what to recommend; clicks, dismissals and category views do.
+      refreshFor: events.some((e) => e.eventType !== 'IMPRESSION')
+        ? [cacheUserId, ...events.map((e) => e.sessionId)]
+        : [],
+    });
   }
 
   async record(
@@ -50,6 +81,12 @@ export class RecommendationEventsService {
     }
 
     const effectiveUserId = userRole === ROLE.VENDOR ? null : (userId ?? null);
+
+    // Preferred path: hand it to the analytics queue (no database write in the request, and the
+    // feed is refreshed once per burst of clicks). If the broker is down, store it here as before.
+    if (await this.enqueueEvents(effectiveUserId, userId, [event])) {
+      return { accepted: true };
+    }
 
     try {
       await this.prisma.recommendationEvent.create({
@@ -105,6 +142,10 @@ export class RecommendationEventsService {
     if (acceptedEvents.length === 0) return { accepted: true, stored: 0 };
 
     const effectiveUserId = userRole === ROLE.VENDOR ? null : (userId ?? null);
+
+    if (await this.enqueueEvents(effectiveUserId, userId, acceptedEvents)) {
+      return { accepted: true, stored: acceptedEvents.length };
+    }
 
     try {
       const result = await this.prisma.recommendationEvent.createMany({
