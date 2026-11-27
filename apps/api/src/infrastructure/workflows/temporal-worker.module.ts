@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
-import { validateEnv } from '../configuration/env.validation';
-import { pinoLoggerConfig } from '../configuration/logger.config';
-import { PrismaModule } from '../prisma/prisma.module';
+import { validateEnv } from '../../config/env.validation';
+import { pinoLoggerConfig } from '../../config/logger.config';
+import { PrismaModule } from '../database/prisma.module';
 import { SampleActivities } from './activities/sample.activities';
 
 /**

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 export type MarketplaceEventType =
   | 'STORE_VIEW'

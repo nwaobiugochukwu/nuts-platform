@@ -1,4 +1,4 @@
-import { CacheWarmupModule } from '@api/modules/cache-warmup/cache-warmup.module';
+import { CacheWarmupModule } from '@api/bootstrap/cache-warmup/cache-warmup.module';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
@@ -17,22 +17,22 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
 
 // ── Infrastructure Layer ──────────────────────────────────
-import { PrismaModule } from './infrastructure/prisma/prisma.module';
-import { RedisModule } from './infrastructure/redis/redis.module';
+import { PrismaModule } from './infrastructure/database/prisma.module';
+import { RedisModule } from './infrastructure/cache/redis.module';
 import { CacheModule } from './infrastructure/cache/cache.module';
 import { RedisThrottlerStorage } from './infrastructure/cache/redis-throttler.storage';
-import { RabbitMQModule } from './infrastructure/rabbitmq/rabbitmq.module';
-import { OutboxModule } from './infrastructure/outbox/outbox.module';
-import { TransactionModule } from './infrastructure/transaction/transaction.module';
-import { MetricsModule } from './infrastructure/metrics/metrics.module';
-import { TemporalModule } from './infrastructure/temporal/temporal.module';
-import { HeartbeatModule } from './infrastructure/health/heartbeat.module';
+import { RabbitMQModule } from './infrastructure/messaging/rabbitmq/rabbitmq.module';
+import { OutboxModule } from './infrastructure/messaging/outbox/outbox.module';
+import { TransactionModule } from './infrastructure/database/transaction.module';
+import { MetricsModule } from './infrastructure/observability/metrics/metrics.module';
+import { TemporalModule } from './infrastructure/workflows/temporal.module';
+import { HeartbeatModule } from './infrastructure/observability/health/heartbeat.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
-import { ResiliencyModule } from './infrastructure/resiliency/resiliency.module';
+import { ResilienceModule } from './infrastructure/resilience/resilience.module';
 import { MailModule } from './infrastructure/mail/mail.module';
-import { CloudinaryModule } from './infrastructure/cloudinary/cloudinary.module';
-import { validateEnv } from './infrastructure/configuration/env.validation';
-import { pinoLoggerConfig } from './infrastructure/configuration/logger.config';
+import { CloudinaryModule } from './infrastructure/storage/cloudinary.module';
+import { validateEnv } from './config/env.validation';
+import { pinoLoggerConfig } from './config/logger.config';
 
 // ── Direct Feature Slices (Screaming Architecture) ────────
 import { AuthModule } from './modules/auth/auth.module';
@@ -109,7 +109,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     MetricsModule,
     TemporalModule,
     HeartbeatModule,
-    ResiliencyModule,
+    ResilienceModule,
     MailModule,
     CloudinaryModule,
 

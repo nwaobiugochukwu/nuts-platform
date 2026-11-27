@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
-import { RedisModule } from '@api/infrastructure/redis/redis.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
+import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { SearchModule } from '@api/modules/search/search.module';
 import { NotificationsModule } from '@api/modules/notifications/notifications.module';
 import { ProductController } from './controllers/product.controller';

@@ -1,4 +1,4 @@
-import { roleCan } from '@api/infrastructure/configuration/process-role';
+import { roleCan } from '@api/config/process-role';
 import {
   HttpException,
   HttpStatus,
@@ -34,8 +34,8 @@ import {
   getCursorPagination,
   type CursorPaginationMetaDto,
 } from '@api/common/utils/cursor-pagination.util';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AuthSessionService } from '../auth/sessions/auth-session.service';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 

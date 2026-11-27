@@ -1,6 +1,6 @@
 import { NotificationType, ROLE } from '@prisma/client';
 import { ABANDONED_CART } from '@api/common/constants';
-import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { AbandonedCartCron } from './abandoned-cart.cron';
 
 const HOUR = 60 * 60 * 1000;

@@ -13,8 +13,8 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import type { StringValue } from 'ms';
 import type Redis from 'ioredis';
 
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { AuthSessionService } from './auth-session.service';
 
 import {

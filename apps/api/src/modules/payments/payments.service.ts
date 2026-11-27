@@ -28,12 +28,12 @@ import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { CART_CACHE_PREFIX } from '@api/modules/cart/cart.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
-import { CircuitBreakerService } from '@api/infrastructure/resiliency/circuit-breaker.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
+import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/users.service';
-import { WalletService } from '@api/modules/wallet/wallet.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { WalletService } from '@api/modules/wallets/wallet.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 
 import { generateStatusNote } from '@api/modules/orders/constants/order-status.constants';
 
@@ -51,7 +51,7 @@ import {
   loadCreditedVendorEarnings,
   loadVendorFundedDiscounts,
   releaseDiscountUsage,
-} from '@api/modules/promotions/discount-funding';
+} from '@api/modules/discounts/discount-funding';
 
 import {
   PAYSTACK_SUCCESS_STATUS,

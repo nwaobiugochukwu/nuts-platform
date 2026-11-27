@@ -29,7 +29,7 @@ import type { Request, Response } from 'express';
 import { ROLE } from '@prisma/client';
 import { AuthCookieService } from '@api/modules/auth/cookies/auth-cookie.service';
 import { OtpService } from '@api/modules/auth/otp/otp.service';
-import { ReferralService } from '@api/modules/referral/referral.service';
+import { ReferralService } from '@api/modules/referrals/referral.service';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { OtpRequired } from '@api/common/decorators/otp-required.decorator';

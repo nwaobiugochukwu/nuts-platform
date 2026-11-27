@@ -1,6 +1,6 @@
 ﻿import { Injectable } from '@nestjs/common';
 import { PaymentStatus, WalletTransactionReason } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   DiscountAnalyticsDto,
   PaymentAnalyticsDto,

@@ -3,8 +3,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { OrdersService } from '@api/modules/orders/orders.service';
 import { UNPAID_ORDER_EXPIRATION } from '@api/common/constants';
 

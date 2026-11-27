@@ -1,7 +1,7 @@
 ﻿import { Injectable, Optional } from '@nestjs/common';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   fillAnalyticsDateGaps,
   parseDateRange,

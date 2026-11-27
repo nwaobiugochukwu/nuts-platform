@@ -1,6 +1,6 @@
 import { NotificationType, ROLE } from '@prisma/client';
 import { generateJobId } from '@api/common/utils';
-import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { VendorSummaryCron } from './vendor-summary.cron';
 
 describe('VendorSummaryCron', () => {

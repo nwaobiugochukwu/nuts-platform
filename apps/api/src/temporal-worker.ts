@@ -10,14 +10,14 @@ import {
   Worker,
   bundleWorkflowCode,
 } from '@temporalio/worker';
-import { portFor } from './infrastructure/configuration/process-role';
-import { buildActivities } from './infrastructure/temporal/activities';
-import { SampleActivities } from './infrastructure/temporal/activities/sample.activities';
+import { portFor } from './config/process-role';
+import { buildActivities } from './infrastructure/workflows/activities';
+import { SampleActivities } from './infrastructure/workflows/activities/sample.activities';
 import {
   queuesToPoll,
   readTemporalConfig,
-} from './infrastructure/temporal/temporal.config';
-import { TemporalWorkerModule } from './infrastructure/temporal/temporal-worker.module';
+} from './infrastructure/workflows/temporal.config';
+import { TemporalWorkerModule } from './infrastructure/workflows/temporal-worker.module';
 
 /**
  * Entry point for the `temporal-worker` role: runs Temporal workflows and
@@ -58,7 +58,7 @@ async function bootstrap() {
 
   // Bundle workflow code once and share it between the task-queue workers.
   const workflowBundle = await bundleWorkflowCode({
-    workflowsPath: require.resolve('./infrastructure/temporal/workflows'),
+    workflowsPath: require.resolve('./infrastructure/workflows/workflows'),
   });
   const activities = buildActivities(app.get(SampleActivities));
 

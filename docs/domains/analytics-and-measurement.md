@@ -48,7 +48,7 @@ Controllers accept tracking and report requests; admin/vendor services query Pos
 - **Recommendation interactions:** the batch DTO accepts at most 100 events, but accepted events are still written directly to PostgreSQL. This endpoint is not a queue-backed ingestion path.
 - **Reporting:** admin and vendor reports share PostgreSQL with commerce; browser dashboards poll cached report endpoints.
 
-Key code paths: [ProductViewsService](../../apps/api/src/modules/analytics/tracking/product-views/product-views.service.ts), [AnalyticsConsumer](../../apps/api/src/infrastructure/rabbitmq/analytics.consumer.ts), [MarketplaceEventsService](../../apps/api/src/modules/analytics/tracking/marketplace-events.service.ts), [RecommendationEventsService](../../apps/api/src/modules/analytics/tracking/recommendation-events.service.ts), and [RecommendationEventsDto](../../apps/api/src/modules/analytics/tracking/recommendation-events.dto.ts).
+Key code paths: [ProductViewsService](../../apps/api/src/modules/analytics/tracking/product-views/product-views.service.ts), [AnalyticsConsumer](../../apps/api/src/infrastructure/messaging/rabbitmq/analytics.consumer.ts), [MarketplaceEventsService](../../apps/api/src/modules/analytics/tracking/marketplace-events.service.ts), [RecommendationEventsService](../../apps/api/src/modules/analytics/tracking/recommendation-events.service.ts), and [RecommendationEventsDto](../../apps/api/src/modules/analytics/tracking/recommendation-events.dto.ts).
 
 #### Failure scenarios and trade-offs
 

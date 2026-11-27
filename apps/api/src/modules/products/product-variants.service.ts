@@ -11,7 +11,7 @@ import {
   CacheKeys,
   CacheService,
 } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 import {
   CreateVariantDto,

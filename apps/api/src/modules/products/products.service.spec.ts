@@ -1,9 +1,9 @@
 ﻿import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
-import { SearchService } from '@api/common/search/search.service';
+import { SearchService } from '@api/modules/search/search.service';
 import { CategoriesService } from '../categories/categories.service';
 import { ProductsService } from './products.service';
 

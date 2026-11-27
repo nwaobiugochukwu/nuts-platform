@@ -9,8 +9,8 @@ import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { ReferralService } from '@api/modules/referral/referral.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { ReferralService } from '@api/modules/referrals/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 
 import { LoginDto } from './dto/login.dto';
@@ -25,7 +25,7 @@ import { OtpService } from './otp/otp.service';
 import {
   BCRYPT_COST_FACTOR,
   UNKNOWN_ACCOUNT_PASSWORD_HASH,
-} from '@api/modules/shared/constants/bcrypt.constants';
+} from '@api/common/constants/bcrypt.constants';
 import { USER_AUTH_SELECT, USER_LOGIN_SELECT } from './auth.selects';
 import type { AuthSession } from './types/auth.types';
 import { RefreshSessionService } from './sessions/refresh-session.service';

@@ -31,10 +31,10 @@ require('tsconfig-paths').register({
 });
 const amqp = require('amqplib');
 const { describeDeadLetter, planReplay } = require(
-  path.join(root, 'dist/infrastructure/rabbitmq/dlq.util.js'),
+  path.join(root, 'dist/infrastructure/messaging/rabbitmq/dlq.util.js'),
 );
 const { RABBITMQ_QUEUES } = require(
-  path.join(root, 'dist/infrastructure/rabbitmq/rabbitmq.constants.js'),
+  path.join(root, 'dist/infrastructure/messaging/rabbitmq/rabbitmq.constants.js'),
 );
 
 const [command = 'help', ...rest] = process.argv.slice(2);

@@ -12,7 +12,7 @@ import { OtpService } from '@api/modules/auth/otp/otp.service';
 import { RefreshSessionService } from '@api/modules/auth/sessions/refresh-session.service';
 import { GoogleAuthService } from '@api/modules/auth/google-auth.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import {
   BCRYPT_COST_FACTOR,

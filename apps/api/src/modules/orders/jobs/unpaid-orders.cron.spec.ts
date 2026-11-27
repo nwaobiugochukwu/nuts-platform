@@ -1,9 +1,9 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { UnpaidOrdersCron } from './unpaid-orders.cron';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { OrdersService } from '@api/modules/orders/orders.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { UNPAID_ORDER_EXPIRATION } from '@api/common/constants';
 
 describe('UnpaidOrdersCron', () => {

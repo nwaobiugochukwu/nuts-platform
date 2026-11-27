@@ -7,12 +7,12 @@
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { PaymentsService } from '@api/modules/payments/payments.service';
-import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
-import { ReferralService } from '@api/modules/referral/referral.service';
+import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
+import { ReferralService } from '@api/modules/referrals/referral.service';
 import { UsersService } from '@api/modules/users/users.service';
-import { WalletService } from '@api/modules/wallet/wallet.service';
+import { WalletService } from '@api/modules/wallets/wallet.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersService', () => {

@@ -1,4 +1,4 @@
-import { fakeRetentionRedis } from '@api/infrastructure/redis/retention-lock-harness-spec';
+import { fakeRetentionRedis } from '@api/infrastructure/cache/retention-lock-harness-spec';
 import { NotificationRetentionCron } from './notification-retention.cron';
 
 const DAY = 24 * 60 * 60 * 1000;

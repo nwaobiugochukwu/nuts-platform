@@ -6,7 +6,7 @@ import {
 import { OrderStatus, Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 import {
   PRODUCT_BY_SLUG,
@@ -31,7 +31,7 @@ import {
 } from '@api/common/utils/cursor-pagination.util';
 
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
-import { SearchService } from '@api/common/search/search.service';
+import { SearchService } from '@api/modules/search/search.service';
 
 import { AdminCreateProductDto } from './dto/admin-create-product.dto';
 import { AdminProductResponseDto } from './dto/admin-product-response.dto';
@@ -45,8 +45,8 @@ import { StockUpdateResponseDto } from './dto/stock-update-response.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { VendorProductResponseDto } from './dto/vendor-product-response.dto';
 
-import type { CreateVariantDto } from '@api/modules/product-variants/dto/create-variant.dto';
-import type { VariantSummaryDto } from '@api/modules/product-variants/dto/variant-response.dto';
+import type { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
+import type { VariantSummaryDto } from '@api/modules/products/dto/variant-response.dto';
 import { auditDetails } from '@api/common/audit-log/audit-details';
 
 /* ============================================================================

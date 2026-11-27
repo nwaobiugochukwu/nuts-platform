@@ -1,5 +1,5 @@
 ﻿import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { VendorVariantResponseDto } from '@api/modules/product-variants/dto/vendor-variant-response.dto';
+import { VendorVariantResponseDto } from '@api/modules/products/dto/vendor-variant-response.dto';
 import { CategoryRefDto } from '@api/common/dto/category-ref.dto';
 import type { VariantCombinations } from '@api/common/dto/variant-combinations.dto';
 

@@ -1,5 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { SecurityModule } from '@api/modules/security/security.module';
 import { AuthCookiesModule } from '@api/modules/auth/auth-cookies.module';
 import { AuthModule } from '@api/modules/auth/auth.module';

@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { AdminDiscountCodesController } from './controllers/admin-discount-codes.controller';
 import { PublicDiscountCodesController } from './controllers/public-discount-codes.controller';
 import { VendorDiscountCodesController } from './controllers/vendor-discount-codes.controller';

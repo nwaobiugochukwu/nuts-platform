@@ -6,10 +6,10 @@ import {
   EmailTemplatesService,
 } from '@api/infrastructure/mail/email-templates.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../notifications.service';
 import { DomainEvents } from '@api/common/events/domain-events';
 import { getErrorMessage } from '@api/common/utils/error-details.util';

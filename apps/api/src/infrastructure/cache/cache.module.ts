@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
-import { RedisModule } from '../redis/redis.module';
-import { RedlockService } from '../redis/redlock.service';
+import { RedisModule } from './redis.module';
+import { RedlockService } from './redlock.service';
 import { CacheService } from './cache.service';
 import { AdminCacheController } from './controllers/admin-cache.controller';
 

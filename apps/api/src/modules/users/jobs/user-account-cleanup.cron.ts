@@ -3,8 +3,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.module';
-import { runWithCronLock } from '@api/infrastructure/redis/cron-lock';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.module';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock';
 
 import { UsersService } from '../users.service';
 

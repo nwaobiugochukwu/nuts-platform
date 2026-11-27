@@ -1,4 +1,4 @@
-import { fakeCronRedis } from '@api/infrastructure/redis/cron-lock-harness-spec';
+import { fakeCronRedis } from '@api/infrastructure/cache/cron-lock-harness-spec';
 import { VoucherClaimCleanupCron } from './voucher-claim-cleanup.cron';
 
 describe('VoucherClaimCleanupCron', () => {

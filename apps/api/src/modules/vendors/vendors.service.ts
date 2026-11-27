@@ -12,7 +12,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   resolveCategoryHierarchy,
   type CategorySummaryRef,

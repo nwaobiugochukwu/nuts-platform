@@ -22,12 +22,12 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { AdminVariantResponseDto } from '@api/modules/product-variants/dto/admin-variant-response.dto';
-import { CreateVariantDto } from '@api/modules/product-variants/dto/create-variant.dto';
-import { UpdateVariantStockDto } from '@api/modules/product-variants/dto/update-variant-stock.dto';
-import { UpdateVariantDto } from '@api/modules/product-variants/dto/update-variant.dto';
-import { VariantStockUpdateResponseDto } from '@api/modules/product-variants/dto/variant-stock-update-response.dto';
-import { ProductVariantsService } from '@api/modules/product-variants/product-variants.service';
+import { AdminVariantResponseDto } from '@api/modules/products/dto/admin-variant-response.dto';
+import { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
+import { UpdateVariantStockDto } from '@api/modules/products/dto/update-variant-stock.dto';
+import { UpdateVariantDto } from '@api/modules/products/dto/update-variant.dto';
+import { VariantStockUpdateResponseDto } from '@api/modules/products/dto/variant-stock-update-response.dto';
+import { ProductVariantsService } from '@api/modules/products/product-variants.service';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';

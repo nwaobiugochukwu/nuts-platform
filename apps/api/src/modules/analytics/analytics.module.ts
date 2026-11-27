@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
-import { RedisModule } from '@api/infrastructure/redis/redis.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
+import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { AdminAnalyticsController } from './controllers/admin-analytics.controller';
 import { AdminAnalyticsService } from './admin/admin-analytics.service';

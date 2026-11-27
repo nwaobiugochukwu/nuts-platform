@@ -1,4 +1,4 @@
-import { fakeCronRedis } from '@api/infrastructure/redis/cron-lock-harness-spec';
+import { fakeCronRedis } from '@api/infrastructure/cache/cron-lock-harness-spec';
 import { UserAccountCleanupService } from './user-account-cleanup.cron';
 
 describe('UserAccountCleanupService', () => {
