@@ -17,6 +17,7 @@ export const RABBITMQ_QUEUES = {
   USER_EMAILS: 'q.nuts.user-emails',
   ORDER_CONFIRMATION_EMAILS: 'q.nuts.order-confirmation-emails',
   REFERRAL_REWARDS: 'q.nuts.referral-rewards',
+  REVIEW_AGGREGATES: 'q.nuts.review-aggregates',
   WORKFLOWS: 'q.nuts.workflows',
   DLQ: 'q.nuts.dlq',
 } as const;
@@ -67,6 +68,12 @@ export const QUEUE_BINDINGS: Record<
     DomainEvents.USER_REGISTERED,
     DomainEvents.USER_PASSWORD_CHANGED,
     DomainEvents.USER_LOGIN_FROM_NEW_DEVICE,
+  ],
+  // Product rating summaries, recomputed whenever a review changes.
+  [RABBITMQ_QUEUES.REVIEW_AGGREGATES]: [
+    DomainEvents.REVIEW_CREATED,
+    DomainEvents.REVIEW_UPDATED,
+    DomainEvents.REVIEW_DELETED,
   ],
   // Referral rewards are granted when an order is delivered (money: one at a time, in order).
   [RABBITMQ_QUEUES.REFERRAL_REWARDS]: [DomainEvents.ORDER_DELIVERED],
