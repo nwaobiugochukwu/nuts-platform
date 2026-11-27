@@ -3,8 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 
 const RETENTION_DAYS = 180;
 const BATCH_SIZE = 2_000;

@@ -10,7 +10,7 @@ import {
   WalletTransactionType,
 } from '@prisma/client';
 
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 import { buildPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';

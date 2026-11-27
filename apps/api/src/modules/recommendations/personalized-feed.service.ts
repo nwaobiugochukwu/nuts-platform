@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { ProductsService } from '@api/modules/products/products.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PopularProductsService } from './popular-products.service';

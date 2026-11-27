@@ -1,7 +1,7 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 
 describe('SearchService', () => {
   let service: SearchService;

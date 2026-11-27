@@ -4,7 +4,7 @@ import {
   WalletTransactionReason,
   WalletTransactionType,
 } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { WalletService } from './wallet.service';
 
 describe('WalletService', () => {

@@ -1,5 +1,8 @@
-import { RABBITMQ_QUEUES } from '../rabbitmq/rabbitmq.constants';
-import { fakeRabbit, withRole } from '../rabbitmq/consumer-harness-spec';
+import { RABBITMQ_QUEUES } from '../messaging/rabbitmq/rabbitmq.constants';
+import {
+  fakeRabbit,
+  withRole,
+} from '../messaging/rabbitmq/consumer-harness-spec';
 import { WorkflowStartConsumer } from './workflow-start.consumer';
 
 describe('WorkflowStartConsumer', () => {

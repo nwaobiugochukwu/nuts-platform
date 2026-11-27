@@ -14,7 +14,7 @@ import {
   ROLE,
 } from '@prisma/client';
 import { AuditLogService } from '@api/common/audit-log/audit-log.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { NotificationsService } from '@api/modules/notifications/notifications.service';
 import {
   CreateAdminAnnouncementDto,

@@ -55,7 +55,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 
 | # | Finding (evidence) | Standard practice | Size of change |
 |---|---|---|---|
-| L1 | Queue consumers live in four places: `infrastructure/rabbitmq` (analytics, inventory, email), `infrastructure/temporal`, `common/audit-log`, `modules/notifications/consumers` | Infrastructure holds the broker plumbing; each domain keeps its consumers in `modules/<domain>/consumers/` | Medium, mechanical |
+| L1 | Queue consumers live in four places: `infrastructure/messaging/rabbitmq` (analytics, inventory, email), `infrastructure/workflows`, `common/audit-log`, `modules/notifications/consumers` | Infrastructure holds the broker plumbing; each domain keeps its consumers in `modules/<domain>/consumers/` | Medium, mechanical |
 | L2 | `common/audit-log` is a whole feature (service, consumer, interceptor, decorator), and an alias also maps it to `modules/security/audit/*` | One audit module with one home | Small to medium |
 | L3 | Five path-alias families; only `@api/*` is used (243 files). `@common`, `@infra`, `@infrastructure` and `@modules` are used by no file. Legacy aliases hide old names: `creators` to vendors, `category` to categories, `checkout/*` to cart and orders, `product-variants` to products, `shared` to common, `referral` to referrals | One alias scheme; delete the rest | Small |
 | L4 | Module layouts differ. Some use `controllers/`, `dto/`, `jobs/`, `consumers/`; `vendors` and `auth` keep services at the module root. `admin-*` files are spread across modules (`auth/admin-auth.service.ts`, `vendors/admin-vendors.service.ts`, `modules/admin`) | One rule: a domain module with a folder per kind of file, and controllers grouped by audience | Medium |
@@ -67,6 +67,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | L10 | Duplicate modules: `auth/auth-cookies.module.ts` and `auth/cookies/auth-cookie.module.ts`; `google-auth.service.ts`, `auth.selects.ts` and `admin-auth.service.ts` sit at the module root while other auth code is in folders | One module per concern, one folder per kind of file | Small |
 | L11 | File-kind suffixes are inconsistent: `type` (5) and `types` (2); `response` (5) next to `dto` (133); 32 files carry no kind suffix at all; `selects`, `util`, `config`, `storage` appear once or twice each | A fixed set of kinds (see the naming rules below) | Small |
 | L12 | Database naming is mixed: 281 camelCase columns against 46 snake_case ones, and 3 tables use both (`product_views`, `shipping_addresses`, `wallet_transactions`); table names `checkout_idempotency`, `discount_code_user_usage`, `order_status_history`, `stock_history` break the plural rule | One rule for new tables and columns; existing ones changed only in a separate, reviewed migration | Decision needed |
+| L13 | 29 source files are never imported by name (for example unused DTOs such as `order-summary.dto.ts`, `product-details.dto.ts`, `admin-vendor-response.dto.ts`, and helpers such as `path-util.ts`, `shipping-address.util.ts`, `body-size.middleware.ts`, `transactional-email.templates.ts`). One confirmed duplicate was deleted in step 2 (a second, unused `RedisThrottlerStorage`) | file search against all import specifiers | Low; review each before deleting, since a name match is not proof of use |
 
 Risk note: these moves touch import paths in about 240 files. They are done mechanically, in small pull requests, with the architecture check and the full test suites as the safety net, and with no behaviour change in the same pull request.
 
@@ -110,8 +111,8 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | `modules/analytics` | 33.3% | 15.2% | |
 | `modules/auth` | 52.4% | 39.1% | |
 | `modules/discounts` | 54.4% | 40.7% | |
-| `infrastructure/rabbitmq` | 62.9% | 67.0% | consumers covered; the broker service itself is not |
-| `infrastructure/outbox`, `modules/referrals`, `common/audit-log`, `common/request-context` | 96% to 98% | 87% to 98% | covered in phase 2 and held by CI floors |
+| `infrastructure/messaging/rabbitmq` | 62.9% | 67.0% | consumers covered; the broker service itself is not |
+| `infrastructure/messaging/outbox`, `modules/referrals`, `common/audit-log`, `common/request-context` | 96% to 98% | 87% to 98% | covered in phase 2 and held by CI floors |
 
 ## 5. The complete event catalog (the production target)
 
@@ -206,7 +207,7 @@ This is the target. It follows the common NestJS and domain-module convention: *
 apps/api/src/
   main.ts  worker.ts  temporal-worker.ts     entry points (their output names are used by PM2 and Docker, so they stay)
   app.module.ts
-  bootstrap/                                 instrument.ts, load-env.ts, swagger setup
+  bootstrap/                                 start-up concerns that compose the app and may use any layer: instrument.ts, load-env.ts, swagger setup, process-error handlers, cache warm-up
   config/                                    env validation, process roles, ports
   common/                                    generic, knows nothing about the business
     decorators/ filters/ guards/ interceptors/ middleware/ pipes/ errors/ utils/ constants/ types/ dto/
@@ -238,18 +239,18 @@ Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cooki
 
 | From | To |
 |---|---|
-| `infrastructure/rabbitmq/analytics.consumer.ts` | `modules/analytics/consumers/` |
-| `infrastructure/rabbitmq/inventory.consumer.ts` | `modules/products/consumers/` |
-| `infrastructure/rabbitmq/email.consumer.ts` | `modules/notifications/consumers/` |
+| `infrastructure/messaging/rabbitmq/analytics.consumer.ts` | `modules/analytics/consumers/` |
+| `infrastructure/messaging/rabbitmq/inventory.consumer.ts` | `modules/products/consumers/` |
+| `infrastructure/messaging/rabbitmq/email.consumer.ts` | `modules/notifications/consumers/` |
 | `common/audit-log/*` and `modules/security/audit/*` | `modules/audit/` (service, consumer, interceptor, decorator in their folders) |
-| `infrastructure/rabbitmq`, `infrastructure/outbox` | `infrastructure/messaging/` |
-| `infrastructure/prisma`, `infrastructure/transaction` | `infrastructure/database/` |
-| `infrastructure/redis`, `infrastructure/cache` | `infrastructure/cache/` |
-| `infrastructure/cloudinary` | `infrastructure/storage/` |
-| `infrastructure/metrics`, `infrastructure/health`, `common/request-context` | `infrastructure/observability/` |
-| `infrastructure/resiliency` | `infrastructure/resilience/` |
-| `infrastructure/temporal` | `infrastructure/workflows/` |
-| `infrastructure/configuration` | `config/` |
+| `infrastructure/messaging/rabbitmq`, `infrastructure/messaging/outbox` | `infrastructure/messaging/` |
+| `infrastructure/database`, `infrastructure/database` | `infrastructure/database/` |
+| `infrastructure/cache`, `infrastructure/cache` | `infrastructure/cache/` |
+| `infrastructure/storage` | `infrastructure/storage/` |
+| `infrastructure/observability/metrics`, `infrastructure/observability/health`, `common/request-context` | `infrastructure/observability/` |
+| `infrastructure/resilience` | `infrastructure/resilience/` |
+| `infrastructure/workflows` | `infrastructure/workflows/` |
+| `config` | `config/` |
 | `common/events` (event names and payloads) | `infrastructure/messaging/events/` |
 | `modules/vendors/vendor-auth.service.ts`, `modules/auth/admin-auth.service.ts` | `modules/auth/services/` (`customer-auth`, `vendor-auth`, `admin-auth`) |
 | `modules/vendors/admin-vendors.service.ts` | `modules/vendors/services/` |

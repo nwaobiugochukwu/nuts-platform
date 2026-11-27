@@ -1,4 +1,4 @@
-import { roleCan } from '@api/infrastructure/configuration/process-role';
+import { roleCan } from '@api/config/process-role';
 import { CategoriesService } from '@api/modules/categories/categories.service';
 import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import { ProductsService } from '@api/modules/products/products.service';

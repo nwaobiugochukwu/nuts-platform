@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import type { RecommendationEventDto } from './recommendation-events.dto';
 
 const CLIENT_TRACKABLE_EVENTS = new Set([

@@ -9,7 +9,7 @@ import { Prisma, ROLE } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 import { EmailService } from '@api/infrastructure/mail/email.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { ReferralService } from '@api/modules/referrals/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 

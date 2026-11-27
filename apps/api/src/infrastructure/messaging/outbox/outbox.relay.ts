@@ -5,7 +5,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, Interval } from '@nestjs/schedule';
 import { OutboxStatus } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { RabbitMQService } from '../rabbitmq/rabbitmq.service';
 import {
   getErrorCode,

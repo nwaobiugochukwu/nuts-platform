@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { currentProcessRole, portFor } from '../configuration/process-role';
+import { currentProcessRole, portFor } from '../../../config/process-role';
 import type { MetricsService } from './metrics.service';
 
 /** Constant-time comparison so the token cannot be guessed byte by byte. */

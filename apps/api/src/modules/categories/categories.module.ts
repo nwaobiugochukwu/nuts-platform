@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
-import { RedisModule } from '@api/infrastructure/redis/redis.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
+import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { CategoriesController } from './controllers/categories.controller';
 import { AdminCategoryController } from './controllers/admin-category.controller';
 import { CategoriesService } from './categories.service';

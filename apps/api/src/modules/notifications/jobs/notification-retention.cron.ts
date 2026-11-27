@@ -2,8 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
 
 @Injectable()

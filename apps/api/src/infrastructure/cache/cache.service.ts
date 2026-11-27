@@ -2,8 +2,8 @@ import { recordCacheLookup } from '@api/common/request-context/request-context';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '../redis/redis.module';
-import { RedlockService } from '../redis/redlock.service';
+import { REDIS_CLIENT } from './redis.module';
+import { RedlockService } from './redlock.service';
 
 export enum CacheKeys {
   // Products

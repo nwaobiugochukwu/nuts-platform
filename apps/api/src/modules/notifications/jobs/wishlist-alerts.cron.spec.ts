@@ -1,5 +1,5 @@
 import { NotificationType, Prisma, ROLE } from '@prisma/client';
-import { fakeRetentionRedis } from '@api/infrastructure/redis/retention-lock-harness-spec';
+import { fakeRetentionRedis } from '@api/infrastructure/cache/retention-lock-harness-spec';
 import { WishlistAlertsCron } from './wishlist-alerts.cron';
 
 describe('WishlistAlertsCron', () => {

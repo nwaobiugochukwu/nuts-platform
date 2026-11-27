@@ -2,7 +2,7 @@ import { currentRequestId } from '@api/common/request-context/request-context';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { OutboxStatus, Prisma } from '@prisma/client';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../../database/prisma.service';
 import { OutboxRelay } from './outbox.relay';
 
 @Injectable()

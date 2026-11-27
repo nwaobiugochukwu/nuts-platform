@@ -4,7 +4,7 @@
   NotFoundException,
 } from '@nestjs/common';
 import { DiscountCodeType, Prisma } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { DiscountCodeService } from './discount-code.service';
 
 describe('DiscountCodeService', () => {

@@ -6,7 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CategoryStatus } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { captureAudit } from '@api/common/audit-log/audit-testing';
 import { CategoriesService } from './categories.service';
 

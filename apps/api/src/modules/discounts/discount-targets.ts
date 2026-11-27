@@ -1,4 +1,4 @@
-import type { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import type { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 /**
  * Human-facing description of what a voucher covers, so storefronts can say

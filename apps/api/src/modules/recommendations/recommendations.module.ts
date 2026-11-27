@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { ProductsModule } from '@api/modules/products/products.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { RecommendationsController } from './recommendations.controller';

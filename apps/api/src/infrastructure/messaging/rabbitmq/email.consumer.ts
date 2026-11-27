@@ -1,6 +1,6 @@
-﻿import { roleCan } from '@api/infrastructure/configuration/process-role';
+﻿import { roleCan } from '@api/config/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { EmailService } from '../mail/email.service';
+import { EmailService } from '../../mail/email.service';
 import { RABBITMQ_QUEUES } from './rabbitmq.constants';
 import { RabbitMQService } from './rabbitmq.service';
 import {

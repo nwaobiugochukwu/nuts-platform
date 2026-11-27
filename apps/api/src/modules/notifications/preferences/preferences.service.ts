@@ -1,6 +1,6 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { UpdateNotificationPreferencesDto } from './dto/update-preferences.dto';
 
 export type NotificationChannel = 'email' | 'inApp' | 'push';

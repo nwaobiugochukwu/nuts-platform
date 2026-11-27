@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.module';
-import { runWithCronLock } from '@api/infrastructure/redis/cron-lock';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.module';
+import { runWithCronLock } from '@api/infrastructure/cache/cron-lock';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const GUEST_HISTORY_DAYS = 180;

@@ -18,11 +18,11 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { NormalizeInputPipe } from './common/pipes/normalize-input.pipe';
 import { SanitizeHtmlPipe } from './common/pipes/sanitize-html.pipe';
 import { setupSwagger } from './swagger.setup';
-import { currentProcessRole } from './infrastructure/configuration/process-role';
-import { stopCronsUnlessJobsRole } from './infrastructure/configuration/role-runtime';
-import { MetricsService } from './infrastructure/metrics/metrics.service';
-import { startMetricsServer } from './infrastructure/metrics/metrics-server';
-import { createHttpMetricsMiddleware } from './infrastructure/metrics/http-metrics.middleware';
+import { currentProcessRole } from './config/process-role';
+import { stopCronsUnlessJobsRole } from './config/role-runtime';
+import { MetricsService } from './infrastructure/observability/metrics/metrics.service';
+import { startMetricsServer } from './infrastructure/observability/metrics/metrics-server';
+import { createHttpMetricsMiddleware } from './infrastructure/observability/metrics/http-metrics.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {

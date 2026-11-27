@@ -1,12 +1,12 @@
-import { roleCan } from '@api/infrastructure/configuration/process-role';
+import { roleCan } from '@api/config/process-role';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { NotificationPriority, NotificationType, ROLE } from '@prisma/client';
 import {
   getErrorMessage,
   getErrorStack,
 } from '@api/common/utils/error-details.util';
-import { RABBITMQ_QUEUES } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
-import { RabbitMQService } from '@api/infrastructure/rabbitmq/rabbitmq.service';
+import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../notifications.service';
 
 interface NotificationMessage {

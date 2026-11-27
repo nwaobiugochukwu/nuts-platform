@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { RedlockService } from '../redis/redlock.service';
+import { RedlockService } from './redlock.service';
 import { CacheService } from './cache.service';
 
 describe('CacheService', () => {

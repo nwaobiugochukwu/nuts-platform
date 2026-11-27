@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { CircuitBreakerService } from '@api/infrastructure/resiliency/circuit-breaker.service';
+import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-breaker.service';
 import {
   EmailProvider,
   SendEmailOptions,

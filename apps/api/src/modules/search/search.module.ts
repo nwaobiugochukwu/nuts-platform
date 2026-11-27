@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '@api/infrastructure/prisma/prisma.module';
+import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { AdminSearchController } from './controllers/admin-search.controller';
 import { SearchController } from './controllers/search.controller';
 import { VendorSearchController } from './controllers/vendor-search.controller';

@@ -7,8 +7,8 @@
 } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
 import type Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 
 import type { AuthenticatedUser } from '../types/authenticated-user.type';
 import type { JwtPayload } from '../types/jwt-payload.type';

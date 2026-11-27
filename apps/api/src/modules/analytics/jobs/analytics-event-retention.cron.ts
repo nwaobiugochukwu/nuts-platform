@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import type Redis from 'ioredis';
 import { ANALYTICS_EVENT_RETENTION_DAYS } from '@api/common/utils/date-range.util';
 import { getErrorMessage } from '@api/common/utils/error-details.util';
-import { REDIS_CLIENT } from '@api/infrastructure/redis/redis.constants';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOCK_KEY = 'lock:cron:analytics-event-retention';

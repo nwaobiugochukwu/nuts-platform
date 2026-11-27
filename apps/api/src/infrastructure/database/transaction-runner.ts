@@ -1,12 +1,12 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { PrismaService } from '../prisma/prisma.service';
-import { OutboxService } from '../outbox/outbox.service';
-import { MetricsService } from '../metrics/metrics.service';
-import type { StartWorkflowInput } from '../temporal/temporal-client.service';
-import { RABBITMQ_ROUTING_KEYS } from '../rabbitmq/rabbitmq.constants';
-import { currentProcessRole } from '../configuration/process-role';
+import { PrismaService } from './prisma.service';
+import { OutboxService } from '../messaging/outbox/outbox.service';
+import { MetricsService } from '../observability/metrics/metrics.service';
+import type { StartWorkflowInput } from '../workflows/temporal-client.service';
+import { RABBITMQ_ROUTING_KEYS } from '../messaging/rabbitmq/rabbitmq.constants';
+import { currentProcessRole } from '../../config/process-role';
 import {
   buildAuditEvent,
   type BuildAuditEventInput,

@@ -5,7 +5,7 @@ import { Optional } from '@nestjs/common';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { MarketplaceEventsService } from '@api/modules/analytics/tracking/marketplace-events.service';
 
 import { WishlistResponseDto } from './dto/wishlist.dto';

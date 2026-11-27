@@ -1,6 +1,6 @@
 ﻿import { Inject, Injectable, Logger } from '@nestjs/common';
 import Redis from 'ioredis';
-import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
 interface ProductRow {
   id: string;

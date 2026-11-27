@@ -1,4 +1,4 @@
-import { fakeCronRedis } from '@api/infrastructure/redis/cron-lock-harness-spec';
+import { fakeCronRedis } from '@api/infrastructure/cache/cron-lock-harness-spec';
 import { AbandonedCartPurgeCron } from './abandoned-cart-purge.cron';
 
 const DAY = 24 * 60 * 60 * 1000;
