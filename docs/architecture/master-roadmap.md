@@ -121,6 +121,17 @@ Status key: **done**, **todo**, **you** (an action only you can take), **decide*
 
 **Result (2026-11-27):** the layout is applied and enforced. `infrastructure` is grouped by purpose, consumers live in their domains, audit is one module, auth owns all three sign-ins, `admin` is split into `staff`, `platform` and `announcements`, every module has the standard folders and every file a kind, `@api/*` is the only alias, and the architecture check fails on any drift. The built API exposes the same 269 routes before and after every step.
 
+### Phase 3A. Isolation and scale audit (added before phase 4)
+
+Read-only audit of fault isolation, independent scaling, database connections, messaging, Temporal, observability, deployment and capacity. Result: [isolation-and-scale-audit.md](isolation-and-scale-audit.md) (findings I1 to I16, capacity formulas, fault-injection design). No code was changed.
+
+| # | What | Status |
+|---|---|---|
+| 3A.1 | Architecture map, what is correct, what is partial, what is missing | done |
+| 3A.2 | Ranked findings with evidence and the phase that fixes each | done |
+| 3A.3 | Capacity formulas and fault-injection design (run in 7.4, development only) | done |
+| 3A.4 | Roadmap changes: 4.3 locks every cron; 4.6 drains consumers on shutdown; 4.9 handler timeout and per-queue prefetch; phase 7 gets the scaling recipe (no `container_name`, nginx upstream, `stop_grace_period`, per-role `DB_CONNECTION_LIMIT`, readiness for traffic) and the metrics gaps; delete the unused `LocalStorageStrategy` | recorded, applied in those phases |
+
 ### Phase 4. Messaging reliability (audit R3 to R18)
 
 | ID | Item | Status |
