@@ -25,7 +25,6 @@ import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.servi
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { PaymentsService } from '@api/modules/payments/services/payments.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
-import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
 
@@ -358,7 +357,6 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly discountCodeService: DiscountCodeService,
-    private readonly referralService: ReferralService,
     private readonly paymentsService: PaymentsService,
     private readonly walletService: WalletService,
     private readonly outbox: OutboxService,
@@ -1199,7 +1197,6 @@ export class OrdersService {
       note,
     } = params;
 
-    let orderUserId: string | undefined;
     let originalStatus: OrderStatus | undefined;
 
     try {
@@ -1219,7 +1216,6 @@ export class OrdersService {
             throw new NotFoundException('Order not found');
           }
 
-          orderUserId = current.userId;
           originalStatus = current.status;
 
           if (originalStatus === nextStatus) {
@@ -1409,21 +1405,8 @@ export class OrdersService {
       throw error;
     }
 
-    /**
-     * These are intentionally OUTSIDE the DB transaction.
-     *
-     * External side effects must never hold database locks.
-     */
-    if (nextStatus === OrderStatus.DELIVERED && orderUserId) {
-      this.referralService
-        .grantReferralRewards(orderId, orderUserId)
-        .catch((error) => {
-          this.logger.error(
-            `Failed to grant referral rewards for ${orderId}`,
-            error,
-          );
-        });
-    }
+    // Referral rewards are not granted here: they are a consumer of the order.delivered event
+    // written in the transaction above (ReferralRewardConsumer), so a crash cannot skip them.
 
     // The status-change event was written to the outbox in the transaction; wake the relay now.
     this.outbox.wakeRelay();

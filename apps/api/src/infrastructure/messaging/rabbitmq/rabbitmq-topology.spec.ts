@@ -108,27 +108,38 @@ describe('queue bindings as a design rule', () => {
     expect(repeated).toEqual([]);
   });
 
-  it('binds a domain event name only on the queue that owns reacting to it', () => {
+  it('delivers each domain event to exactly the consumers that react to it (fan-out is explicit)', () => {
     const events = new Set<string>(Object.values(DomainEvents));
-    const owners = new Map<string, string>();
+    const consumers = new Map<string, string[]>();
     for (const [queue, keys] of Object.entries(QUEUE_BINDINGS)) {
-      for (const key of keys) if (events.has(key)) owners.set(key, queue);
+      for (const key of keys) {
+        if (events.has(key)) {
+          consumers.set(key, [...(consumers.get(key) ?? []), queue].sort());
+        }
+      }
     }
 
-    expect(Object.fromEntries(owners)).toEqual({
-      [RABBITMQ_ROUTING_KEYS.VENDOR_FOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
-      [RABBITMQ_ROUTING_KEYS.VENDOR_UNFOLLOWED]: RABBITMQ_QUEUES.VENDOR_EVENTS,
-      [DomainEvents.PAYMENT_WEBHOOK_RECEIVED]: RABBITMQ_QUEUES.PAYMENT_WEBHOOKS,
-      [DomainEvents.USER_REGISTERED]: RABBITMQ_QUEUES.USER_EMAILS,
-      [DomainEvents.USER_PASSWORD_CHANGED]: RABBITMQ_QUEUES.USER_EMAILS,
-      [DomainEvents.USER_LOGIN_FROM_NEW_DEVICE]: RABBITMQ_QUEUES.USER_EMAILS,
-      [DomainEvents.ORDER_PROCESSING]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.ORDER_SHIPPED]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.ORDER_DELIVERED]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.ORDER_CANCELLED]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.PAYMENT_CONFIRMED]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.PAYMENT_FAILED]: RABBITMQ_QUEUES.ORDER_EVENTS,
-      [DomainEvents.REFERRAL_REWARD_CREDITED]: RABBITMQ_QUEUES.ORDER_EVENTS,
+    const Q = RABBITMQ_QUEUES;
+    expect(Object.fromEntries(consumers)).toEqual({
+      [DomainEvents.VENDOR_FOLLOWED]: [Q.VENDOR_EVENTS],
+      [DomainEvents.VENDOR_UNFOLLOWED]: [Q.VENDOR_EVENTS],
+      [DomainEvents.PAYMENT_WEBHOOK_RECEIVED]: [Q.PAYMENT_WEBHOOKS],
+      [DomainEvents.USER_REGISTERED]: [Q.USER_EMAILS],
+      [DomainEvents.USER_PASSWORD_CHANGED]: [Q.USER_EMAILS],
+      [DomainEvents.USER_LOGIN_FROM_NEW_DEVICE]: [Q.USER_EMAILS],
+      [DomainEvents.ORDER_PROCESSING]: [Q.ORDER_EVENTS],
+      [DomainEvents.ORDER_SHIPPED]: [Q.ORDER_EVENTS],
+      [DomainEvents.ORDER_DELIVERED]: [
+        Q.ORDER_EVENTS,
+        Q.REFERRAL_REWARDS,
+      ].sort(),
+      [DomainEvents.ORDER_CANCELLED]: [Q.ORDER_EVENTS],
+      [DomainEvents.PAYMENT_CONFIRMED]: [
+        Q.ORDER_CONFIRMATION_EMAILS,
+        Q.ORDER_EVENTS,
+      ].sort(),
+      [DomainEvents.PAYMENT_FAILED]: [Q.ORDER_EVENTS],
+      [DomainEvents.REFERRAL_REWARD_CREDITED]: [Q.ORDER_EVENTS],
     });
   });
 });

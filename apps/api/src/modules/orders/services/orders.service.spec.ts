@@ -9,7 +9,6 @@ import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { PaymentsService } from '@api/modules/payments/services/payments.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
-import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
 import { OrdersService } from './orders.service';
@@ -131,7 +130,6 @@ describe('OrdersService', () => {
       mockPrisma,
       mockUsersService,
       mockDiscountService,
-      {} as unknown as ReferralService,
       mockPaymentsService,
       mockWalletService,
       mockOutbox,

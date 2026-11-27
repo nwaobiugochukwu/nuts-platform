@@ -16,6 +16,7 @@ export const RABBITMQ_QUEUES = {
   PAYMENT_WEBHOOKS: 'q.nuts.payment-webhooks',
   USER_EMAILS: 'q.nuts.user-emails',
   ORDER_CONFIRMATION_EMAILS: 'q.nuts.order-confirmation-emails',
+  REFERRAL_REWARDS: 'q.nuts.referral-rewards',
   WORKFLOWS: 'q.nuts.workflows',
   DLQ: 'q.nuts.dlq',
 } as const;
@@ -67,6 +68,8 @@ export const QUEUE_BINDINGS: Record<
     DomainEvents.USER_PASSWORD_CHANGED,
     DomainEvents.USER_LOGIN_FROM_NEW_DEVICE,
   ],
+  // Referral rewards are granted when an order is delivered (money: one at a time, in order).
+  [RABBITMQ_QUEUES.REFERRAL_REWARDS]: [DomainEvents.ORDER_DELIVERED],
   // The order confirmation email with its PDF invoice.
   [RABBITMQ_QUEUES.ORDER_CONFIRMATION_EMAILS]: [DomainEvents.PAYMENT_CONFIRMED],
   // Stored Paystack webhooks waiting to be applied (the webhook inbox).

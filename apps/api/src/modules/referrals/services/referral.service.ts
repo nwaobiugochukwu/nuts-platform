@@ -12,6 +12,8 @@ import {
 import { randomBytes } from 'crypto';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 
 @Injectable()
 export class ReferralService {
@@ -35,7 +37,10 @@ export class ReferralService {
 
   private static readonly MAX_SERIALIZABLE_RETRIES = 3;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // REFERRAL CODE
@@ -386,6 +391,36 @@ export class ReferralService {
               WalletTransactionReason.REFERRAL,
               orderId,
             );
+
+            // The fact the notification consumer turns into the referrer's email and in-app
+            // notice. It commits with the credits: it exists if and only if they do.
+            const referrer = await tx.user.findUnique({
+              where: { id: referral.referrerId },
+              select: { email: true, firstName: true, lastName: true },
+            });
+            if (referrer) {
+              await this.outbox.appendEnvelope(
+                tx,
+                {
+                  type: DomainEvents.REFERRAL_REWARD_CREDITED,
+                  aggregate: { type: 'referral', id: referral.id },
+                  payload: {
+                    referralId: referral.id,
+                    referrerId: referral.referrerId,
+                    referrerEmail: referrer.email,
+                    referrerName:
+                      `${referrer.firstName ?? ''} ${referrer.lastName ?? ''}`.trim() ||
+                      'there',
+                    referredUserId: userId,
+                    orderId,
+                    rewardAmount: referrerReward.toNumber(),
+                    referredRewardAmount: referredUserReward.toNumber(),
+                    currency: 'NGN',
+                  },
+                },
+                { wakeRelay: false },
+              );
+            }
           },
           {
             isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -396,7 +431,8 @@ export class ReferralService {
           },
         );
 
-        // Transaction completed successfully.
+        // Transaction completed successfully; the reward event is in the outbox now.
+        this.outbox.wakeRelay();
         return;
       } catch (error) {
         /*
