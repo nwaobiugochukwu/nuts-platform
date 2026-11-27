@@ -139,14 +139,14 @@ Read-only audit of fault isolation, independent scaling, database connections, m
 | 4.1 | Outbox: `next_attempt_at` with exponential backoff and jitter; terminal `DEAD` status; replay for dead rows; alert on dead rows [R3] | done: 5 s doubling to 15 min with jitter, `DEAD` after 8 attempts, `npm run outbox -- list\|replay`, metric `nuts_outbox_dead_events` and alert `OutboxDeadEvents` |
 | 4.2 | Outbox: per-aggregate ordering, or declare every consumer order-tolerant [R4] | done: declared order-tolerant, [ADR 0006](adr/0006-outbox-retry-ordering-and-relay-ownership.md) |
 | 4.3 | One owner for the relay and the wake-on-commit design written down [R18]. Also wrap every cron in the distributed lock (isolation audit I2) | done: owner and wake design written down (ADR 0006); the four unlocked jobs (low-stock, abandoned-cart, vendor-summary, refund reconciler) now use `runWithCronLock`; five jobs keep their own working hand-written locks |
-| 4.4 | Consumers: retry queues with delays (10 s, 1 min, 10 min), an attempt counter header, dead-letter after the last attempt [R6] | todo |
-| 4.5 | Classify transient versus permanent errors; permanent go straight to the dead-letter queue [R7] | todo |
-| 4.6 | Idempotent consumers: processed-event record per consumer (the email consumer first) [R8] | todo |
-| 4.7 | Open circuit means delay and retry, not dead-letter [R13] | todo |
+| 4.4 | Consumers: retry queues with delays (10 s, 1 min, 10 min), an attempt counter header, dead-letter after the last attempt [R6] | done: `<queue>.retry.10s\|1m\|10m`, header `x-nuts-attempt` |
+| 4.5 | Classify transient versus permanent errors; permanent go straight to the dead-letter queue [R7] | done: `PermanentConsumerError`, unreadable JSON and validation errors are permanent; malformed email, notification and vendor-follow messages now dead-letter instead of being dropped |
+| 4.6 | Idempotent consumers: processed-event record per consumer (the email consumer first) [R8]. Also drain consumers on shutdown (isolation audit I3) | done: `processed_events` table and `ProcessedEventService.runOnce` (email and inventory; notifications and vendor-follow already de-duplicate by key); the outbox row id is the message id; shutdown cancels consumers and waits up to 25 s for in-flight messages |
+| 4.7 | Open circuit means delay and retry, not dead-letter [R13] | done: waits 1 minute without using a retry, up to about an hour |
 | 4.8 | Circuit breakers: count only timeouts, network errors, 5xx and 429; protect Cloudinary; retry with backoff and jitter for repeatable calls; a gauge and alert per breaker [R9 to R12] | todo |
-| 4.9 | Per-queue prefetch and a handler timeout [R15]  Also bind each consumer exactly once [R22] | todo |
-| 4.10 | Fix the inventory consumer race with an atomic increment [R21] | todo |
-| 4.11 | Dead-letter alerting by queue and age; runbook entry for replay | todo |
+| 4.9 | Per-queue prefetch and a handler timeout [R15]  Also bind each consumer exactly once [R22] | done: prefetch per queue (emails 5, inventory 1, workflows 5, analytics and audit 20, others 10), 30 s handler timeout counted as a transient failure, a handler is bound once per channel |
+| 4.10 | Fix the inventory consumer race with an atomic increment [R21] | done: atomic increment in one transaction, floor at zero corrected under the row lock; also rethrows failures instead of swallowing them |
+| 4.11 | Dead-letter alerting by queue and age; runbook entry for replay | done: `nuts_consumer_messages_total{queue,outcome}`, `nuts_consumer_duration_seconds`, `nuts_rabbitmq_dlq_oldest_age_seconds`; alerts `ConsumerDeadLettering`, `DeadLetterQueueOldMessage`, `ConsumerRetriesHigh`; [runbook](../operations/runbooks/dead-letters.md) |
 
 **Done when:** killing a consumer, the broker or a provider mid-flight loses nothing and sends nothing twice (proved by the phase 2 tests).
 

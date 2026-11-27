@@ -6,6 +6,7 @@ import {
   getErrorStack,
 } from '@api/common/utils/error-details.util';
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import { PermanentConsumerError } from '../../../infrastructure/messaging/rabbitmq/consumer-retry.util';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from '../services/notifications.service';
 
@@ -130,7 +131,9 @@ export class NotificationsConsumer implements OnModuleInit {
               { rawPayload },
               'Rejecting invalid notification message payload to DLQ for operational review',
             );
-            throw new Error('Malformed or incomplete notification message');
+            throw new PermanentConsumerError(
+              'Malformed or incomplete notification message',
+            );
           }
 
           await this.notificationsService.create({

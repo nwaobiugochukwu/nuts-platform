@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, Optional } from '@nestjs/common';
 import { OutboxStatus } from '@prisma/client';
 import {
   Counter,
@@ -8,6 +8,7 @@ import {
   collectDefaultMetrics,
 } from 'prom-client';
 import { PrismaService } from '../../database/prisma.service';
+import { onConsumerOutcome } from '../../messaging/rabbitmq/consumer-outcome.util';
 import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { HeartbeatService, stateFromAge } from '../health/heartbeat.service';
 import { currentProcessRole } from '../../../config/process-role.config';
@@ -24,13 +25,16 @@ export function statusClass(status: number): string {
 }
 
 @Injectable()
-export class MetricsService {
+export class MetricsService implements OnModuleDestroy {
   private readonly logger = new Logger(MetricsService.name);
   readonly registry = new Registry();
 
   private readonly httpDuration: Histogram<'method' | 'route' | 'status'>;
   private readonly txDuration: Histogram<'name' | 'outcome'>;
   private readonly txRetries: Counter<'name'>;
+  private readonly consumerMessages: Counter<'queue' | 'outcome'>;
+  private readonly consumerDuration: Histogram<'queue'>;
+  private readonly stopConsumerOutcomes: () => void;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -61,7 +65,33 @@ export class MetricsService {
       registers: [this.registry],
     });
 
+    this.consumerMessages = new Counter({
+      name: 'nuts_consumer_messages_total',
+      help: 'Queue messages by outcome: ok, retried, circuit-wait, dead-lettered, duplicate-skipped',
+      labelNames: ['queue', 'outcome'],
+      registers: [this.registry],
+    });
+    this.consumerDuration = new Histogram({
+      name: 'nuts_consumer_duration_seconds',
+      help: 'Time a consumer took to handle one message successfully',
+      labelNames: ['queue'],
+      buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 30],
+      registers: [this.registry],
+    });
+    this.stopConsumerOutcomes = onConsumerOutcome(
+      ({ queue, outcome, durationSeconds }) => {
+        this.consumerMessages.inc({ queue, outcome });
+        if (durationSeconds !== undefined) {
+          this.consumerDuration.observe({ queue }, durationSeconds);
+        }
+      },
+    );
+
     this.registerCollectedGauges();
+  }
+
+  onModuleDestroy(): void {
+    this.stopConsumerOutcomes();
   }
 
   observeHttp(
@@ -134,6 +164,15 @@ export class MetricsService {
         } catch (error) {
           this.logSoft('outbox dead count', error);
         }
+      },
+    });
+    const dlqAge = new Gauge({
+      name: 'nuts_rabbitmq_dlq_oldest_age_seconds',
+      help: 'Age of the oldest dead-lettered message (0 when none); a growing value means nobody is handling the dead letters',
+      registers,
+      collect: async () => {
+        const age = await this.rabbitmq?.getDeadLetterOldestAgeSeconds();
+        if (age !== null && age !== undefined) dlqAge.set(age);
       },
     });
     const oldest = new Gauge({

@@ -22,6 +22,7 @@ import { RedisModule } from './infrastructure/cache/redis.module';
 import { CacheModule } from './infrastructure/cache/cache.module';
 import { RedisThrottlerStorage } from './infrastructure/cache/redis-throttler.storage';
 import { RabbitMQModule } from './infrastructure/messaging/rabbitmq/rabbitmq.module';
+import { IdempotencyModule } from './infrastructure/messaging/idempotency/idempotency.module';
 import { OutboxModule } from './infrastructure/messaging/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/database/transaction.module';
 import { MetricsModule } from './infrastructure/observability/metrics/metrics.module';
@@ -107,6 +108,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     CacheModule,
     RabbitMQModule,
     OutboxModule,
+    IdempotencyModule,
     TransactionModule,
     MetricsModule,
     TemporalModule,

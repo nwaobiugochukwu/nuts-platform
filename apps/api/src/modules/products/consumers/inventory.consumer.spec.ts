@@ -1,23 +1,34 @@
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { InventoryConsumer } from './inventory.consumer';
-import { fakeRabbit } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
+import {
+  fakeProcessed,
+  fakeRabbit,
+} from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 
 describe('InventoryConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;
+  let idempotency: ReturnType<typeof fakeProcessed>;
   let prisma: any;
+  let tx: any;
   let consumer: InventoryConsumer;
 
   beforeEach(() => {
     harness = fakeRabbit();
-    prisma = {
-      product: {
-        findUnique: jest.fn(),
-        update: jest.fn((args: unknown) => args),
-      },
-      stockHistory: { create: jest.fn((args: unknown) => args) },
-      $transaction: jest.fn().mockResolvedValue([]),
+    idempotency = fakeProcessed();
+    tx = {
+      product: { update: jest.fn() },
+      stockHistory: { create: jest.fn().mockResolvedValue({}) },
     };
-    consumer = new InventoryConsumer(harness.rabbit, prisma);
+    prisma = {
+      $transaction: jest.fn((work: (t: unknown) => Promise<unknown>) =>
+        work(tx),
+      ),
+    };
+    consumer = new InventoryConsumer(
+      harness.rabbit,
+      prisma,
+      idempotency.processed,
+    );
     jest
       .spyOn((consumer as any).logger, 'log')
       .mockImplementation(() => undefined);
@@ -26,28 +37,36 @@ describe('InventoryConsumer', () => {
       .mockImplementation(() => undefined);
   });
 
-  async function handle(payload: unknown) {
+  async function handle(payload: unknown, messageId?: string) {
     await consumer.onModuleInit();
-    return harness.handlerFor(RABBITMQ_QUEUES.INVENTORY)(payload);
+    return harness.handlerFor(RABBITMQ_QUEUES.INVENTORY)(payload, {
+      properties: { messageId },
+    });
   }
+
+  /** The product row after the increment: what Postgres returns from the atomic update. */
+  const stockAfterIncrement = (stock: number) =>
+    tx.product.update.mockResolvedValueOnce({ stock });
 
   it('ignores a message without a product id', async () => {
     await handle({ adjustment: 5 });
     await handle(undefined);
 
-    expect(prisma.product.findUnique).not.toHaveBeenCalled();
-  });
-
-  it('ignores an adjustment for a product that no longer exists', async () => {
-    prisma.product.findUnique.mockResolvedValue(null);
-
-    await handle({ productId: 'p1', adjustment: 5 });
-
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('updates the stock and writes the history in one transaction', async () => {
-    prisma.product.findUnique.mockResolvedValue({ stock: 10 });
+  it('ignores an adjustment for a product that no longer exists', async () => {
+    tx.product.update.mockRejectedValueOnce(
+      Object.assign(new Error('not found'), { code: 'P2025' }),
+    );
+
+    await handle({ productId: 'p1', adjustment: 5 });
+
+    expect(tx.stockHistory.create).not.toHaveBeenCalled();
+  });
+
+  it('adds the adjustment with an atomic increment and writes the history in the same transaction', async () => {
+    stockAfterIncrement(7); // was 10, adjusted by -3
 
     await handle({
       productId: 'p1',
@@ -59,11 +78,13 @@ describe('InventoryConsumer', () => {
     });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.product.update).toHaveBeenCalledWith({
+    expect(tx.product.update).toHaveBeenCalledTimes(1);
+    expect(tx.product.update).toHaveBeenCalledWith({
       where: { id: 'p1' },
-      data: { stock: 7 },
+      data: { stock: { increment: -3 } },
+      select: { stock: true },
     });
-    expect(prisma.stockHistory.create).toHaveBeenCalledWith({
+    expect(tx.stockHistory.create).toHaveBeenCalledWith({
       data: {
         productId: 'p1',
         variantId: 'v1',
@@ -77,57 +98,55 @@ describe('InventoryConsumer', () => {
     });
   });
 
-  it('never lets stock go below zero', async () => {
-    prisma.product.findUnique.mockResolvedValue({ stock: 2 });
+  it('never lets stock go below zero, correcting it inside the same transaction', async () => {
+    stockAfterIncrement(-8); // was 2, adjusted by -10
 
     await handle({ productId: 'p1', adjustment: -10 });
 
-    expect(prisma.product.update).toHaveBeenCalledWith({
+    expect(tx.product.update).toHaveBeenLastCalledWith({
       where: { id: 'p1' },
       data: { stock: 0 },
     });
-    expect(
-      prisma.stockHistory.create.mock.calls[0][0].data.newStockQuantity,
-    ).toBe(0);
+    const data = tx.stockHistory.create.mock.calls[0][0].data;
+    expect(data.oldStockQuantity).toBe(2);
+    expect(data.newStockQuantity).toBe(0);
   });
 
   it('fills in a default reason and author', async () => {
-    prisma.product.findUnique.mockResolvedValue({ stock: 1 });
+    stockAfterIncrement(2);
 
     await handle({ productId: 'p1', adjustment: 1 });
 
-    const data = prisma.stockHistory.create.mock.calls[0][0].data;
+    const data = tx.stockHistory.create.mock.calls[0][0].data;
     expect(data.description).toBe('Inventory adjustment');
     expect(data.createdBy).toBe('rabbitmq-inventory-worker');
     expect(data.variantId).toBeNull();
   });
 
-  // KNOWN DEFECTS (audit R21 and R6). These describe the correct behaviour and fail today, so
-  // they are marked `failing`: they pass the build now and turn red once the defect is fixed,
-  // which is the reminder to delete the `.failing`.
-  it.failing(
-    'rethrows a database failure so the broker retries it instead of losing it',
-    async () => {
-      prisma.product.findUnique.mockResolvedValue({ stock: 10 });
-      prisma.$transaction.mockRejectedValue(new Error('deadlock'));
+  it('rethrows a database failure so the queue retries it instead of losing the adjustment', async () => {
+    prisma.$transaction.mockRejectedValue(new Error('deadlock'));
 
-      await expect(handle({ productId: 'p1', adjustment: 1 })).rejects.toThrow(
-        'deadlock',
-      );
-    },
-  );
+    await expect(handle({ productId: 'p1', adjustment: 1 })).rejects.toThrow(
+      'deadlock',
+    );
+  });
 
-  it.failing(
-    'applies the change atomically instead of writing a value computed from an earlier read',
-    async () => {
-      prisma.product.findUnique.mockResolvedValue({ stock: 10 });
+  it('does not apply the same adjustment twice when the broker redelivers it', async () => {
+    const dup = fakeProcessed(['m-1']);
+    consumer = new InventoryConsumer(harness.rabbit, prisma, dup.processed);
+    harness.consumers.length = 0;
+    await consumer.onModuleInit();
 
-      await handle({ productId: 'p1', adjustment: 4 });
+    await harness.handlerFor(RABBITMQ_QUEUES.INVENTORY)(
+      { productId: 'p1', adjustment: 4 },
+      { properties: { messageId: 'm-1' } },
+    );
 
-      expect(prisma.product.update).toHaveBeenCalledWith({
-        where: { id: 'p1' },
-        data: { stock: { increment: 4 } },
-      });
-    },
-  );
+    expect(dup.runOnce).toHaveBeenCalledWith(
+      'inventory',
+      'm-1',
+      expect.any(Function),
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });
