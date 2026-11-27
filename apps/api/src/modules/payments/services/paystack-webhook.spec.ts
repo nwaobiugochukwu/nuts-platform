@@ -14,6 +14,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
   let mockPrisma: any;
   let mockConfig: any;
   let mockOutbox: any;
+  let mockInbox: any;
   let mockWalletService: any;
   const secretKey = 'sk_test_secret_key_12345';
 
@@ -68,6 +69,12 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       creditVendorPending: jest.fn(),
     };
 
+    mockInbox = {
+      receive: jest
+        .fn()
+        .mockResolvedValue({ inboxId: 'in-1', duplicate: false }),
+    };
+
     mockOutbox = {
       appendEvent: jest.fn(),
       appendEnvelope: jest.fn(),
@@ -84,8 +91,13 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         executePaystack: jest.fn((fn: () => unknown) => fn()),
       } as unknown as CircuitBreakerService,
       mockOutbox,
+      mockInbox,
     );
   });
+
+  /** What the endpoint and the consumer do together: verify, then apply. */
+  const deliver = async (rawBody: string, signature: string | undefined) =>
+    service.processWebhookEvent(service.verifyWebhook(rawBody, signature));
 
   const generateSignature = (body: string, secret = secretKey) => {
     return createHmac('sha512', secret).update(body).digest('hex');
@@ -98,7 +110,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         data: { reference: 'ref-1' },
       });
 
-      await expect(service.handleWebhook(rawBody, undefined)).rejects.toThrow(
+      await expect(deliver(rawBody, undefined)).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -110,9 +122,9 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       });
       const badSignature = generateSignature(rawBody, 'wrong-secret');
 
-      await expect(
-        service.handleWebhook(rawBody, badSignature),
-      ).rejects.toThrow('Invalid Paystack webhook signature.');
+      await expect(deliver(rawBody, badSignature)).rejects.toThrow(
+        'Invalid Paystack webhook signature.',
+      );
     });
 
     it('rejects webhooks with tampered payload', async () => {
@@ -126,9 +138,9 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         data: { reference: 'ref-2' },
       });
 
-      await expect(
-        service.handleWebhook(tamperedBody, signature),
-      ).rejects.toThrow('Invalid Paystack webhook signature.');
+      await expect(deliver(tamperedBody, signature)).rejects.toThrow(
+        'Invalid Paystack webhook signature.',
+      );
     });
   });
 
@@ -181,7 +193,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         status: PaymentStatus.SUCCESS,
       });
 
-      await service.handleWebhook(rawBody, signature);
+      await deliver(rawBody, signature);
 
       // Verifies payment status transitioned to SUCCESS
       expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
@@ -259,7 +271,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       });
       mockOutbox.wakeRelay.mockImplementation(() => order.push('wake'));
 
-      await service.handleWebhook(rawBody, generateSignature(rawBody));
+      await deliver(rawBody, generateSignature(rawBody));
 
       const published = mockOutbox.appendEnvelope.mock.calls.map(
         ([tx, event, options]: any[]) => ({ tx, event, options }),
@@ -360,7 +372,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         status: PaymentStatus.SUCCESS,
       });
 
-      await service.handleWebhook(rawBody, generateSignature(rawBody));
+      await deliver(rawBody, generateSignature(rawBody));
 
       expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
     });
@@ -408,7 +420,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         status: PaymentStatus.SUCCESS,
       });
 
-      await service.handleWebhook(rawBody, signature);
+      await deliver(rawBody, signature);
 
       expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
         where: { id: 'pay-fallback', status: PaymentStatus.PENDING },
@@ -453,7 +465,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         },
       });
 
-      await service.handleWebhook(rawBody, signature);
+      await deliver(rawBody, signature);
 
       // Verifies payment was flagged and marked FAILED
       expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
@@ -480,10 +492,63 @@ describe('Paystack Webhook & Payment Verification Security', () => {
         currency: 'NGN',
       });
 
-      await service.handleWebhook(rawBody, signature);
+      await deliver(rawBody, signature);
 
       // Must not call Paystack verify or mutate order again
       expect(mockPrisma.order.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('receiving a webhook (the endpoint)', () => {
+    const body = JSON.stringify({
+      event: 'charge.success',
+      data: { reference: 'TX-IN-1', status: 'success' },
+    });
+
+    it('stores a correctly signed event in the inbox and does not process it', async () => {
+      await service.receiveWebhook(body, generateSignature(body));
+
+      expect(mockInbox.receive).toHaveBeenCalledWith({
+        provider: 'paystack',
+        eventType: 'charge.success',
+        rawBody: body,
+      });
+      expect(mockPrisma.payment.findUnique).not.toHaveBeenCalled();
+      expect(mockPrisma.payment.updateMany).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a missing signature', undefined],
+      ['a wrong signature', 'deadbeef'],
+    ])('stores nothing for %s', async (_label, signature) => {
+      await expect(service.receiveWebhook(body, signature)).rejects.toThrow(
+        'Invalid Paystack webhook signature.',
+      );
+      expect(mockInbox.receive).not.toHaveBeenCalled();
+    });
+
+    it('rejects a signed body that is not JSON, storing nothing', async () => {
+      const bad = 'not json';
+      await expect(
+        service.receiveWebhook(bad, generateSignature(bad)),
+      ).rejects.toThrow('Invalid webhook payload.');
+      expect(mockInbox.receive).not.toHaveBeenCalled();
+    });
+
+    it('accepts the provider repeating an event it already sent', async () => {
+      mockInbox.receive.mockResolvedValue({ inboxId: 'in-1', duplicate: true });
+
+      await expect(
+        service.receiveWebhook(body, generateSignature(body)),
+      ).resolves.toBeUndefined();
+    });
+
+    it('fails the request (so Paystack retries) when the event cannot be stored', async () => {
+      mockInbox.receive.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.receiveWebhook(body, generateSignature(body)),
+      ).rejects.toThrow('db down');
     });
   });
 });

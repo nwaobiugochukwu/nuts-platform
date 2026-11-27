@@ -14,12 +14,14 @@ import { RedlockService } from '../src/infrastructure/cache/redlock.service';
 import { OtpService } from '../src/modules/auth/services/otp.service';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 import { PaymentsService } from '../src/modules/payments/services/payments.service';
+import { RabbitMQService } from '../src/infrastructure/messaging/rabbitmq/rabbitmq.service';
 
 describe('Payment Flow End-to-End (e2e)', () => {
   let app: INestApplication<App>;
   let mockPrisma: any;
   let mockRedis: any;
   let paymentsService: PaymentsService;
+  let rabbitmq: RabbitMQService;
 
   const testUserId = 'u-e2e-customer';
   const testVendorId = 'v-e2e-vendor';
@@ -161,6 +163,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
       updatedAt: new Date(),
     },
     outboxEvents: [] as any[],
+    webhookInbox: [] as any[],
     orderStatusHistory: [] as any[],
   };
 
@@ -381,6 +384,11 @@ describe('Payment Flow End-to-End (e2e)', () => {
           if (where.id === testOrderId) {
             return Promise.resolve({
               ...dbState.order,
+              user: {
+                id: dbState.user.id,
+                email: dbState.user.email,
+                firstName: 'Jane',
+              },
               orderItems: [
                 {
                   id: 'oi-1',
@@ -447,6 +455,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
       payment: {
         findUnique: jest.fn().mockImplementation(({ where }) => {
           if (
+            where.id === testPaymentId ||
             where.transactionReference === testTransactionRef ||
             where.orderId === testOrderId
           ) {
@@ -493,6 +502,31 @@ describe('Payment Flow End-to-End (e2e)', () => {
           dbState.outboxEvents.push(data);
           return Promise.resolve({ id: 'outbox-1', ...data });
         }),
+      },
+      webhookInbox: {
+        createMany: jest.fn().mockImplementation(({ data }) => {
+          dbState.webhookInbox.push(
+            ...data.map((row: any) => ({ ...row, status: 'RECEIVED' })),
+          );
+          return Promise.resolve({ count: data.length });
+        }),
+        findUnique: jest
+          .fn()
+          .mockImplementation(({ where }) =>
+            Promise.resolve(
+              dbState.webhookInbox.find((row) => row.id === where.id) ?? null,
+            ),
+          ),
+        updateMany: jest.fn().mockImplementation(({ where, data }) => {
+          const row = dbState.webhookInbox.find((r) => r.id === where.id);
+          if (row) Object.assign(row, data);
+          return Promise.resolve({ count: row ? 1 : 0 });
+        }),
+      },
+      processedEvent: {
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       checkoutIdempotency: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -551,6 +585,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
     await app.init();
 
     paymentsService = moduleFixture.get<PaymentsService>(PaymentsService);
+    rabbitmq = moduleFixture.get(RabbitMQService);
   });
 
   afterAll(async () => {
@@ -731,6 +766,48 @@ describe('Payment Flow End-to-End (e2e)', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data).toEqual({ received: true });
 
+      // The endpoint only stores the event (the webhook inbox) and queues it: nothing has been
+      // settled yet, and the stored body is exactly what Paystack sent.
+      expect(dbState.webhookInbox).toHaveLength(1);
+      expect(dbState.webhookInbox[0].payload).toBe(rawBody);
+      expect(mockPrisma.payment.updateMany).not.toHaveBeenCalled();
+      const queued = dbState.outboxEvents.find(
+        (event) => event.eventType === 'payment.webhook_received',
+      );
+      expect(queued.payload).toMatchObject({
+        type: 'payment.webhook_received',
+        version: 1,
+        payload: { inboxId: dbState.webhookInbox[0].id, provider: 'paystack' },
+      });
+
+      // Paystack repeating the same event queues nothing new.
+      mockPrisma.webhookInbox.createMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.webhookInbox.findUniqueOrThrow = jest
+        .fn()
+        .mockResolvedValue({ id: dbState.webhookInbox[0].id });
+      await request(app.getHttpServer())
+        .post('/api/v1/payments/webhook')
+        .set('x-paystack-signature', signature)
+        .set('Content-Type', 'application/json')
+        .send(rawBody)
+        .expect(200);
+      expect(
+        dbState.outboxEvents.filter(
+          (event) => event.eventType === 'payment.webhook_received',
+        ),
+      ).toHaveLength(1);
+
+      // The worker takes the event off the queue: the real consumer handler, run on the stored
+      // event (the broker hop is the one thing this test does not have).
+      const handler = (
+        (rabbitmq as any).registeredConsumers.get(
+          'q.nuts.payment-webhooks',
+        ) as Array<(payload: unknown, message: unknown) => Promise<void>>
+      )[0];
+      await handler(queued.payload, { properties: { messageId: queued.id } });
+
+      expect(dbState.webhookInbox[0].status).toBe('PROCESSED');
+
       // Verifies payment transitioned to SUCCESS
       expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
         where: { id: testPaymentId, status: PaymentStatus.PENDING },
@@ -760,8 +837,7 @@ describe('Payment Flow End-to-End (e2e)', () => {
       expect(mockPrisma.vendorWallet.update).toHaveBeenCalled();
 
       // Verifies the confirmation notifications are stored in the same transaction (outbox),
-      // so a crash after the commit cannot lose them. Today they are `notification.dispatch`
-      // commands; the real `order.confirmed` domain event arrives with the event backbone.
+      // so a crash after the commit cannot lose them.
       expect(mockPrisma.outboxEvent.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           aggregateType: 'order',
@@ -770,11 +846,19 @@ describe('Payment Flow End-to-End (e2e)', () => {
           status: 'PENDING',
         }),
       });
-    });
 
-    it.todo(
-      'publishes an order.confirmed domain event through the outbox in the same transaction (roadmap phase 5)',
-    );
+      // The facts the email and notification consumers react to are in the outbox too, written in
+      // the same transaction as the settlement.
+      const published = dbState.outboxEvents
+        .map((event) => event.eventType)
+        .filter(
+          (type) => type === 'order.processing' || type === 'payment.confirmed',
+        );
+      expect(published.sort()).toEqual([
+        'order.processing',
+        'payment.confirmed',
+      ]);
+    });
 
     /**
      * PHASE 6: Storefront Self-Healing & Order Inspection

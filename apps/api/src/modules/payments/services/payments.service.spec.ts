@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { EmailService } from '@api/infrastructure/mail/email.service';
+import { WebhookInboxService } from './webhook-inbox.service';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { UsersService } from '@api/modules/users/services/users.service';
@@ -94,6 +95,7 @@ describe('PaymentsService â€“ refund', () => {
         { provide: EmailService, useValue: mockEmailService },
         { provide: WalletService, useValue: mockWalletService },
         { provide: OutboxService, useValue: mockOutboxService },
+        { provide: WebhookInboxService, useValue: { receive: jest.fn() } },
         { provide: CircuitBreakerService, useValue: mockCircuitBreakerService },
       ],
     }).compile();

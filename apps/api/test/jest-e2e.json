@@ -1,16 +1,10 @@
 {
-  "moduleFileExtensions": [
-    "js",
-    "json",
-    "ts"
-  ],
+  "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testTimeout": 30000,
   "testRegex": ".e2e-spec.ts$",
-  "transformIgnorePatterns": [
-    "node_modules[\\\\/](?!cockatiel[\\\\/])"
-  ],
+  "transformIgnorePatterns": ["node_modules[\\\\/](?!cockatiel[\\\\/])"],
   "transform": {
     "^.+\\.(t|j)s$": [
       "@swc/jest",
@@ -35,7 +29,5 @@
   "moduleNameMapper": {
     "^@api/(.*)$": "<rootDir>/../src/$1"
   },
-  "setupFiles": [
-    "<rootDir>/setup-env.ts"
-  ]
+  "setupFiles": ["<rootDir>/setup-env.ts"]
 }

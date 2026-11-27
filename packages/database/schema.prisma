@@ -1302,3 +1302,24 @@ model ProcessedEvent {
   @@index([status, completedAt])
   @@map("processed_events")
 }
+
+/// A provider webhook stored exactly as received (see WebhookInboxService).
+model WebhookInbox {
+  id          String    @id @default(uuid())
+  provider    String
+  /// sha256 of the raw body: the provider's retry of the same event has the same key.
+  eventKey    String    @map("event_key")
+  eventType   String    @map("event_type")
+  /// The raw request body, byte for byte.
+  payload     String
+  /// RECEIVED, PROCESSED or FAILED (never processed after the last retry: see the dead-letter queue).
+  status      String    @default("RECEIVED")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+
+  @@unique([provider, eventKey])
+  @@index([status, receivedAt])
+  @@map("webhook_inbox")
+}

@@ -31,6 +31,7 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { WebhookInboxService } from './webhook-inbox.service';
 import { withUpstreamStatus } from '@api/infrastructure/resilience/dependency-failure.util';
 import { runWithCronLock } from '@api/infrastructure/cache/cron-lock.util';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
@@ -117,6 +118,7 @@ export class PaymentsService {
     private readonly walletService: WalletService,
     private readonly circuitBreaker: CircuitBreakerService,
     private readonly outbox: OutboxService,
+    private readonly webhookInbox: WebhookInboxService,
     @Optional() private readonly cacheService?: CacheService,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis?: Redis,
   ) {}
@@ -446,10 +448,31 @@ export class PaymentsService {
   // PAYSTACK WEBHOOK
   // ---------------------------------------------------------------------------
 
-  async handleWebhook(
+  /**
+   * What the webhook endpoint does: check the signature, then store the event once and queue it
+   * (the webhook inbox). Paystack gets its 200 as soon as the event is safely stored; the work
+   * happens from the queue, with retries, in `processWebhookEvent`.
+   */
+  async receiveWebhook(
     rawBody: string,
     signature: string | undefined,
   ): Promise<void> {
+    const event = this.verifyWebhook(rawBody, signature);
+    const { duplicate } = await this.webhookInbox.receive({
+      provider: 'paystack',
+      eventType: event.event,
+      rawBody,
+    });
+    if (duplicate) {
+      this.logger.log(`Paystack webhook ${event.event} was already received.`);
+    }
+  }
+
+  /** Verifies the signature and returns the parsed event; throws 400 on anything invalid. */
+  verifyWebhook(
+    rawBody: string,
+    signature: string | undefined,
+  ): PaystackWebhookEvent {
     this.assertPaystackConfigured();
 
     if (!signature || !this.isValidWebhookSignature(rawBody, signature)) {
@@ -466,7 +489,11 @@ export class PaymentsService {
     if (!event || typeof event.event !== 'string') {
       throw new BadRequestException('Webhook event type is required.');
     }
+    return event;
+  }
 
+  /** Applies a verified webhook event. Called by the webhook consumer, never by the endpoint. */
+  async processWebhookEvent(event: PaystackWebhookEvent): Promise<void> {
     if (event.event.startsWith('refund.')) {
       await this.handleRefundWebhook(event);
       return;

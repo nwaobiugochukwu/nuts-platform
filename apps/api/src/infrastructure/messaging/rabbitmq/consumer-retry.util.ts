@@ -97,6 +97,7 @@ export const QUEUE_PREFETCH: Record<string, number> = {
   'q.nuts.emails': 5, // each message calls the email provider
   'q.nuts.inventory': 1, // stock changes are applied one at a time
   'q.nuts.workflows': 5,
+  'q.nuts.payment-webhooks': 5,
   'q.nuts.analytics': 20, // cheap inserts
   'q.nuts.audit': 20,
 };

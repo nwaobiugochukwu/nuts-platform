@@ -66,6 +66,36 @@ describe('BotDetectionMiddleware', () => {
       expect(next).toHaveBeenCalledTimes(1);
       expect(status).not.toHaveBeenCalled();
     });
+
+    it('lets the Paystack webhook through: a server sends none of the browser headers', () => {
+      req.method = 'POST';
+      req.path = '/api/v1/payments/webhook';
+      req.headers = { host: 'api.example.com' };
+
+      middleware.use(req as Request, res as Response, next);
+
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(status).not.toHaveBeenCalled();
+    });
+
+    it('does not extend that exemption to other methods or other payment paths', () => {
+      for (const [method, path] of [
+        ['GET', '/api/v1/payments/webhook'],
+        ['POST', '/api/v1/payments/initialize'],
+        ['POST', '/api/v1/payments/webhook/extra'],
+      ]) {
+        status.mockClear();
+        next.mockClear();
+        req.method = method;
+        req.path = path;
+        req.headers = { host: 'api.example.com' };
+
+        middleware.use(req as Request, res as Response, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(status).toHaveBeenCalled();
+      }
+    });
   });
 
   describe('Layer 1: Hard Block Known Bad User-Agents', () => {

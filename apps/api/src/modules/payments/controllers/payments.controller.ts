@@ -161,7 +161,7 @@ export class PaymentsController {
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @Message('Payment webhook processed successfully')
+  @Message('Payment webhook received')
   @ApiOperation({
     summary: 'Paystack webhook',
   })
@@ -190,7 +190,8 @@ export class PaymentsController {
       );
     }
 
-    await this.paymentsService.handleWebhook(
+    // Verified and stored; the work happens from a queue (the webhook inbox).
+    await this.paymentsService.receiveWebhook(
       rawBody.toString('utf8'),
       signature,
     );

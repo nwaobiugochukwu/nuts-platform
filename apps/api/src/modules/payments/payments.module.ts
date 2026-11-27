@@ -8,7 +8,9 @@ import {
   OrderPaymentCanonicalController,
   PaymentsController,
 } from './controllers/payments.controller';
+import { PaymentWebhookConsumer } from './consumers/payment-webhook.consumer';
 import { PaymentsService } from './services/payments.service';
+import { WebhookInboxService } from './services/webhook-inbox.service';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { PaymentsService } from './services/payments.service';
     MailModule,
   ],
   controllers: [PaymentsController, OrderPaymentCanonicalController],
-  providers: [PaymentsService],
+  providers: [PaymentsService, WebhookInboxService, PaymentWebhookConsumer],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

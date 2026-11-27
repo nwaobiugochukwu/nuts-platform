@@ -157,7 +157,7 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | Payments | `payment.confirmed`, `payment.failed` | payments | orders, email, notifications, wallet, audit | **live** (5.2: published in the transaction, queue `q.nuts.order-events`) |
 | Payments | `payment.refund_requested`, `payment.refunded`, `payment.refund_failed` | payments | orders, inventory, wallet, email, notifications, audit | partly outbox, no domain event |
 | Payments | `payment.reconciliation_needed` | payments | ops alert queue, audit | recorded in the database only |
-| Payments | `payment.webhook_received` | webhook endpoint (inbox) | payments (process once, idempotent) | new (E13) |
+| Payments | `payment.webhook_received` | webhook endpoint (inbox) | payments (process once, idempotent) | **live** (5.3: webhook inbox, queue `q.nuts.payment-webhooks`) |
 | Wallets | `wallet.credited`, `wallet.debited`, `vendor.earnings_available` | wallets | notifications, email, audit | new |
 | Wallets | `payout.requested`, `payout.processed`, `payout.failed` | wallets | notifications, email, audit | new (when payouts exist) |
 | Promotions | `discount.created`, `discount.activated`, `discount.expired`, `discount.used`, `voucher.claimed` | discounts | cache (campaigns), notifications, analytics | new |
