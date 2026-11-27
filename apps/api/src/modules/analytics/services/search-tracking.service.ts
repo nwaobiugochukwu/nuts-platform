@@ -1,4 +1,6 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger, Optional } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { TrackingQueueService } from './tracking-queue.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 
@@ -9,6 +11,7 @@ export class SearchTrackingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
+    @Optional() private readonly queue?: TrackingQueueService,
   ) {}
 
   /**
@@ -22,8 +25,26 @@ export class SearchTrackingService {
     visitorId?: string,
     cacheUserId?: string,
   ): Promise<void> {
-    // Persist synchronously (not via the message queue) so the signal is
-    // already in the database when recommendations are recomputed below.
+    // Preferred path: the analytics queue stores it and refreshes the recommendations once
+    // the row exists (so the refresh can never run before the signal is stored). If the broker
+    // is down, store it here and refresh at once, as before.
+    const queued = await this.queue?.enqueue({
+      type: 'search',
+      id: randomUUID(),
+      query,
+      resultsCount,
+      userId: userId ?? null,
+      sessionId: sessionId ?? null,
+      timestamp: Date.now(),
+      refreshFor: [userId, cacheUserId, sessionId, visitorId],
+    });
+    if (queued) {
+      if (resultsCount === 0) {
+        this.logger.debug({ query }, 'Zero-result search tracked');
+      }
+      return;
+    }
+
     await this.prisma.searchQuery.create({
       data: {
         query,
