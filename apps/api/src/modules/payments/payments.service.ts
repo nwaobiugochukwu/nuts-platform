@@ -32,7 +32,7 @@ import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { OutboxService } from '@api/infrastructure/outbox/outbox.service';
 import { CircuitBreakerService } from '@api/infrastructure/resiliency/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/users.service';
-import { WalletService } from '@api/modules/wallet/wallet.service';
+import { WalletService } from '@api/modules/wallets/wallet.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/rabbitmq/rabbitmq.constants';
 
 import { generateStatusNote } from '@api/modules/orders/constants/order-status.constants';
@@ -51,7 +51,7 @@ import {
   loadCreditedVendorEarnings,
   loadVendorFundedDiscounts,
   releaseDiscountUsage,
-} from '@api/modules/promotions/discount-funding';
+} from '@api/modules/discounts/discount-funding';
 
 import {
   PAYSTACK_SUCCESS_STATUS,

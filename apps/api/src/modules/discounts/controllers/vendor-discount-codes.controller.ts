@@ -28,13 +28,13 @@ import {
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 
-import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
+import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import {
   CreateVendorDiscountCodeDto,
   DiscountCodeResponseDto,
   ListDiscountCodesQueryDto,
   UpdateVendorDiscountCodeDto,
-} from '@api/modules/promotions/dto';
+} from '@api/modules/discounts/dto';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
 import { Message } from '@api/common/decorators/message.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';

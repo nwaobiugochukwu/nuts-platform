@@ -6,10 +6,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { Roles } from '@api/modules/shared/decorators/role.decorator';
-import { GetVendor } from '@api/modules/shared/decorators/get-vendor.decorator';
-import { Message } from '@api/modules/shared/decorators/message.decorator';
-import { ApiResponseDto } from '@api/modules/shared/dto/api-response.dto';
+import { Roles } from '@api/common/decorators/role.decorator';
+import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
+import { Message } from '@api/common/decorators/message.decorator';
+import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 import { VendorAnalyticsQueryDto } from '../vendors/dto/vendor-analytics-query.dto';
 import { VendorAnalyticsSummaryDto } from '../vendors/dto/vendor-analytics-summary.dto';
 import { VendorAnalyticsService } from '../vendors/vendor-analytics.service';

@@ -28,14 +28,14 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 
-import { CreateVariantDto } from '@api/modules/product-variants/dto/create-variant.dto';
-import { QueryVariantDto } from '@api/modules/product-variants/dto/query-variant.dto';
-import { UpdateVariantStockDto } from '@api/modules/product-variants/dto/update-variant-stock.dto';
-import { UpdateVariantDto } from '@api/modules/product-variants/dto/update-variant.dto';
-import { ProductVariantListResponseDto } from '@api/modules/product-variants/dto/variant-response.dto';
-import { VariantStockUpdateResponseDto } from '@api/modules/product-variants/dto/variant-stock-update-response.dto';
-import { VendorVariantResponseDto } from '@api/modules/product-variants/dto/vendor-variant-response.dto';
-import { ProductVariantsService } from '@api/modules/product-variants/product-variants.service';
+import { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
+import { QueryVariantDto } from '@api/modules/products/dto/query-variant.dto';
+import { UpdateVariantStockDto } from '@api/modules/products/dto/update-variant-stock.dto';
+import { UpdateVariantDto } from '@api/modules/products/dto/update-variant.dto';
+import { ProductVariantListResponseDto } from '@api/modules/products/dto/variant-response.dto';
+import { VariantStockUpdateResponseDto } from '@api/modules/products/dto/variant-stock-update-response.dto';
+import { VendorVariantResponseDto } from '@api/modules/products/dto/vendor-variant-response.dto';
+import { ProductVariantsService } from '@api/modules/products/product-variants.service';
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';

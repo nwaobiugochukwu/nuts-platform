@@ -7,7 +7,7 @@ import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
 import { CircuitBreakerService } from '@api/infrastructure/resiliency/circuit-breaker.service';
 import { UsersService } from '@api/modules/users/users.service';
-import { WalletService } from '@api/modules/wallet/wallet.service';
+import { WalletService } from '@api/modules/wallets/wallet.service';
 import { PaymentsService } from './payments.service';
 
 describe('Paystack Webhook & Payment Verification Security', () => {

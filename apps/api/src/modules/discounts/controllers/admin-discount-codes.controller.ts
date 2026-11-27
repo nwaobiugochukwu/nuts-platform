@@ -23,13 +23,13 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
+import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import {
   CreateAdminDiscountCodeDto,
   DiscountCodeResponseDto,
   ListDiscountCodesQueryDto,
   UpdateAdminDiscountCodeDto,
-} from '@api/modules/promotions/dto';
+} from '@api/modules/discounts/dto';
 import { Message } from '@api/common/decorators/message.decorator';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';

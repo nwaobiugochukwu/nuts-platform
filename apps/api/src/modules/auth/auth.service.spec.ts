@@ -3,7 +3,7 @@ import * as bcrypt from 'bcrypt';
 import { Prisma, ROLE } from '@prisma/client';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { ReferralService } from '@api/modules/referral/referral.service';
+import { ReferralService } from '@api/modules/referrals/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import { AuthService } from './auth.service';
 import { OtpService } from './otp/otp.service';

@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { InsufficientStockException } from '@api/common/errors/insufficient-stock.exception';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/prisma/prisma.service';
-import { DiscountCodeService } from '@api/modules/promotions/discount-code.service';
+import { DiscountCodeService } from '@api/modules/discounts/discount-code.service';
 import { UsersService } from '@api/modules/users/users.service';
 import { CartService } from './cart.service';
 import { FakeTransactionRunner } from '@api/infrastructure/transaction/fake-transaction-runner';

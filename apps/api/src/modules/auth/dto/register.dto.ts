@@ -11,10 +11,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { MaxPasswordBytes } from '@api/modules/shared/decorators/max-password-bytes.decorator';
-import { NormalizeEmail } from '@api/modules/shared/decorators/normalize-email.decorator';
-import { Trim } from '@api/modules/shared/decorators/string-trim.decorator';
-import { ShippingAddressDto } from '@api/modules/shared/dto/shipping-address.dto';
+import { MaxPasswordBytes } from '@api/common/decorators/max-password-bytes.decorator';
+import { NormalizeEmail } from '@api/common/decorators/normalize-email.decorator';
+import { Trim } from '@api/common/decorators/string-trim.decorator';
+import { ShippingAddressDto } from '@api/common/dto/shipping-address.dto';
 
 export { ShippingAddressDto as ShippingAddressRegistrationDto };
 

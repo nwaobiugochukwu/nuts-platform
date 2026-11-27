@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { WalletTransactionResponseDto } from '@api/modules/wallet/dto/wallet-transaction-response.dto';
+import { WalletTransactionResponseDto } from '@api/modules/wallets/dto/wallet-transaction-response.dto';
 
 export class VendorWalletResponseDto {
   @ApiProperty({
