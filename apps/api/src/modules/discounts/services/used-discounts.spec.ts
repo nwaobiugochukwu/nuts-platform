@@ -2,6 +2,7 @@ import { DiscountClaimStatus } from '@prisma/client';
 
 import { DiscountCodeService } from './discount-code.service';
 import { VoucherClaimsService } from './voucher-claims.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('discounts a customer has used up', () => {
   it('finds only codes whose per-customer limit is reached', async () => {
@@ -147,7 +148,10 @@ describe('discounts a customer has used up', () => {
       product: { findMany: jest.fn().mockResolvedValue([]) },
       category: { findMany: jest.fn().mockResolvedValue([]) },
     };
-    const service = new VoucherClaimsService(prisma as never);
+    const service = new VoucherClaimsService(
+      prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
+    );
 
     const wallet = await service.list('u1');
 

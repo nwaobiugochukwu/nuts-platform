@@ -8,6 +8,7 @@
 import { Category, CategoryStatus, Prisma } from '@prisma/client';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import {
   CATEGORY_BY_PATH,
   CATEGORY_BY_SLUG,
@@ -31,6 +32,7 @@ export class CategoriesService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -279,35 +281,38 @@ export class CategoriesService {
     }
     const newIsActive = newStatus === CategoryStatus.ACTIVE;
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const cat = await tx.category.update({
-        where: { id },
-        data: {
-          name: newName,
-          slug: newSlug,
-          description:
-            dto.description !== undefined
-              ? dto.description?.trim() || null
-              : existing.description,
-          imageUrl:
-            dto.imageUrl !== undefined
-              ? dto.imageUrl?.trim() || null
-              : existing.imageUrl,
-          parentId: newParentId,
-          sortOrder:
-            dto.sortOrder !== undefined ? dto.sortOrder : existing.sortOrder,
-          status: newStatus,
-          isActive: newIsActive,
-          path: newPath,
-        },
-      });
+    const updated = await this.transactions.run(
+      async ({ tx }) => {
+        const cat = await tx.category.update({
+          where: { id },
+          data: {
+            name: newName,
+            slug: newSlug,
+            description:
+              dto.description !== undefined
+                ? dto.description?.trim() || null
+                : existing.description,
+            imageUrl:
+              dto.imageUrl !== undefined
+                ? dto.imageUrl?.trim() || null
+                : existing.imageUrl,
+            parentId: newParentId,
+            sortOrder:
+              dto.sortOrder !== undefined ? dto.sortOrder : existing.sortOrder,
+            status: newStatus,
+            isActive: newIsActive,
+            path: newPath,
+          },
+        });
 
-      if (existing.path !== newPath) {
-        await this.updateDescendantPathsInTx(tx, cat.id, newPath);
-      }
+        if (existing.path !== newPath) {
+          await this.updateDescendantPathsInTx(tx, cat.id, newPath);
+        }
 
-      return cat;
-    });
+        return cat;
+      },
+      { name: 'category.update' },
+    );
 
     auditDetails({
       entityId: updated.id,
@@ -365,13 +370,16 @@ export class CategoriesService {
       );
     }
 
-    await this.prisma.$transaction(
-      categoryIds.map((id, index) =>
-        this.prisma.category.update({
-          where: { id },
-          data: { sortOrder: index },
-        }),
-      ),
+    await this.transactions.run(
+      async ({ tx }) => {
+        for (const [index, id] of categoryIds.entries()) {
+          await tx.category.update({
+            where: { id },
+            data: { sortOrder: index },
+          });
+        }
+      },
+      { name: 'category.reorder-children' },
     );
 
     auditDetails({
@@ -394,15 +402,14 @@ export class CategoriesService {
     const descendantIds = await this.getDescendantIds(category.id);
     const allAffectedIds = [category.id, ...descendantIds];
 
-    await this.prisma.$transaction([
-      this.prisma.category.updateMany({
-        where: { id: { in: allAffectedIds } },
-        data: {
-          status: targetStatus,
-          isActive,
-        },
-      }),
-    ]);
+    // One statement: atomic by itself.
+    await this.prisma.category.updateMany({
+      where: { id: { in: allAffectedIds } },
+      data: {
+        status: targetStatus,
+        isActive,
+      },
+    });
 
     auditDetails({
       entityId: category.id,
@@ -425,15 +432,14 @@ export class CategoriesService {
     const descendantIds = await this.getDescendantIds(category.id);
     const allAffectedIds = Array.from(new Set([category.id, ...descendantIds]));
 
-    await this.prisma.$transaction([
-      this.prisma.category.updateMany({
-        where: { id: { in: allAffectedIds } },
-        data: {
-          status: CategoryStatus.ARCHIVED,
-          isActive: false,
-        },
-      }),
-    ]);
+    // One statement: atomic by itself.
+    await this.prisma.category.updateMany({
+      where: { id: { in: allAffectedIds } },
+      data: {
+        status: CategoryStatus.ARCHIVED,
+        isActive: false,
+      },
+    });
 
     auditDetails({
       entityId: category.id,

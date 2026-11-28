@@ -14,6 +14,7 @@ import type { StringValue } from 'ms';
 import type Redis from 'ioredis';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { AuthSessionService } from './auth-session.service';
 import { DeviceTrackingService } from './device-tracking.service';
@@ -54,6 +55,7 @@ export class RefreshSessionService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly jwtService: JwtService,
     configService: ConfigService,
     @Optional() private readonly authSessionService?: AuthSessionService,
@@ -89,35 +91,38 @@ export class RefreshSessionService {
     await this.prisma.userAuthSession.deleteMany({
       where: { userId: user.id, expiresAt: { lte: new Date() } },
     });
-    await this.prisma.$transaction(async (tx) => {
-      // Keep the legacy pointer updated while older API instances may still run.
-      const account = await tx.user.updateMany({
-        where: {
-          id: user.id,
-          isActive: true,
-          tokenVersion: user.tokenVersion,
-        },
-        data: {
-          refreshToken: this.hashRefreshToken(tokens.refreshId),
-          refreshTokenId: tokens.refreshId,
-        },
-      });
-      if (account.count !== 1) {
-        throw new UnauthorizedException(
-          'Unable to create authentication session',
-        );
-      }
-      await tx.userAuthSession.create({
-        data: {
-          id: sessionId,
-          userId: user.id,
-          tokenVersion: user.tokenVersion,
-          refreshToken: this.hashRefreshToken(tokens.refreshId),
-          refreshTokenId: tokens.refreshId,
-          expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
-        },
-      });
-    });
+    await this.transactions.run(
+      async ({ tx }) => {
+        // Keep the legacy pointer updated while older API instances may still run.
+        const account = await tx.user.updateMany({
+          where: {
+            id: user.id,
+            isActive: true,
+            tokenVersion: user.tokenVersion,
+          },
+          data: {
+            refreshToken: this.hashRefreshToken(tokens.refreshId),
+            refreshTokenId: tokens.refreshId,
+          },
+        });
+        if (account.count !== 1) {
+          throw new UnauthorizedException(
+            'Unable to create authentication session',
+          );
+        }
+        await tx.userAuthSession.create({
+          data: {
+            id: sessionId,
+            userId: user.id,
+            tokenVersion: user.tokenVersion,
+            refreshToken: this.hashRefreshToken(tokens.refreshId),
+            refreshTokenId: tokens.refreshId,
+            expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
+          },
+        });
+      },
+      { name: 'session.issue' },
+    );
 
     // A sign-in from a device this customer has not used before triggers a security email.
     // It never holds up or fails the sign-in itself.
@@ -320,36 +325,39 @@ export class RefreshSessionService {
   }
 
   async revokeUserSession(userId: string, sessionId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      const session = await tx.userAuthSession.findFirst({
-        where: {
-          id: sessionId,
-          userId,
-          revokedAt: null,
-        },
-        select: { refreshTokenId: true },
-      });
-      if (!session) return;
+    await this.transactions.run(
+      async ({ tx }) => {
+        const session = await tx.userAuthSession.findFirst({
+          where: {
+            id: sessionId,
+            userId,
+            revokedAt: null,
+          },
+          select: { refreshTokenId: true },
+        });
+        if (!session) return;
 
-      const revoked = await tx.userAuthSession.updateMany({
-        where: {
-          id: sessionId,
-          userId,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-          refreshToken: null,
-          refreshTokenId: null,
-        },
-      });
-      if (revoked.count !== 1 || !session.refreshTokenId) return;
+        const revoked = await tx.userAuthSession.updateMany({
+          where: {
+            id: sessionId,
+            userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: new Date(),
+            refreshToken: null,
+            refreshTokenId: null,
+          },
+        });
+        if (revoked.count !== 1 || !session.refreshTokenId) return;
 
-      await tx.user.updateMany({
-        where: { id: userId, refreshTokenId: session.refreshTokenId },
-        data: { refreshToken: null, refreshTokenId: null },
-      });
-    });
+        await tx.user.updateMany({
+          where: { id: userId, refreshTokenId: session.refreshTokenId },
+          data: { refreshToken: null, refreshTokenId: null },
+        });
+      },
+      { name: 'session.revoke' },
+    );
 
     await this.authSessionService?.invalidateAccountStamp(userId, ROLE.USER);
     await this.authSessionService?.invalidateSession(sessionId);
@@ -362,28 +370,31 @@ export class RefreshSessionService {
    * to ensure no stale sessions survive the security-critical operation.
    */
   async revokeAllUserSessions(userId: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await tx.userAuthSession.updateMany({
-        where: {
-          userId,
-          revokedAt: null,
-        },
-        data: {
-          revokedAt: new Date(),
-          refreshToken: null,
-          refreshTokenId: null,
-        },
-      });
+    await this.transactions.run(
+      async ({ tx }) => {
+        await tx.userAuthSession.updateMany({
+          where: {
+            userId,
+            revokedAt: null,
+          },
+          data: {
+            revokedAt: new Date(),
+            refreshToken: null,
+            refreshTokenId: null,
+          },
+        });
 
-      await tx.user.updateMany({
-        where: { id: userId },
-        data: {
-          refreshToken: null,
-          refreshTokenId: null,
-          tokenVersion: { increment: 1 },
-        },
-      });
-    });
+        await tx.user.updateMany({
+          where: { id: userId },
+          data: {
+            refreshToken: null,
+            refreshTokenId: null,
+            tokenVersion: { increment: 1 },
+          },
+        });
+      },
+      { name: 'session.revoke-all' },
+    );
 
     await this.authSessionService?.invalidateAccountStamp(userId, ROLE.USER);
   }
@@ -590,41 +601,44 @@ export class RefreshSessionService {
       user.tokenVersion,
       session.id,
     );
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const sessionUpdate = await tx.userAuthSession.updateMany({
-        where: {
-          id: session.id,
-          userId: user.id,
-          tokenVersion: user.tokenVersion,
-          refreshTokenId: payload.refreshId,
-          revokedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-        data: {
-          refreshToken: this.hashRefreshToken(tokens.refreshId),
-          refreshTokenId: tokens.refreshId,
-          expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
-        },
-      });
-      if (sessionUpdate.count !== 1) return 0;
+    const updated = await this.transactions.run(
+      async ({ tx }) => {
+        const sessionUpdate = await tx.userAuthSession.updateMany({
+          where: {
+            id: session.id,
+            userId: user.id,
+            tokenVersion: user.tokenVersion,
+            refreshTokenId: payload.refreshId,
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: {
+            refreshToken: this.hashRefreshToken(tokens.refreshId),
+            refreshTokenId: tokens.refreshId,
+            expiresAt: this.getRefreshExpiresAt(tokens.refreshToken),
+          },
+        });
+        if (sessionUpdate.count !== 1) return 0;
 
-      // Older API instances still rotate the account-level refresh pointer.
-      const accountUpdate = await tx.user.updateMany({
-        where: {
-          id: user.id,
-          isActive: true,
-          tokenVersion: user.tokenVersion,
-        },
-        data: {
-          refreshToken: this.hashRefreshToken(tokens.refreshId),
-          refreshTokenId: tokens.refreshId,
-        },
-      });
-      if (accountUpdate.count !== 1) {
-        throw new UnauthorizedException('Invalid refresh session');
-      }
-      return sessionUpdate.count;
-    });
+        // Older API instances still rotate the account-level refresh pointer.
+        const accountUpdate = await tx.user.updateMany({
+          where: {
+            id: user.id,
+            isActive: true,
+            tokenVersion: user.tokenVersion,
+          },
+          data: {
+            refreshToken: this.hashRefreshToken(tokens.refreshId),
+            refreshTokenId: tokens.refreshId,
+          },
+        });
+        if (accountUpdate.count !== 1) {
+          throw new UnauthorizedException('Invalid refresh session');
+        }
+        return sessionUpdate.count;
+      },
+      { name: 'session.refresh' },
+    );
 
     if (updated !== 1) {
       throw new UnauthorizedException(

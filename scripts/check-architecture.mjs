@@ -13,7 +13,7 @@
  *          Only providers (services), DTOs, constants and types are shared.
  *       3. Database transactions are opened only through `TransactionRunner`
  *          (infrastructure/database). Files that still call `$transaction`
- *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
+ *          directly are listed in API_RAW_TRANSACTION_ALLOWED and may only shrink.
  *       4. Temporal workflow files (`infrastructure/workflows/workflows/`) are deterministic
  *          sandbox code: they may import only `@temporalio/workflow`, relative pure
  *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
@@ -62,23 +62,16 @@ const rel = (p) => path.relative(root, p).split(path.sep).join("/");
 // ── API ───────────────────────────────────────────────────────────────────────
 const API_SRC = path.join(root, "apps/api/src");
 
-// Files that still open transactions with `prisma.$transaction` directly. Convert them to
-// `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
-const API_RAW_TRANSACTION_LEGACY = new Set([
+// Files allowed to open transactions with `prisma.$transaction` directly. Everything else uses
+// `TransactionRunner.run(...)` (context, hooks, metrics, retries). Do not add to it.
+//
+// The outbox relay is infrastructure the runner is built on: `OutboxService` wakes the relay, and the
+// runner depends on `OutboxService`, so the relay cannot depend on the runner. Its claim transaction
+// (`FOR UPDATE SKIP LOCKED`) is part of the outbox mechanism itself.
+const API_RAW_TRANSACTION_ALLOWED = new Set([
   "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
-  "apps/api/src/modules/products/consumers/inventory.consumer.ts",
-  "apps/api/src/modules/auth/services/admin-auth.service.ts",
-  "apps/api/src/modules/auth/services/auth.service.ts",
-  "apps/api/src/modules/auth/services/refresh-session.service.ts",
-  "apps/api/src/modules/categories/services/categories.service.ts",
-  "apps/api/src/modules/discounts/services/voucher-claims.service.ts",
-  "apps/api/src/modules/notifications/services/order-event-notifications.service.ts",
-  "apps/api/src/modules/products/services/product-variants.service.ts",
-  "apps/api/src/modules/products/services/products.service.ts",
-  "apps/api/src/modules/recommendations/services/personalized-feed.service.ts",
-  "apps/api/src/modules/referrals/services/referral.service.ts",
-  "apps/api/src/modules/vendors/services/vendor-follows.service.ts",
 ]);
+
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
 const API_DIRECT_AUDIT_ALLOWED = new Map([
@@ -111,7 +104,7 @@ for (const file of walk(API_SRC)) {
       violations.push(`[api:5] ${r} calls the audit log directly ${calls} time(s) (allowed ${allowed}); declare it with @Audit on the controller and auditDetails(...) instead`);
     }
   }
-  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
+  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_ALLOWED.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
     violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
   }
   if (!r.includes("/test/")) {

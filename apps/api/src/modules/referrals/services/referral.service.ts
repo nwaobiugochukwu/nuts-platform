@@ -12,6 +12,7 @@ import {
 import { randomBytes } from 'crypto';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 
@@ -39,6 +40,7 @@ export class ReferralService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly outbox: OutboxService,
   ) {}
 
@@ -250,8 +252,8 @@ export class ReferralService {
       attempt++
     ) {
       try {
-        await this.prisma.$transaction(
-          async (tx) => {
+        await this.transactions.run(
+          async ({ tx }) => {
             const referral = await tx.referral.findUnique({
               where: {
                 referredUserId: userId,
@@ -423,11 +425,10 @@ export class ReferralService {
             }
           },
           {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-
-            maxWait: ReferralService.REWARD_TRANSACTION_MAX_WAIT_MS,
-
-            timeout: ReferralService.REWARD_TRANSACTION_TIMEOUT_MS,
+            name: 'referral.grant-rewards',
+            timeoutMs: ReferralService.REWARD_TRANSACTION_TIMEOUT_MS,
+            maxWaitMs: ReferralService.REWARD_TRANSACTION_MAX_WAIT_MS,
+            isolation: 'Serializable',
           },
         );
 

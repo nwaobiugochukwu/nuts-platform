@@ -14,6 +14,7 @@ import { RefreshSessionService } from '@api/modules/auth/services/refresh-sessio
 import type { AuthSession } from '@api/modules/auth/types/auth.types';
 import { ADMIN_AUTH_SELECT } from '@api/modules/auth/constants/auth-selects.constants';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import {
   BCRYPT_COST_FACTOR,
@@ -30,6 +31,7 @@ export class AdminAuthService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly configService: ConfigService,
     private readonly accountLockService: AccountLockService,
     private readonly refreshSessionService: RefreshSessionService,
@@ -130,8 +132,8 @@ export class AdminAuthService {
 
     let admin;
     try {
-      admin = await this.prisma.$transaction(
-        async (tx) => {
+      admin = await this.transactions.run(
+        async ({ tx }) => {
           const existingAdmins = await tx.admin.count();
           if (existingAdmins > 0) {
             throw new ConflictException(
@@ -150,7 +152,7 @@ export class AdminAuthService {
             select: ADMIN_AUTH_SELECT,
           });
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        { name: 'admin-auth.setup', isolation: 'Serializable' },
       );
     } catch (error) {
       if (
@@ -276,9 +278,7 @@ export class AdminAuthService {
     });
   }
 
-  //
   // PRIVATE HELPERS
-  //
 
   private toAuthUserDto(admin: {
     id: string;

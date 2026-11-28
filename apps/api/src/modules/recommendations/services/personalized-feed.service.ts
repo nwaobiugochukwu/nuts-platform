@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { roleCan } from '@api/config/process-role.config';
 import { RecommendationRefreshService } from '@api/modules/analytics/services/recommendation-refresh.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PopularProductsService } from './popular-products.service';
@@ -35,6 +36,7 @@ export const NOT_INTERESTED_EVENT = 'NOT_INTERESTED';
 export class PersonalizedFeedService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly products: ProductCatalogService,
     private readonly popular: PopularProductsService,
     @Optional() private readonly cacheService?: CacheService,
@@ -754,60 +756,63 @@ export class PersonalizedFeedService implements OnModuleInit {
   }
 
   async claimRecentlyViewed(userId: string, visitorId: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const visitorViews = await tx.recentProductView.findMany({
-        where: { visitorId },
-        orderBy: { lastViewedAt: 'desc' },
-        take: 100,
-        select: { productId: true, lastViewedAt: true },
-      });
-      if (!visitorViews.length) return { claimed: 0 };
-
-      const existingViews = await tx.recentProductView.findMany({
-        where: {
-          userId,
-          productId: { in: visitorViews.map(({ productId }) => productId) },
-        },
-        select: { productId: true, lastViewedAt: true },
-      });
-      const existingByProduct = new Map(
-        existingViews.map((view) => [view.productId, view.lastViewedAt]),
-      );
-      const toCreate = visitorViews
-        .filter((view) => !existingByProduct.has(view.productId))
-        .map((view) => ({
-          userId,
-          productId: view.productId,
-          lastViewedAt: view.lastViewedAt,
-        }));
-      if (toCreate.length) {
-        await tx.recentProductView.createMany({
-          data: toCreate,
-          skipDuplicates: true,
+    const result = await this.transactions.run(
+      async ({ tx }) => {
+        const visitorViews = await tx.recentProductView.findMany({
+          where: { visitorId },
+          orderBy: { lastViewedAt: 'desc' },
+          take: 100,
+          select: { productId: true, lastViewedAt: true },
         });
-      }
+        if (!visitorViews.length) return { claimed: 0 };
 
-      const toAdvance = visitorViews.filter((view) => {
-        const existing = existingByProduct.get(view.productId);
-        return existing && view.lastViewedAt > existing;
-      });
-      for (const view of toAdvance) {
-        await tx.recentProductView.updateMany({
+        const existingViews = await tx.recentProductView.findMany({
           where: {
             userId,
-            productId: view.productId,
-            lastViewedAt: { lt: view.lastViewedAt },
+            productId: { in: visitorViews.map(({ productId }) => productId) },
           },
-          data: { lastViewedAt: view.lastViewedAt },
+          select: { productId: true, lastViewedAt: true },
         });
-      }
+        const existingByProduct = new Map(
+          existingViews.map((view) => [view.productId, view.lastViewedAt]),
+        );
+        const toCreate = visitorViews
+          .filter((view) => !existingByProduct.has(view.productId))
+          .map((view) => ({
+            userId,
+            productId: view.productId,
+            lastViewedAt: view.lastViewedAt,
+          }));
+        if (toCreate.length) {
+          await tx.recentProductView.createMany({
+            data: toCreate,
+            skipDuplicates: true,
+          });
+        }
 
-      // Keep visitor rows through the guest-history retention window so a
-      // delayed auth hydration or another tab can still claim them safely.
-      // Report only rows that actually changed, so re-running this (it is
-      // idempotent) is correctly seen as "nothing new".
-      return { claimed: toCreate.length + toAdvance.length };
-    });
+        const toAdvance = visitorViews.filter((view) => {
+          const existing = existingByProduct.get(view.productId);
+          return existing && view.lastViewedAt > existing;
+        });
+        for (const view of toAdvance) {
+          await tx.recentProductView.updateMany({
+            where: {
+              userId,
+              productId: view.productId,
+              lastViewedAt: { lt: view.lastViewedAt },
+            },
+            data: { lastViewedAt: view.lastViewedAt },
+          });
+        }
+
+        // Keep visitor rows through the guest-history retention window so a
+        // delayed auth hydration or another tab can still claim them safely.
+        // Report only rows that actually changed, so re-running this (it is
+        // idempotent) is correctly seen as "nothing new".
+        return { claimed: toCreate.length + toAdvance.length };
+      },
+      { name: 'feed.claim-recently-viewed' },
+    );
 
     if (result.claimed > 0) {
       // History just changed under this user: drop shelves cached for either

@@ -7,6 +7,7 @@ import { DiscountCodeType, Prisma } from '@prisma/client';
 
 import { DiscountCodeService } from './discount-code.service';
 import { CLAIM_TTL_MS, VoucherClaimsService } from './voucher-claims.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const D = (n: number) => new Prisma.Decimal(n);
 
@@ -74,7 +75,14 @@ function make(
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   };
-  return { tx, prisma, service: new VoucherClaimsService(prisma as never) };
+  return {
+    tx,
+    prisma,
+    service: new VoucherClaimsService(
+      prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
+    ),
+  };
 }
 
 describe('VoucherClaimsService', () => {

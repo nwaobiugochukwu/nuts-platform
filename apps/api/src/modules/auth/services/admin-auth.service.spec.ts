@@ -14,6 +14,7 @@ import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 import { AdminVendorsService } from '@api/modules/vendors/services/admin-vendors.service';
 import { captureAudit } from '@api/modules/audit/audit-testing-spec';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const p2025 = () =>
   new Prisma.PrismaClientKnownRequestError('Record not found', {
@@ -106,6 +107,7 @@ describe('AdminAuthService', () => {
 
     service = new AdminAuthService(
       mockPrisma,
+      new TransactionRunnerService(mockPrisma, {} as never),
       mockConfig,
       mockAccountLock,
       mockRefreshSession as any,

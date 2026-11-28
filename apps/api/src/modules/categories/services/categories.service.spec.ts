@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -9,6 +9,7 @@ import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { captureAudit } from '@api/modules/audit/audit-testing-spec';
 import { CategoriesService } from './categories.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('CategoriesService (Hierarchical Catalog System)', () => {
   let service: CategoriesService;
@@ -116,6 +117,10 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
       providers: [
         CategoriesService,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: TransactionRunnerService,
+          useValue: new TransactionRunnerService(prisma as never, {} as never),
+        },
         { provide: CacheService, useValue: cacheService },
       ],
     }).compile();

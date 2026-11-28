@@ -7,6 +7,7 @@ import { SearchService } from '@api/modules/search/services/search.service';
 import { CategoriesService } from '../../categories/services/categories.service';
 import { ProductCategoryResolverService } from './product-category-resolver.service';
 import { ProductsService } from './products.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const mockCacheService = {
   get: jest.fn().mockResolvedValue(null),
@@ -65,6 +66,13 @@ describe('ProductsService â€“ Products CRUD', () => {
         ProductsService,
         ProductCategoryResolverService,
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: TransactionRunnerService,
+          useValue: new TransactionRunnerService(
+            mockPrisma as never,
+            {} as never,
+          ),
+        },
         { provide: CacheService, useValue: mockCacheService },
         { provide: SearchService, useValue: mockSearchService },
         { provide: AuditLogService, useValue: mockAuditLogService },
