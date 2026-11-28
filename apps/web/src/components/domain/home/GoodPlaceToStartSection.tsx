@@ -110,7 +110,7 @@ export function GoodPlaceToStartSection({
             <RecommendationProductCard
               product={product}
               deal={dealsMap?.[product.id]?.bestDiscount}
-              surface="HOME_MARKETPLACE_MIX"
+              surface="HOME_GOOD_PLACE_TO_START"
               requestId={requestId}
               sessionId={sessionId}
               position={position}

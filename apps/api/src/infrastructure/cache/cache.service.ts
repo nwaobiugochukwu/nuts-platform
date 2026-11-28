@@ -326,8 +326,9 @@ export class CacheService {
   ): Promise<void> {
     const ids = [...new Set(identities.filter((id): id is string => !!id))];
     if (ids.length === 0) return;
-    // The daily marketplace mix is deterministic per shopper+day (it does not
-    // depend on behavioural signals), so it is intentionally NOT cleared here.
+    // The daily starter sampler (the spread across stores) is deterministic per
+    // shopper+day (it does not depend on behavioural signals), so it is
+    // intentionally NOT cleared here.
     await this.delMany(
       ids.flatMap((id) => [
         `recommendations:for-you:${id}`,

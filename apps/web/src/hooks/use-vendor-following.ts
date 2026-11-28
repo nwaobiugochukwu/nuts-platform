@@ -52,7 +52,7 @@ function invalidateFollowCaches(
     queryClient.invalidateQueries({ queryKey: ["vendor-follower-count", vendorSlug] }),
     queryClient.invalidateQueries({ queryKey: queryKey.recommendations.forYou(userId), refetchType: "active" }),
     queryClient.invalidateQueries({ queryKey: queryKey.recommendations.following(userId), refetchType: "active" }),
-    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.marketplaceMixAll, refetchType: "active" }),
+    queryClient.invalidateQueries({ queryKey: queryKey.recommendations.goodPlaceToStartAll, refetchType: "active" }),
     queryClient.invalidateQueries({ queryKey: queryKey.recommendations.storesAll, refetchType: "active" }),
   ]);
 }

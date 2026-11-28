@@ -35,7 +35,7 @@ export function RecommendationProductCard({
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const canPurchase = useAuthStore((state) => state.capabilities?.canPurchase ?? false);
   const canTrackRecommendations = !isAuthenticated || canPurchase;
-  const rankerVersion = surface === "HOME_MARKETPLACE_MIX" ? "starter-picks-v1" : RANKER_VERSION;
+  const rankerVersion = surface === "HOME_GOOD_PLACE_TO_START" ? "starter-picks-v1" : RANKER_VERSION;
   const attribution = useMemo<RecommendationAttribution | undefined>(
     () => requestId && sessionId && canTrackRecommendations
       ? { requestId, surface, rankerVersion, position, sessionId }
@@ -59,7 +59,7 @@ export function RecommendationProductCard({
         recommendationContext={attribution}
         priority={priority}
         size={size}
-        hideRecommendationReason={surface === "HOME_MARKETPLACE_MIX"}
+        hideRecommendationReason={surface === "HOME_GOOD_PLACE_TO_START"}
       />
     </div>
   );
