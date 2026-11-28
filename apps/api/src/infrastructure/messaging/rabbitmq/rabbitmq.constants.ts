@@ -30,7 +30,6 @@ export const RABBITMQ_QUEUES = {
 export const RABBITMQ_ROUTING_KEYS = {
   NOTIFICATION_DISPATCH: 'notification.dispatch',
   EMAIL_DISPATCH: 'email.dispatch',
-  ANALYTICS_EVENT: 'analytics.event',
   INVENTORY_ADJUST: 'inventory.adjust',
   VENDOR_FOLLOWED: 'vendor.followed',
   VENDOR_UNFOLLOWED: 'vendor.unfollowed',
@@ -56,11 +55,8 @@ export const QUEUE_BINDINGS: Record<
     RABBITMQ_QUEUES.NOTIFICATIONS,
     RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
   ],
-  // Everything a shopper does that analytics and recommendations learn from. `analytics.event` is
-  // the old label for all of it (a `type` field inside the message); it stays bound while messages
-  // published by the previous release are still in flight, and can be dropped after one release.
+  // Everything a shopper does that analytics and recommendations learn from.
   [RABBITMQ_QUEUES.ANALYTICS]: [
-    RABBITMQ_ROUTING_KEYS.ANALYTICS_EVENT,
     DomainEvents.SHOPPER_PRODUCT_VIEWED,
     DomainEvents.SHOPPER_SEARCHED,
     DomainEvents.SHOPPER_STORE_VIEWED,

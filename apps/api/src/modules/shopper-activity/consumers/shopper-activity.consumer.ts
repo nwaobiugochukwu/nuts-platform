@@ -14,7 +14,6 @@ import type {
   ShopperActivity,
   ShopperActivityBody,
 } from '../types/shopper-activity.types';
-import { adaptLegacyTrackingMessage } from '../utils/legacy-tracking-message.util';
 import {
   SHOPPER_ACTIVITY_EVENTS,
   actionForEvent,
@@ -43,15 +42,8 @@ export class ShopperActivityConsumer implements OnModuleInit {
   async onModuleInit() {
     // Queue consumers run only in the worker role (or when one process runs everything).
     if (!roleCan('consumers')) return;
-    await this.rabbitmq.consume<unknown>(
-      RABBITMQ_QUEUES.ANALYTICS,
-      async (raw) => {
-        // Messages from the previous release use another shape; see the adapter. An old batch
-        // becomes several events, handled one after the other (a redelivery repeats only no-ops).
-        const legacy = adaptLegacyTrackingMessage(raw);
-        if (legacy === 'ignore') return;
-        for (const event of legacy ?? [raw]) await this.handle(event);
-      },
+    await this.rabbitmq.consume<unknown>(RABBITMQ_QUEUES.ANALYTICS, (raw) =>
+      this.handle(raw),
     );
   }
 

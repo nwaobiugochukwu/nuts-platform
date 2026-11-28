@@ -6,8 +6,7 @@
  * `domain-events.constants.spec.ts` enforces the rule and that no name appears twice. An event
  * listed here is not necessarily published yet; the catalog table in the audit says which are.
  *
- * Commands (do this: `email.dispatch`, `notification.dispatch`, `workflow.start`,
- * `analytics.event`) are not facts and live in RABBITMQ_ROUTING_KEYS.
+ * Commands (do this: `email.dispatch`, `notification.dispatch`, `workflow.start`) are not facts and live in RABBITMQ_ROUTING_KEYS.
  */
 export const DomainEvents = {
   // ── Identity ──────────────────────────────────────────
