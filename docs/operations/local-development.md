@@ -139,8 +139,10 @@ python3 scripts/check-doc-links.py
 
 ### The monitoring stack
 
+`npm run dev` already starts Prometheus and Grafana with everything else. To run only these two:
+
 ```bash
-npm run obs:up       # starts Prometheus and Grafana (profile "observability")
+npm run obs:up       # starts Prometheus and Grafana
 npm run obs:down     # stops them
 ```
 
