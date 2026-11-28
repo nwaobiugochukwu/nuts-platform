@@ -35,7 +35,7 @@ import { ProductCardDto } from '../dto/product-card.dto';
 import { PublicProductResponseDto } from '../dto/public-product-response.dto';
 import { QueryProductDto } from '../dto/query-product.dto';
 import { QueryProductsBodyDto } from '../dto/query-products-body.dto';
-import { ProductsService } from '../services/products.service';
+import { ProductCatalogService } from '../services/product-catalog.service';
 
 @ApiTags('PRODUCTS')
 @ApiExtraModels(
@@ -48,7 +48,7 @@ import { ProductsService } from '../services/products.service';
 @Public()
 @Controller('products')
 export class ProductController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly catalog: ProductCatalogService) {}
 
   /**
    * Cursor-based public product search.
@@ -96,7 +96,7 @@ export class ProductController {
     data: ProductCardDto[];
     meta: CursorPaginationMetaDto;
   }> {
-    return this.productsService.findAllPublicCursor({
+    return this.catalog.findAllPublicCursor({
       ...body,
       bypassCache,
     });
@@ -150,7 +150,7 @@ export class ProductController {
     data: ProductCardDto[];
     meta: PaginationMetaDto | CursorPaginationMetaDto;
   }> {
-    return this.productsService.findAllPublic({
+    return this.catalog.findAllPublic({
       ...query,
       bypassCache,
     });
@@ -199,7 +199,7 @@ export class ProductController {
       minPrice === undefined ? undefined : Number(minPrice);
     const parsedMaxPrice =
       maxPrice === undefined ? undefined : Number(maxPrice);
-    return this.productsService.findTrending({
+    return this.catalog.findTrending({
       limit: limit ? parseInt(limit, 10) : 20,
       days: days ? parseInt(days, 10) : 30,
       categoryId,
@@ -226,7 +226,7 @@ export class ProductController {
       { items: ProductCardDto[]; totalItems: number; totalPages: number }
     >
   > {
-    return this.productsService.findCategoryPreviews(
+    return this.catalog.findCategoryPreviews(
       parentCategoryId,
       limit ? parseInt(limit, 10) : 12,
     );
@@ -274,6 +274,6 @@ export class ProductController {
     @Param('slug') slug: string,
     @AdminCacheBypass() bypassCache: boolean,
   ): Promise<PublicProductResponseDto> {
-    return this.productsService.findOnePublic(slug, bypassCache);
+    return this.catalog.findOnePublic(slug, bypassCache);
   }
 }

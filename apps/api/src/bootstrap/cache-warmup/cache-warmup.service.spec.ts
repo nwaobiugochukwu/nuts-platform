@@ -1,6 +1,6 @@
 import { CategoriesService } from '@api/modules/categories/services/categories.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
-import { ProductsService } from '@api/modules/products/services/products.service';
+import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import { ConfigService } from '@nestjs/config';
 import { ModuleRef } from '@nestjs/core';
@@ -37,7 +37,7 @@ function build(overrides: { discoveryFails?: boolean } = {}) {
       },
     ],
     [
-      ProductsService,
+      ProductCatalogService,
       {
         findAllPublicCursor: jest.fn(() => {
           if (overrides.discoveryFails)

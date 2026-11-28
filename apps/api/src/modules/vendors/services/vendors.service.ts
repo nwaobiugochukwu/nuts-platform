@@ -16,7 +16,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
   resolveCategoryHierarchy,
   type CategorySummaryRef,
-} from '@api/modules/products/services/products.service';
+} from '@api/modules/products/utils/product-includes.util';
 import { type AuditChanges } from '@api/modules/audit/services/audit-log.service';
 import { UNKNOWN_ACCOUNT_PASSWORD_HASH } from '@api/common/constants/bcrypt.constants';
 import {
