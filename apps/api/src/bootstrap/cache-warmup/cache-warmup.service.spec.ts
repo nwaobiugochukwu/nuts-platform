@@ -1,5 +1,5 @@
 import { CategoriesService } from '@api/modules/categories/services/categories.service';
-import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { PublicPromotionsService } from '@api/modules/discounts/services/public-promotions.service';
 import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import { ConfigService } from '@nestjs/config';
@@ -19,7 +19,7 @@ function build(overrides: { discoveryFails?: boolean } = {}) {
       },
     ],
     [
-      DiscountCodeService,
+      PublicPromotionsService,
       {
         getPublicPlatformPromos: jest.fn(() => {
           calls.push('campaigns');

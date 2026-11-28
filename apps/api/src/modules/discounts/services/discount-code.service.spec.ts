@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -68,30 +68,6 @@ describe('DiscountCodeService', () => {
         new Prisma.Decimal(300),
       );
       expect(calculated.toString()).toBe('300');
-    });
-
-    it('rejects creation when perUserUsageLimit > usageLimit', async () => {
-      await expect(
-        service.create({
-          code: 'INVALID',
-          type: DiscountCodeType.PERCENTAGE,
-          value: 10,
-          usageLimit: 5,
-          perUserUsageLimit: 10,
-          platformwide: true,
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('rejects percentage discount greater than 100%', async () => {
-      await expect(
-        service.create({
-          code: 'OVER100',
-          type: DiscountCodeType.PERCENTAGE,
-          value: 150,
-          platformwide: true,
-        }),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 

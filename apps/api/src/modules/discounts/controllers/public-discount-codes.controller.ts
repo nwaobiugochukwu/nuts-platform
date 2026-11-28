@@ -13,7 +13,7 @@ import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Message } from '@api/common/decorators/message.decorator';
 import { GetUser } from '@api/common/decorators/get-user.decorator';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
-import { DiscountCodeService } from '../services/discount-code.service';
+import { PublicPromotionsService } from '../services/public-promotions.service';
 import {
   BatchProductDiscountsDto,
   PublicPlatformPromoDto,
@@ -23,7 +23,7 @@ import {
 @ApiTags('DISCOUNTS')
 @Controller('public/discounts')
 export class PublicDiscountCodesController {
-  constructor(private readonly discountCodeService: DiscountCodeService) {}
+  constructor(private readonly promotions: PublicPromotionsService) {}
 
   @Get('campaigns')
   @OptionalAuth()
@@ -35,7 +35,7 @@ export class PublicDiscountCodesController {
   getPlatformPromos(
     @GetUser('id') userId?: string,
   ): Promise<PublicPlatformPromoDto[]> {
-    return this.discountCodeService.getPublicPlatformPromos(userId);
+    return this.promotions.getPublicPlatformPromos(userId);
   }
 
   @Get(':productId/available-product-deals-and-vouchers')
@@ -59,7 +59,7 @@ export class PublicDiscountCodesController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @GetUser('id') userId?: string,
   ): Promise<PublicProductDealDto> {
-    return this.discountCodeService.getPublicProductDeals(productId, userId);
+    return this.promotions.getPublicProductDeals(productId, userId);
   }
 
   @Post('best-value-deal')
@@ -75,12 +75,9 @@ export class PublicDiscountCodesController {
     @GetUser('id') userId?: string,
   ) {
     if (dto.productId && (!dto.productIds || dto.productIds.length === 0)) {
-      return this.discountCodeService.getPublicProductDeals(
-        dto.productId,
-        userId,
-      );
+      return this.promotions.getPublicProductDeals(dto.productId, userId);
     }
-    return this.discountCodeService.getBatchProductDeals(
+    return this.promotions.getBatchProductDeals(
       { productIds: dto.productIds ?? (dto.productId ? [dto.productId] : []) },
       userId,
     );

@@ -1,6 +1,7 @@
 import { DiscountClaimStatus } from '@prisma/client';
 
-import { DiscountCodeService } from './discount-code.service';
+import { FirstOrderEligibilityService } from './first-order-eligibility.service';
+import { PublicPromotionsService } from './public-promotions.service';
 import { VoucherClaimsService } from './voucher-claims.service';
 import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
@@ -20,7 +21,10 @@ describe('discounts a customer has used up', () => {
         ]),
       },
     };
-    const service = new DiscountCodeService(prisma as never);
+    const service = new PublicPromotionsService(
+      prisma as never,
+      new FirstOrderEligibilityService(prisma as never),
+    );
 
     const exhausted = await service.findExhaustedCodeIds('u1', [
       'once',
@@ -36,7 +40,10 @@ describe('discounts a customer has used up', () => {
       discountCode: { findMany: jest.fn() },
       discountCodeUserUsage: { findMany: jest.fn() },
     };
-    const service = new DiscountCodeService(prisma as never);
+    const service = new PublicPromotionsService(
+      prisma as never,
+      new FirstOrderEligibilityService(prisma as never),
+    );
 
     expect((await service.findExhaustedCodeIds(undefined, ['a'])).size).toBe(0);
     expect((await service.findExhaustedCodeIds('u1', [])).size).toBe(0);
@@ -87,7 +94,10 @@ describe('discounts a customer has used up', () => {
           .mockResolvedValue([{ discountCodeId: 'used', usageCount: 1 }]),
       },
     };
-    const service = new DiscountCodeService(prisma as never);
+    const service = new PublicPromotionsService(
+      prisma as never,
+      new FirstOrderEligibilityService(prisma as never),
+    );
 
     const promos = await service.getPublicPlatformPromos('u1');
 

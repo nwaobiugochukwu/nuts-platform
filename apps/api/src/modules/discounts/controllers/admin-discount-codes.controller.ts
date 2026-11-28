@@ -1,4 +1,4 @@
-﻿import {
+import {
   Body,
   Controller,
   Delete,
@@ -23,7 +23,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ROLE } from '@prisma/client';
-import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { DiscountCodeManagementService } from '../services/discount-code-management.service';
 import {
   CreateAdminDiscountCodeDto,
   DiscountCodeResponseDto,
@@ -39,7 +39,7 @@ import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 @Roles(ROLE.ADMIN)
 @ApiBearerAuth('JWT-auth')
 export class AdminDiscountCodesController {
-  constructor(private readonly discountCodeService: DiscountCodeService) {}
+  constructor(private readonly discountCodes: DiscountCodeManagementService) {}
 
   @Post()
   @Message('Discount code created successfully')
@@ -54,7 +54,7 @@ export class AdminDiscountCodesController {
   async create(
     @Body() dto: CreateAdminDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
-    return this.discountCodeService.createForAdmin(dto);
+    return this.discountCodes.createForAdmin(dto);
   }
 
   @Get()
@@ -70,7 +70,7 @@ export class AdminDiscountCodesController {
   async findAll(
     @Query() query: ListDiscountCodesQueryDto,
   ): Promise<DiscountCodeResponseDto[]> {
-    return this.discountCodeService.findAllForAdmin(query.limit, query.offset);
+    return this.discountCodes.findAllForAdmin(query.limit, query.offset);
   }
 
   @Patch(':id')
@@ -81,7 +81,7 @@ export class AdminDiscountCodesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAdminDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
-    return this.discountCodeService.updateForAdmin(id, dto);
+    return this.discountCodes.updateForAdmin(id, dto);
   }
 
   @Patch(':id/deactivate')
@@ -99,7 +99,7 @@ export class AdminDiscountCodesController {
   })
   @ApiNotFoundResponse({ description: 'Discount code not found' })
   async deactivate(@Param('id', ParseUUIDPipe) id: string): Promise<null> {
-    await this.discountCodeService.deactivate(id, undefined, true);
+    await this.discountCodes.deactivate(id, undefined, true);
     return null;
   }
 
@@ -118,7 +118,7 @@ export class AdminDiscountCodesController {
   })
   @ApiNotFoundResponse({ description: 'Discount code not found' })
   async reactivate(@Param('id', ParseUUIDPipe) id: string): Promise<null> {
-    await this.discountCodeService.reactivate(id, undefined, true);
+    await this.discountCodes.reactivate(id, undefined, true);
     return null;
   }
 
@@ -139,7 +139,7 @@ export class AdminDiscountCodesController {
   @ApiBadRequestResponse({ description: 'Cannot delete used discount code' })
   @ApiNotFoundResponse({ description: 'Discount code not found' })
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<null> {
-    await this.discountCodeService.remove(id, undefined, true);
+    await this.discountCodes.remove(id, undefined, true);
     return null;
   }
 }
