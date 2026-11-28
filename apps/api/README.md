@@ -19,12 +19,12 @@ The API is not a microservice per module and does not implement system-wide CQRS
 - Base path: `/api/v1`.
 - Successful responses use `{ success, message, data, meta?, timestamp }`; pagination metadata varies by endpoint. Follow the endpoint's Swagger contract.
 - Customer, vendor, and admin routes have separate authorization boundaries. Vendor access additionally depends on account activation and approval.
-- **Canonical RESTful Resource Hierarchy:** Resources follow standard parent-child REST hierarchies with backward-compatible aliases for legacy routes:
-  - Product Reviews: Canonical `GET /api/v1/products/:productId/reviews` (aliased to legacy `/api/v1/reviews/product/:productId`).
-  - Order Payments: Canonical `GET /api/v1/orders/:orderId/payment` (aliased to legacy `/api/v1/payments/order/:orderId`).
-  - Vendor Product Variants: Canonical `POST` & `GET /api/v1/vendors/products/:productId/variants` (aliased to `/api/v1/vendors/products/variants`).
-  - Admin Product Variants: Canonical `POST` & `GET /api/v1/admin/products/:productId/variants` (aliased to `/api/v1/admin/products/variants`).
-  - Vendor Follows & Public Storefront: Canonical `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, and public store endpoints `GET /api/v1/vendors/:storeSlug`, `/products`, `/followers/count`. `VendorFollowsController` is registered before `PublicStoreController` in `VendorsModule` so the explicit `GET /api/v1/vendors/follows` path is not shadowed by the `:storeSlug` wildcard. Follow buttons on the storefront use optimistic state updates (no "Checking…" loading state).
+- **RESTful resource hierarchy:** Resources follow standard parent-child REST routes, one route per operation (no legacy aliases):
+  - Product Reviews: `GET /api/v1/products/:productId/reviews`.
+  - Order Payments: `GET /api/v1/orders/:orderId/payment`.
+  - Vendor Product Variants: `POST` & `GET /api/v1/vendors/products/:productId/variants`; a variant is changed by its own id under `/api/v1/vendors/products/variants/:id`.
+  - Admin Product Variants: `POST` & `GET /api/v1/admin/products/:productId/variants`; a variant is changed by its own id under `/api/v1/admin/products/variants/:id`.
+  - Vendor Follows & Public Storefront: `POST` & `DELETE /api/v1/vendors/:vendorId/follow`, and public store endpoints `GET /api/v1/vendors/:storeSlug`, `/products`, `/followers/count`. `VendorFollowsController` is registered before `PublicStoreController` in `VendorsModule` so the explicit `GET /api/v1/vendors/follows` path is not shadowed by the `:storeSlug` wildcard. Follow buttons on the storefront use optimistic state updates (no "Checking…" loading state).
 - **Unified Endpoints via `@OptionalAuth()`:** The recommendation engine (`/api/v1/recommendations/for-you`, `/trending`, `/daily-mix`, `/by-category`) uses the custom `@OptionalAuth()` decorator. It transparently attaches authenticated user context if valid JWT credentials exist, but permits anonymous guests without throwing `401 Unauthorized` or `403 Forbidden`. Legacy `/session` endpoints (e.g. `/for-you/session`) are retained via array route decorators for zero-downtime backwards compatibility.
 - Product discovery uses `GET /api/v1/discover` and keyset cursors. Search and some administrative lists use page-based pagination; do not assume a single pagination shape.
 - Paystack webhooks are verified against the raw request body and provider signature. Full refunds create a durable attempt and settle local order, stock, and vendor-earning changes only after provider confirmation. Partial refunds and post-shipment returns are not currently supported.

@@ -12,7 +12,7 @@ The application is several independent **programs**. They are built from one cod
 | **api** | answers requests: login, catalogue, cart, checkout, live notification streams | nothing can be bought or changed |
 | **worker** | background tasks taken from a queue: send emails and notifications, record analytics, update stock, write audit records, start workflows | the site works, but emails, notifications and similar work wait in the queue |
 | **jobs** | work on a timer: cancel unpaid orders, cart and wishlist reminders, cleanups. **Exactly one copy** | the site works, but timed work stops |
-| temporal-worker | long multi-step processes (only when Temporal is turned on; none are moved onto it yet) | those processes pause |
+| workflow-worker | long multi-step processes (only when Temporal is turned on; none are moved onto it yet) | those processes pause |
 | api-migrate | a one-off job that updates the database schema before a deploy | the deploy waits |
 
 They share these services (none are our code): **PostgreSQL** (all data), **Redis** (cache, rate limits, job locks, heartbeats, live-notification fan-out), **RabbitMQ** (the message queues) and, later, **Temporal**. They also call outside services: Paystack (payments), Brevo (email), Cloudinary (images), Google (sign-in), web push, Sentry (errors).
@@ -53,11 +53,11 @@ The api answers at step 2; everything after it happens in the background, so a s
 | **Transaction helper** | one function opens database transactions, retries conflicts and runs follow-up work only after commit | the same safe behaviour everywhere, instead of copies that drift |
 | **Connection budget** | per-service database pool sizes; only the api opens the notification subscriber | three programs share the limits of hosted Supabase, Redis and RabbitMQ plans |
 
-## 5. Worker versus temporal-worker
+## 5. Worker versus workflow-worker
 
 The **worker** does quick, independent tasks from RabbitMQ: send an email, create a notification. Each takes milliseconds and does not remember anything afterwards.
 
-The **temporal-worker** runs long, multi-step processes from Temporal, for example "wait 30 minutes for payment, then check, then cancel and restore stock". Temporal remembers where each process is, across restarts, deploys and waits of days.
+The **workflow-worker** runs long, multi-step processes from Temporal, for example "wait 30 minutes for payment, then check, then cancel and restore stock". Temporal remembers where each process is, across restarts, deploys and waits of days.
 
 Rule of thumb: a one-off side effect is a worker task; anything with waits, deadlines or several steps that must stay consistent is a Temporal workflow. Today the Temporal pieces (client, worker, tests, an image) exist but no real process runs on them, so turning Temporal on changes nothing.
 

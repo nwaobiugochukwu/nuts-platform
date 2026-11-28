@@ -26,7 +26,7 @@ import { IdempotencyModule } from './infrastructure/messaging/idempotency/idempo
 import { OutboxModule } from './infrastructure/messaging/outbox/outbox.module';
 import { TransactionModule } from './infrastructure/database/transaction.module';
 import { MetricsModule } from './infrastructure/observability/metrics/metrics.module';
-import { TemporalModule } from './infrastructure/workflows/temporal.module';
+import { WorkflowModule } from './infrastructure/workflows/workflow.module';
 import { HeartbeatModule } from './infrastructure/observability/health/heartbeat.module';
 import { RequestContextMiddleware } from './common/request-context/request-context.middleware';
 import { ResilienceModule } from './infrastructure/resilience/resilience.module';
@@ -103,7 +103,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     IdempotencyModule,
     TransactionModule,
     MetricsModule,
-    TemporalModule,
+    WorkflowModule,
     HeartbeatModule,
     ResilienceModule,
     MailModule,

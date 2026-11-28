@@ -11,7 +11,7 @@ import { REDIS_CLIENT } from '../../cache/redis.constants';
 import { roleCan } from '../../../config/process-role.config';
 import { RabbitMQService } from '../../messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '../../messaging/rabbitmq/rabbitmq.constants';
-import { readTemporalConfig } from '../../workflows/temporal.config';
+import { readWorkflowConfig } from '../../workflows/workflow.config';
 
 /** The background programs whose absence would otherwise go unnoticed. */
 export type BackgroundTarget = 'worker' | 'jobs';
@@ -186,7 +186,7 @@ export class HeartbeatService
       ages: { worker, jobs },
       queueStats: this.rabbitmq?.isAvailable() ? queueStats : null,
       // The workflow-start consumer only runs when Temporal is enabled.
-      ignoreQueues: readTemporalConfig().enabled
+      ignoreQueues: readWorkflowConfig().enabled
         ? []
         : [RABBITMQ_QUEUES.WORKFLOWS],
     });

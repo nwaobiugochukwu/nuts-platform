@@ -99,22 +99,6 @@ export class AdminUsersController {
     return this.usersService.findAll(query);
   }
 
-  @Post('query')
-  @HttpCode(HttpStatus.OK)
-  @Message('Users retrieved successfully')
-  @ApiOperation({
-    summary: 'List users (filters in body)',
-    description: 'Same as GET /admin/users but with filters in the JSON body.',
-  })
-  @ApiResponse({
-    status: 200,
-    type: ApiResponseDto<UserListItemResponseDto[]>,
-    description: 'Paginated list of users',
-  })
-  async query(@Body() body: QueryUserDto) {
-    return this.usersService.findAll(body);
-  }
-
   // GET USER BY ID
   @Get(':id')
   @Message('User retrieved successfully')

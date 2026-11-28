@@ -8,15 +8,8 @@ import { ProductController } from './controllers/product.controller';
 import { DiscoverController } from './controllers/discover.controller';
 import { AdminProductsController } from './controllers/admin-products.controller';
 import { VendorProductsController } from './controllers/vendor-products.controller';
-import { ProductVariantsController } from './controllers/product-variants.controller';
-import {
-  AdminProductVariantsCanonicalController,
-  AdminProductVariantsController,
-} from './controllers/admin-product-variants.controller';
-import {
-  VendorProductVariantsCanonicalController,
-  VendorProductVariantsController,
-} from './controllers/vendor-product-variants.controller';
+import { AdminProductVariantsController } from './controllers/admin-product-variants.controller';
+import { VendorProductVariantsController } from './controllers/vendor-product-variants.controller';
 import { ProductCatalogService } from './services/product-catalog.service';
 import { ProductCategoryResolverService } from './services/product-category-resolver.service';
 import { ProductsService } from './services/products.service';
@@ -30,11 +23,8 @@ import { LowStockJob } from './jobs/low-stock.job';
     DiscoverController,
     AdminProductsController,
     VendorProductsController,
-    ProductVariantsController,
     AdminProductVariantsController,
-    AdminProductVariantsCanonicalController,
     VendorProductVariantsController,
-    VendorProductVariantsCanonicalController,
   ],
   providers: [
     ProductsService,

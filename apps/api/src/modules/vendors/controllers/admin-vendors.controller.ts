@@ -1,5 +1,4 @@
 ﻿import {
-  Body,
   Controller,
   Delete,
   Get,
@@ -8,7 +7,6 @@
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
   Query,
 } from '@nestjs/common';
 import {
@@ -56,18 +54,6 @@ export class AdminVendorsController {
   })
   async findAll(@Query() query: QueryAdminVendorsDto) {
     return this.adminVendorsService.findAll(query);
-  }
-
-  /** Cursor-based query â€” filters travel in the request body. */
-  @Post('query')
-  @HttpCode(HttpStatus.OK)
-  @Message('Vendors retrieved successfully')
-  @ApiOperation({
-    summary: 'List vendors (cursor pagination, filters in body)',
-  })
-  @ApiResponse({ status: 200, type: ApiResponseDto<VendorProfileDto[]> })
-  async query(@Body() body: QueryAdminVendorsDto) {
-    return this.adminVendorsService.findAll(body);
   }
 
   @Get(':id')

@@ -35,12 +35,12 @@ import {
 import { ReviewsService } from '../services/reviews.service';
 
 @ApiTags('REVIEWS')
-@Controller('reviews')
+@Controller()
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
   @Roles(ROLE.USER)
-  @Post()
+  @Post('reviews')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Create a review for a purchased product',
@@ -65,31 +65,8 @@ export class ReviewsController {
     return this.reviewsService.create(userId, dto);
   }
 
-  @Get('product/:productId')
-  @Public()
-  @Header(
-    'Cache-Control',
-    'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
-  )
-  @ApiOperation({
-    summary: 'Get review summary and items for a product',
-    description:
-      'Returns active reviews, aggregate rating, and distribution breakdown for a product.',
-  })
-  @ApiParam({ name: 'productId', description: 'Product ID' })
-  @ApiOkResponse({
-    description: 'Product reviews summary and list',
-    type: ApiResponseDto<ProductReviewsResponseDto>,
-  })
-  @ApiNotFoundResponse({ description: 'Product not found' })
-  findByProduct(
-    @Param('productId') productId: string,
-  ): Promise<ProductReviewsResponseDto> {
-    return this.reviewsService.findByProduct(productId);
-  }
-
   @Roles(ROLE.USER)
-  @Delete(':id')
+  @Delete('reviews/:id')
   @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -112,21 +89,15 @@ export class ReviewsController {
     await this.reviewsService.remove(userId, id);
     return null;
   }
-}
 
-@ApiTags('REVIEWS')
-@Public()
-@Controller('products/:productId/reviews')
-export class ProductReviewsCanonicalController {
-  constructor(private readonly reviewsService: ReviewsService) {}
-
-  @Get()
+  @Get('products/:productId/reviews')
+  @Public()
   @Header(
     'Cache-Control',
     'public, max-age=60, s-maxage=120, stale-while-revalidate=60',
   )
   @ApiOperation({
-    summary: 'Get review summary and items for a product (Canonical)',
+    summary: 'Get review summary and items for a product',
     description:
       'Returns active reviews, aggregate rating, and distribution breakdown for a product.',
   })

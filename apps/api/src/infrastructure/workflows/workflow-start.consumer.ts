@@ -3,9 +3,9 @@ import { RabbitMQService } from '../messaging/rabbitmq/rabbitmq.service';
 import { RABBITMQ_QUEUES } from '../messaging/rabbitmq/rabbitmq.constants';
 import { roleCan } from '../../config/process-role.config';
 import {
-  TemporalClientService,
+  WorkflowClientService,
   type StartWorkflowInput,
-} from './temporal-client.service';
+} from './workflow-client.service';
 
 /**
  * Starts workflows from outbox events (`ctx.startWorkflow` inside a
@@ -18,7 +18,7 @@ export class WorkflowStartConsumer implements OnModuleInit {
 
   constructor(
     private readonly rabbitmq: RabbitMQService,
-    private readonly temporal: TemporalClientService,
+    private readonly temporal: WorkflowClientService,
   ) {}
 
   async onModuleInit(): Promise<void> {
