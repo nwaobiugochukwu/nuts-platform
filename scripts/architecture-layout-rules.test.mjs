@@ -65,10 +65,11 @@ test("only the @api alias exists", () => {
 });
 
 test("a module's specs live in its tests folder", () => {
-  assert.deepEqual(checkSpecLocation("modules/orders/tests/services/order-status.service.spec.ts"), []);
+  assert.deepEqual(checkSpecLocation("modules/orders/tests/order-status.service.spec.ts"), []);
   assert.deepEqual(checkSpecLocation("modules/orders/tests/orders.module.spec.ts"), []);
-  assert.match(checkSpecLocation("modules/orders/services/order-status.service.spec.ts")[0], /belong in modules\/orders\/tests/);
-  assert.match(checkSpecLocation("modules/orders/orders.module.spec.ts")[0], /belong in modules\/orders\/tests/);
+  assert.match(checkSpecLocation("modules/orders/tests/services/order-status.service.spec.ts")[0], /no subfolders/);
+  assert.match(checkSpecLocation("modules/orders/services/order-status.service.spec.ts")[0], /belong directly in modules\/orders\/tests/);
+  assert.match(checkSpecLocation("modules/orders/orders.module.spec.ts")[0], /belong directly in modules\/orders\/tests/);
   // outside the modules the rule does not apply, and end-to-end specs are not unit specs
   assert.deepEqual(checkSpecLocation("common/utils/x.util.spec.ts"), []);
   assert.deepEqual(checkSpecLocation("modules/payments/tests/payment-flow.e2e-spec.ts"), []);

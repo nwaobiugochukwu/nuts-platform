@@ -98,7 +98,7 @@ export function checkConsumerLocation(relFromSrc) {
 export function checkSpecLocation(relFromSrc) {
   const m = relFromSrc.match(/^modules\/([^/]+)\/(.+\.spec\.ts)$/);
   if (!m) return [];
-  return m[2].startsWith("tests/") ? [] : [`specs belong in modules/${m[1]}/tests/ (mirroring the folder of what they test); found ${relFromSrc}`];
+  return /^tests\/[^/]+$/.test(m[2]) ? [] : [`specs belong directly in modules/${m[1]}/tests/ (no subfolders); found ${relFromSrc}`];
 }
 
 /** Internal aliases other than @api/* are not allowed. */
