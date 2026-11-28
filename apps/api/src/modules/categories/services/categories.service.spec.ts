@@ -119,7 +119,7 @@ describe('CategoriesService (Hierarchical Catalog System)', () => {
         { provide: PrismaService, useValue: prisma },
         {
           provide: TransactionRunnerService,
-          useValue: new TransactionRunnerService(prisma, {} as never),
+          useValue: new TransactionRunnerService(prisma as never, {} as never),
         },
         { provide: CacheService, useValue: cacheService },
       ],

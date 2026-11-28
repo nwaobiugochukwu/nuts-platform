@@ -66,7 +66,10 @@ describe('ProductsService â€“ Products CRUD', () => {
         { provide: PrismaService, useValue: mockPrisma },
         {
           provide: TransactionRunnerService,
-          useValue: new TransactionRunnerService(mockPrisma, {} as never),
+          useValue: new TransactionRunnerService(
+            mockPrisma as never,
+            {} as never,
+          ),
         },
         { provide: CacheService, useValue: mockCacheService },
         { provide: SearchService, useValue: mockSearchService },

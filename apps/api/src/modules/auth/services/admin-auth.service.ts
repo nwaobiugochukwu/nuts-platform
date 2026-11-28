@@ -278,7 +278,6 @@ export class AdminAuthService {
     });
   }
 
-
   // PRIVATE HELPERS
 
   private toAuthUserDto(admin: {

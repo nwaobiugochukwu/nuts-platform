@@ -47,7 +47,10 @@ describe('ProductVariantsService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         {
           provide: TransactionRunnerService,
-          useValue: new TransactionRunnerService(mockPrisma, {} as never),
+          useValue: new TransactionRunnerService(
+            mockPrisma as never,
+            {} as never,
+          ),
         },
         { provide: CacheService, useValue: mockCacheService },
       ],
