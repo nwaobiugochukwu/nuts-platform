@@ -69,7 +69,7 @@ module.exports = {
     {
       ...common,
       name: 'worker',
-      script: 'dist/worker.js',
+      script: 'dist/bootstrap/worker.js',
       exec_mode: 'fork',
       instances: 1,
       env: { ...common.env, PROCESS_ROLE: 'worker' },
@@ -79,7 +79,7 @@ module.exports = {
       // target runner-temporal); do not start it from the Alpine image.
       ...common,
       name: 'temporal-worker',
-      script: 'dist/temporal-worker.js',
+      script: 'dist/bootstrap/temporal-worker.js',
       exec_mode: 'fork',
       instances: 1,
       env: { ...common.env },
@@ -87,7 +87,7 @@ module.exports = {
     {
       ...common,
       name: 'jobs',
-      script: 'dist/worker.js',
+      script: 'dist/bootstrap/worker.js',
       exec_mode: 'fork',
       instances: 1,
       env: { ...common.env, PROCESS_ROLE: 'jobs' },

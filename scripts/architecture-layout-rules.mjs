@@ -20,14 +20,14 @@ export const CLASS_SUFFIX = {
 
 /** Files with no kind: program entry points and start-up files. Relative to apps/api/src. */
 export const NO_KIND_FILES = new Set([
-  "main.ts", "worker.ts", "temporal-worker.ts", "bootstrap/instrument.ts", "bootstrap/load-env.ts",
+  "main.ts", "bootstrap/worker.ts", "bootstrap/temporal-worker.ts", "bootstrap/instrument.ts", "bootstrap/load-env.ts",
 ]);
 
 /** The only folders a module may contain (besides its own `*.module.ts` files). */
 export const MODULE_FOLDERS = new Set([
   "controllers", "services", "dto", "consumers", "events", "jobs", "listeners", "guards", "decorators",
   "interceptors", "strategies", "middleware", "templates", "constants", "types", "utils", "mappers", "pipes",
-  "throttler",
+  "throttler", "tests",
 ]);
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;

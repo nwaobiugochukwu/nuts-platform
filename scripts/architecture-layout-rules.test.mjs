@@ -14,7 +14,7 @@ test("accepts <kebab-name>.<allowed-kind>.ts and rejects the rest", () => {
 });
 
 test("exempts entry points, barrels, declaration files and test helpers", () => {
-  for (const f of ["main.ts", "worker.ts", "bootstrap/instrument.ts", "modules/x/utils/index.ts", "common/types/redlock.d.ts", "infrastructure/messaging/rabbitmq/consumer-harness-spec.ts"]) {
+  for (const f of ["main.ts", "bootstrap/worker.ts", "bootstrap/instrument.ts", "modules/x/utils/index.ts", "common/types/redlock.d.ts", "infrastructure/messaging/rabbitmq/consumer-harness-spec.ts"]) {
     assert.deepEqual(checkFileName(f), [], f);
   }
   assert.match(checkFileName("modules/x/random.ts")[0], /has no kind/);

@@ -6,9 +6,9 @@
   "include": ["src/**/*.ts"],
   "exclude": [
     "node_modules",
-    "test",
     "dist",
     "**/*spec.ts",
+    "src/e2e-env.setup.ts",
     "prisma.config.ts"
   ]
 }

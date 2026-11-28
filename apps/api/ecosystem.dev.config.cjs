@@ -58,13 +58,13 @@ module.exports = {
     {
       ...common,
       name: 'worker',
-      script: 'dist/worker.js',
+      script: 'dist/bootstrap/worker.js',
       env: { ...common.env, PROCESS_ROLE: 'worker' },
     },
     {
       ...common,
       name: 'jobs',
-      script: 'dist/worker.js',
+      script: 'dist/bootstrap/worker.js',
       env: { ...common.env, PROCESS_ROLE: 'jobs' },
     },
     {

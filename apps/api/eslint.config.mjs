@@ -36,7 +36,7 @@ export default tseslint.config(
   // Jest mocks (jest.fn(), mockResolvedValue, etc.) are untyped by design.
   // Enforcing no-unsafe-* inside test files creates noise without adding safety.
   {
-    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', '**/test/**/*.ts'],
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts', '**/e2e-env.setup.ts'],
     rules: {
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
