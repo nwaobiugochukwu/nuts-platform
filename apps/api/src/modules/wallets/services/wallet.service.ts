@@ -11,13 +11,17 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 import { buildPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
 
 @Injectable()
 export class WalletService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
+  ) {}
 
   /**
    * User wallets are expected to be created during user registration.
@@ -65,44 +69,47 @@ export class WalletService {
   ): Promise<void> {
     this.assertPositiveAmount(amount);
 
-    await this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.userWallet.findUnique({
-        where: {
-          userId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!wallet) {
-        throw new NotFoundException('User wallet not found');
-      }
-
-      /**
-       * Atomic increment prevents a lost-update race.
-       */
-      await tx.userWallet.update({
-        where: {
-          userId,
-        },
-        data: {
-          balance: {
-            increment: amount,
+    await this.transactions.run(
+      async ({ tx }) => {
+        const wallet = await tx.userWallet.findUnique({
+          where: {
+            userId,
           },
-        },
-      });
+          select: {
+            id: true,
+          },
+        });
 
-      await tx.walletTransaction.create({
-        data: {
-          amount,
-          type: WalletTransactionType.CREDIT,
-          reason,
-          referenceId,
-          userWalletId: wallet.id,
-        },
-      });
-    });
+        if (!wallet) {
+          throw new NotFoundException('User wallet not found');
+        }
+
+        /**
+         * Atomic increment prevents a lost-update race.
+         */
+        await tx.userWallet.update({
+          where: {
+            userId,
+          },
+          data: {
+            balance: {
+              increment: amount,
+            },
+          },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            amount,
+            type: WalletTransactionType.CREDIT,
+            reason,
+            referenceId,
+            userWalletId: wallet.id,
+          },
+        });
+      },
+      { name: 'wallet.credit-user' },
+    );
   }
 
   async debitUserWallet(
@@ -113,67 +120,70 @@ export class WalletService {
   ): Promise<void> {
     this.assertPositiveAmount(amount);
 
-    await this.prisma.$transaction(async (tx) => {
-      const wallet = await tx.userWallet.findUnique({
-        where: {
-          userId,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (!wallet) {
-        throw new NotFoundException('User wallet not found');
-      }
-
-      /**
-       * IMPORTANT:
-       *
-       * Do not:
-       *
-       * 1. read balance
-       * 2. check balance
-       * 3. decrement
-       *
-       * Two requests could both read the same balance.
-       *
-       * Instead, the database performs:
-       *
-       * balance >= amount
-       * AND
-       * balance = balance - amount
-       *
-       * as one update.
-       */
-      const result = await tx.userWallet.updateMany({
-        where: {
-          userId,
-          balance: {
-            gte: amount,
+    await this.transactions.run(
+      async ({ tx }) => {
+        const wallet = await tx.userWallet.findUnique({
+          where: {
+            userId,
           },
-        },
-        data: {
-          balance: {
-            decrement: amount,
+          select: {
+            id: true,
           },
-        },
-      });
+        });
 
-      if (result.count !== 1) {
-        throw new BadRequestException('Insufficient wallet balance');
-      }
+        if (!wallet) {
+          throw new NotFoundException('User wallet not found');
+        }
 
-      await tx.walletTransaction.create({
-        data: {
-          amount,
-          type: WalletTransactionType.DEBIT,
-          reason,
-          referenceId,
-          userWalletId: wallet.id,
-        },
-      });
-    });
+        /**
+         * IMPORTANT:
+         *
+         * Do not:
+         *
+         * 1. read balance
+         * 2. check balance
+         * 3. decrement
+         *
+         * Two requests could both read the same balance.
+         *
+         * Instead, the database performs:
+         *
+         * balance >= amount
+         * AND
+         * balance = balance - amount
+         *
+         * as one update.
+         */
+        const result = await tx.userWallet.updateMany({
+          where: {
+            userId,
+            balance: {
+              gte: amount,
+            },
+          },
+          data: {
+            balance: {
+              decrement: amount,
+            },
+          },
+        });
+
+        if (result.count !== 1) {
+          throw new BadRequestException('Insufficient wallet balance');
+        }
+
+        await tx.walletTransaction.create({
+          data: {
+            amount,
+            type: WalletTransactionType.DEBIT,
+            reason,
+            referenceId,
+            userWalletId: wallet.id,
+          },
+        });
+      },
+      { name: 'wallet.debit-user' },
+    );
   }
 
   async creditVendorPending(
@@ -212,12 +222,11 @@ export class WalletService {
       });
     };
 
-    if (tx) {
-      await execute(tx);
-      return;
-    }
-
-    await this.prisma.$transaction(execute);
+    // Joins the caller's transaction when given one, so the wallet change commits or rolls back with it.
+    await this.transactions.run(({ tx: client }) => execute(client), {
+      name: 'wallet.credit-vendor-pending',
+      parent: tx,
+    });
   }
 
   async settleVendorEarning(
@@ -270,12 +279,11 @@ export class WalletService {
       });
     };
 
-    if (tx) {
-      await execute(tx);
-      return;
-    }
-
-    await this.prisma.$transaction(execute);
+    // Joins the caller's transaction when given one, so the wallet change commits or rolls back with it.
+    await this.transactions.run(({ tx: client }) => execute(client), {
+      name: 'wallet.settle-vendor-earning',
+      parent: tx,
+    });
   }
 
   async debitVendorPending(
@@ -336,12 +344,11 @@ export class WalletService {
       });
     };
 
-    if (tx) {
-      await execute(tx);
-      return;
-    }
-
-    await this.prisma.$transaction(execute);
+    // Joins the caller's transaction when given one, so the wallet change commits or rolls back with it.
+    await this.transactions.run(({ tx: client }) => execute(client), {
+      name: 'wallet.debit-vendor-pending',
+      parent: tx,
+    });
   }
 
   async getUserWalletWithTransactions(userId: string, limit = 20) {

@@ -5,11 +5,13 @@ import {
   WalletTransactionType,
 } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { FakeTransactionRunner } from '@api/infrastructure/database/fake-transaction-runner-spec';
 import { WalletService } from './wallet.service';
 
 describe('WalletService', () => {
   let service: WalletService;
   let mockPrisma: any;
+  let runner: FakeTransactionRunner;
 
   beforeEach(() => {
     mockPrisma = {
@@ -34,7 +36,8 @@ describe('WalletService', () => {
       ),
     };
 
-    service = new WalletService(mockPrisma);
+    runner = new FakeTransactionRunner(mockPrisma);
+    service = new WalletService(mockPrisma, runner as never);
   });
 
   describe('getUserWallet', () => {
@@ -184,6 +187,127 @@ describe('WalletService', () => {
           balance: { increment: new Prisma.Decimal(2500) },
         },
       });
+    });
+  });
+
+  describe('vendor wallet changes', () => {
+    const amount = new Prisma.Decimal(2500);
+    beforeEach(() => {
+      mockPrisma.vendorWallet.findUnique.mockResolvedValue({ id: 'vw-1' });
+      mockPrisma.walletTransaction.create.mockResolvedValue({});
+    });
+
+    it('credits pending earnings and lifetime earnings, with a SALE ledger row', async () => {
+      await service.creditVendorPending('vendor-1', amount, 'order-1');
+
+      expect(mockPrisma.vendorWallet.update).toHaveBeenCalledWith({
+        where: { vendorId: 'vendor-1' },
+        data: {
+          pendingBalance: { increment: amount },
+          lifetimeEarnings: { increment: amount },
+        },
+      });
+      expect(mockPrisma.walletTransaction.create).toHaveBeenCalledWith({
+        data: {
+          amount,
+          type: WalletTransactionType.CREDIT,
+          reason: WalletTransactionReason.SALE,
+          referenceId: 'order-1',
+          vendorWalletId: 'vw-1',
+        },
+      });
+      expect(runner.runs).toEqual(['wallet.credit-vendor-pending']);
+    });
+
+    it('reverses pending earnings for a refund and records a REFUND debit', async () => {
+      mockPrisma.vendorWallet.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.debitVendorPending('vendor-1', amount, 'order-1');
+
+      expect(mockPrisma.vendorWallet.updateMany).toHaveBeenCalledWith({
+        where: { vendorId: 'vendor-1', pendingBalance: { gte: amount } },
+        data: {
+          pendingBalance: { decrement: amount },
+          lifetimeEarnings: { decrement: amount },
+        },
+      });
+      expect(mockPrisma.walletTransaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: WalletTransactionType.DEBIT,
+          reason: WalletTransactionReason.REFUND,
+        }),
+      });
+    });
+
+    it('never writes a ledger row for a reversal the balance could not cover', async () => {
+      mockPrisma.vendorWallet.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.debitVendorPending('vendor-1', amount, 'order-1'),
+      ).rejects.toThrow('Insufficient pending balance for reversal');
+      expect(mockPrisma.walletTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to settle more than is pending', async () => {
+      mockPrisma.vendorWallet.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.settleVendorEarning('vendor-1', amount, 'order-1'),
+      ).rejects.toThrow('Insufficient pending balance');
+      expect(mockPrisma.walletTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('says so when the vendor has no wallet, writing nothing', async () => {
+      mockPrisma.vendorWallet.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.creditVendorPending('vendor-1', amount, 'order-1'),
+      ).rejects.toThrow(NotFoundException);
+      expect(mockPrisma.vendorWallet.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'credit',
+        (tx?: unknown) =>
+          service.creditVendorPending('v', amount, 'o', tx as never),
+      ],
+      [
+        'debit',
+        (tx?: unknown) =>
+          service.debitVendorPending('v', amount, 'o', tx as never),
+      ],
+      [
+        'settle',
+        (tx?: unknown) =>
+          service.settleVendorEarning('v', amount, 'o', tx as never),
+      ],
+    ])(
+      'a %s inside the caller’s transaction uses that transaction’s client',
+      async (_n, call) => {
+        mockPrisma.vendorWallet.updateMany.mockResolvedValue({ count: 1 });
+        const callerTx = {
+          ...mockPrisma,
+          vendorWallet: {
+            findUnique: jest.fn().mockResolvedValue({ id: 'vw-9' }),
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          },
+          walletTransaction: { create: jest.fn() },
+        };
+
+        await call(callerTx);
+
+        expect(callerTx.walletTransaction.create).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.walletTransaction.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects a zero or negative amount before touching anything', async () => {
+      await expect(
+        service.creditVendorPending('vendor-1', new Prisma.Decimal(0), 'o'),
+      ).rejects.toThrow(BadRequestException);
+      expect(runner.runs).toHaveLength(0);
     });
   });
 });
