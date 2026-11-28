@@ -31,10 +31,7 @@ import { WalletService } from '@api/modules/wallets/services/wallet.service';
 import { AdminOrderResponseDto } from '../dto/admin-order-response.dto';
 import { CheckoutResponseDto } from '../dto/checkout-response.dto';
 import { CheckoutDto } from '../dto/checkout.dto';
-import {
-  OrderAppliedVoucherDto,
-  OrderResponseDto,
-} from '../dto/order-response.dto';
+import { OrderResponseDto } from '../dto/order-response.dto';
 import { QueryOrderDto } from '../dto/query-order.dto';
 import { VendorOrderResponseDto } from '../dto/vendor-order-response.dto';
 
@@ -43,7 +40,6 @@ import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
 
 import { CHECKOUT_IDEMPOTENCY_TTL_HOURS } from '@api/common/constants/checkout.constants';
-import { UNPAID_ORDER_EXPIRATION } from '@api/common/constants';
 import {
   InsufficientStockException,
   type StockShortfallItem,
@@ -72,266 +68,23 @@ import type {
   OrderDeliveredPayload,
   OrderShippedPayload,
 } from '@api/infrastructure/messaging/events/event-payloads.types';
+import { restoreOrderStock } from '@api/common/utils/restore-order-stock.util';
 import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const jsonValueLabel = (value: unknown): string => {
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return String(value);
-  }
-  if (value == null) return '';
-  return JSON.stringify(value) ?? '';
-};
-
-/**
- * Fields needed by the normal customer order endpoints.
- *
- * Keep this intentionally small.
- * Returning every column from Product/User/etc. increases DB work and
- * response serialization cost.
- */
-const orderInclude = {
-  orderItems: {
-    include: {
-      product: {
-        select: {
-          name: true,
-          slug: true,
-          sku: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          options: true,
-        },
-      },
-    },
-  },
-
-  payment: {
-    select: {
-      id: true,
-      status: true,
-      paymentLink: true,
-      transactionReference: true,
-    },
-  },
-
-  // Snapshot of what each voucher took off this order (breakdown on the
-  // order page).
-  discountCodeUsages: {
-    orderBy: { createdAt: 'asc' as const },
-    select: {
-      discountAmount: true,
-      discountCode: {
-        select: {
-          code: true,
-          description: true,
-          scope: true,
-          type: true,
-          value: true,
-          autoApply: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.OrderInclude;
-
-/**
- * Lighter relation graph for order lists.
- *
- * Payment information is deliberately omitted because the list endpoint
- * doesn't need Paystack references or payment links.
- */
-const orderListInclude = {
-  orderItems: {
-    include: {
-      product: {
-        select: {
-          name: true,
-          slug: true,
-          sku: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          options: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.OrderInclude;
-
-/**
- * Status history is capped.
- *
- * An order can theoretically accumulate hundreds/thousands of history rows.
- * Returning all of them on every request is unnecessary.
- */
-const statusHistoryInclude = {
-  orderBy: {
-    createdAt: 'desc' as const,
-  },
-  take: 50,
-  include: {
-    changedByUser: {
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-      },
-    },
-    changedByVendor: {
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-      },
-    },
-    changedByAdmin: {
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-      },
-    },
-  },
-};
-
-const vendorOrderInclude = {
-  orderItems: {
-    include: {
-      product: {
-        select: {
-          name: true,
-          slug: true,
-          sku: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          options: true,
-        },
-      },
-    },
-  },
-
-  user: {
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-    },
-  },
-
-  statusHistory: statusHistoryInclude,
-} satisfies Prisma.OrderInclude;
-
-const vendorOrderListInclude = {
-  orderItems: {
-    include: {
-      product: {
-        select: {
-          name: true,
-          slug: true,
-          sku: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          options: true,
-        },
-      },
-    },
-  },
-
-  user: {
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-    },
-  },
-
-  statusHistory: statusHistoryInclude,
-} satisfies Prisma.OrderInclude;
-
-const adminOrderInclude = {
-  orderItems: {
-    include: {
-      product: {
-        select: {
-          name: true,
-          slug: true,
-          sku: true,
-        },
-      },
-      variant: {
-        select: {
-          id: true,
-          options: true,
-        },
-      },
-    },
-  },
-
-  user: {
-    select: {
-      id: true,
-      email: true,
-      firstName: true,
-      lastName: true,
-    },
-  },
-
-  payment: {
-    select: {
-      id: true,
-      status: true,
-      amount: true,
-      currency: true,
-      transactionId: true,
-      transactionReference: true,
-    },
-  },
-
-  statusHistory: statusHistoryInclude,
-} satisfies Prisma.OrderInclude;
-
-type OrderWithItems = Prisma.OrderGetPayload<{
-  include: typeof orderInclude;
-}>;
-
-type OrderWithItemsList = Prisma.OrderGetPayload<{
-  include: typeof orderListInclude;
-}>;
-
-type VendorOrderWithRelations = Prisma.OrderGetPayload<{
-  include: typeof vendorOrderInclude;
-}>;
-
-type VendorOrderWithRelationsList = Prisma.OrderGetPayload<{
-  include: typeof vendorOrderListInclude;
-}>;
-
-type AdminOrderWithRelations = Prisma.OrderGetPayload<{
-  include: typeof adminOrderInclude;
-}>;
+import {
+  adminOrderInclude,
+  orderInclude,
+  orderListInclude,
+  vendorOrderInclude,
+  vendorOrderListInclude,
+  type OrderWithItems,
+} from '../utils/order-includes.util';
+import {
+  toAdminResponse,
+  toCheckoutResponse,
+  toResponse,
+  toVendorResponse,
+  variantLabel,
+} from '../utils/order-response.mapper';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -529,7 +282,7 @@ export class OrdersService {
       );
     }
 
-    const response = this.toCheckoutResponse(order);
+    const response = toCheckoutResponse(order);
 
     if (paymentInit) {
       response.authorizationUrl = paymentInit.authorizationUrl;
@@ -655,7 +408,7 @@ export class OrdersService {
     ]);
 
     return {
-      data: orders.map((order) => this.toResponse(order)),
+      data: orders.map((order) => toResponse(order)),
       meta: createPaginationMeta(total, page, limit),
     };
   }
@@ -681,7 +434,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return this.toResponse(order);
+    return toResponse(order);
   }
 
   // ---------------------------------------------------------------------------
@@ -813,7 +566,7 @@ export class OrdersService {
     ]);
 
     return {
-      data: orders.map((order) => this.toAdminResponse(order)),
+      data: orders.map((order) => toAdminResponse(order)),
       meta: createPaginationMeta(total, page, limit),
     };
   }
@@ -830,7 +583,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return this.toAdminResponse(order);
+    return toAdminResponse(order);
   }
 
   // ---------------------------------------------------------------------------
@@ -977,7 +730,7 @@ export class OrdersService {
     ]);
 
     return {
-      data: orders.map((order) => this.toVendorResponse(order)),
+      data: orders.map((order) => toVendorResponse(order)),
       meta: createPaginationMeta(total, page, limit),
     };
   }
@@ -1017,7 +770,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return this.toVendorResponse(order);
+    return toVendorResponse(order);
   }
 
   async updateStatusAdmin(
@@ -1268,7 +1021,7 @@ export class OrdersService {
             !current.stockRestored;
 
           if (restoreStock) {
-            await this.restoreOrderStock(
+            await restoreOrderStock(
               tx,
               current.orderItems,
               'Stock restored after order cancellation',
@@ -1797,15 +1550,15 @@ export class OrdersService {
         const shortfalls: StockShortfallItem[] = [];
 
         for (const item of itemsToDeduct) {
-          const variantLabel = item.variant
-            ? this.variantLabel(item.variant.options)
+          const label = item.variant
+            ? variantLabel(item.variant.options)
             : null;
 
           const toShortfall = (available: number): StockShortfallItem => ({
             productId: item.productId,
             variantId: item.variantId ?? null,
             name: item.product.name,
-            variantLabel,
+            variantLabel: label,
             requested: item.quantity,
             available,
           });
@@ -2242,120 +1995,6 @@ export class OrdersService {
     return `${parts.join(', ')} (Tel: ${address.phone})`;
   }
 
-  // ---------------------------------------------------------------------------
-  // STOCK
-  // ---------------------------------------------------------------------------
-
-  private async restoreOrderStock(
-    tx: TransactionClient,
-    orderItems: Array<{
-      productId: string;
-      variantId: string | null;
-      quantity: number;
-    }>,
-    description: string,
-  ): Promise<void> {
-    const historyRows: Prisma.StockHistoryCreateManyInput[] = [];
-
-    /**
-     * Process in deterministic order.
-     *
-     * Deterministic lock ordering reduces deadlock probability when multiple
-     * transactions touch several inventory rows.
-     */
-    const items = [...orderItems].sort((a, b) => {
-      const aKey = a.variantId ?? a.productId;
-      const bKey = b.variantId ?? b.productId;
-
-      return aKey.localeCompare(bKey);
-    });
-
-    for (const item of items) {
-      if (item.variantId) {
-        const rows = await tx.$queryRaw<
-          Array<{
-            id: string;
-            productId: string;
-            oldStock: number;
-            newStock: number;
-          }>
-        >(
-          Prisma.sql`
-            UPDATE "product_variants"
-            SET
-              "stock" = "stock" + ${item.quantity},
-              "updatedAt" = NOW()
-            WHERE "id" = ${item.variantId}
-            RETURNING
-              "id",
-              "productId",
-              ("stock" - ${item.quantity}) AS "oldStock",
-              "stock" AS "newStock"
-          `,
-        );
-
-        if (rows.length !== 1) {
-          throw new ConflictException(
-            `Variant ${item.variantId} could not be restored.`,
-          );
-        }
-
-        historyRows.push({
-          productId: rows[0].productId,
-          variantId: rows[0].id,
-          adjustment: item.quantity,
-          oldStockQuantity: rows[0].oldStock,
-          newStockQuantity: rows[0].newStock,
-          description,
-        });
-      } else {
-        const rows = await tx.$queryRaw<
-          Array<{
-            id: string;
-            oldStock: number;
-            newStock: number;
-          }>
-        >(
-          Prisma.sql`
-            UPDATE "products"
-            SET
-              "stock" = "stock" + ${item.quantity},
-              "updatedAt" = NOW()
-            WHERE "id" = ${item.productId}
-            RETURNING
-              "id",
-              ("stock" - ${item.quantity}) AS "oldStock",
-              "stock" AS "newStock"
-          `,
-        );
-
-        if (rows.length !== 1) {
-          throw new ConflictException(
-            `Product ${item.productId} could not be restored.`,
-          );
-        }
-
-        historyRows.push({
-          productId: rows[0].id,
-          adjustment: item.quantity,
-          oldStockQuantity: rows[0].oldStock,
-          newStockQuantity: rows[0].newStock,
-          description,
-        });
-      }
-    }
-
-    if (historyRows.length) {
-      await tx.stockHistory.createMany({
-        data: historyRows,
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // VENDOR MONEY
-  // ---------------------------------------------------------------------------
-
   private calculateVendorEarnings(
     items: Array<{
       vendorId: string;
@@ -2412,419 +2051,6 @@ export class OrdersService {
     return Math.max(0, row.stock);
   }
 
-  private variantLabel(options: Prisma.JsonValue): string | null {
-    if (Array.isArray(options)) {
-      return options
-        .map((option) => {
-          if (
-            isRecord(option) &&
-            typeof option.name === 'string' &&
-            typeof option.value === 'string'
-          ) {
-            return `${option.name}: ${option.value}`;
-          }
-
-          return jsonValueLabel(option);
-        })
-        .join(', ');
-    }
-
-    if (typeof options === 'object' && options !== null) {
-      return Object.entries(options as Record<string, unknown>)
-        .map(([name, value]) => `${name}: ${jsonValueLabel(value)}`)
-        .join(', ');
-    }
-
-    return null;
-  }
-
-  private normalizeVariantSnapshot(snapshot: unknown): {
-    options: {
-      name: string;
-      value: string;
-    }[];
-  } | null {
-    if (!snapshot) {
-      return null;
-    }
-
-    if (Array.isArray(snapshot)) {
-      return {
-        options: snapshot.filter(
-          (
-            option,
-          ): option is {
-            name: string;
-            value: string;
-          } =>
-            isRecord(option) &&
-            typeof option.name === 'string' &&
-            typeof option.value === 'string',
-        ),
-      };
-    }
-
-    if (typeof snapshot === 'object' && snapshot !== null) {
-      return {
-        options: Object.entries(snapshot as Record<string, unknown>).map(
-          ([name, value]) => ({
-            name,
-            value: String(value),
-          }),
-        ),
-      };
-    }
-
-    return null;
-  }
-
-  // ---------------------------------------------------------------------------
-  // RESPONSE MAPPERS
-  // ---------------------------------------------------------------------------
-
-  private toAppliedVouchers(
-    order: OrderWithItems | OrderWithItemsList,
-  ): OrderAppliedVoucherDto[] {
-    const usages =
-      'discountCodeUsages' in order ? order.discountCodeUsages : [];
-    if (usages.length > 0) {
-      return usages.map((usage) => ({
-        code: usage.discountCode.code,
-        description: usage.discountCode.description ?? null,
-        scope: usage.discountCode.scope,
-        type: usage.discountCode.type,
-        value: Number(usage.discountCode.value),
-        amount: Number(usage.discountAmount),
-        automatic: usage.discountCode.autoApply,
-      }));
-    }
-    // Legacy orders: only the joined code string was kept ("STORE20, PLAT10").
-    return (order.discountCode ?? '')
-      .split(',')
-      .map((code) => code.trim())
-      .filter(Boolean)
-      .map((code) => ({
-        code,
-        description: null,
-        scope: 'PLATFORM' as const,
-        type: 'FIXED' as const,
-        value: 0,
-        amount: null,
-        automatic: false,
-      }));
-  }
-
-  private toResponse(
-    order: OrderWithItems | OrderWithItemsList,
-  ): OrderResponseDto {
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-
-      totalAmount: Number(order.totalAmount),
-      discountAmount: Number(order.discountAmount),
-      referralDiscountAmount: Number(order.referralDiscountAmount),
-      finalAmount: Number(order.finalAmount),
-
-      // Detail responses carry the payment; list responses do not.
-      ...('payment' in order
-        ? { paymentStatus: order.payment?.status ?? PaymentStatus.PENDING }
-        : {}),
-
-      discountCode: order.discountCode ?? null,
-
-      appliedVouchers: this.toAppliedVouchers(order),
-
-      referralCode: order.referralCode ?? null,
-
-      shippingAddress: order.shippingAddress,
-
-      shippingAddressId: order.shippingAddressId ?? null,
-
-      createdAt: order.createdAt,
-
-      paymentExpiresAt:
-        order.status === OrderStatus.PENDING
-          ? new Date(
-              new Date(order.createdAt).getTime() +
-                UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES * 60 * 1000,
-            )
-          : null,
-
-      items: order.orderItems.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-
-        quantity: item.quantity,
-
-        unitPrice: Number(item.unitPrice),
-
-        totalPrice: Number(item.totalPrice),
-
-        productSnapshot: item.productSnapshot as {
-          name: string;
-          sku: string;
-          images: string[];
-        },
-
-        variantSnapshot: this.normalizeVariantSnapshot(item.variantSnapshot),
-      })),
-    };
-  }
-
-  private toCheckoutResponse(order: OrderWithItems): CheckoutResponseDto {
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-
-      totalAmount: Number(order.totalAmount),
-      discountAmount: Number(order.discountAmount),
-      referralDiscountAmount: Number(order.referralDiscountAmount),
-      finalAmount: Number(order.finalAmount),
-
-      discountCode: order.discountCode ?? null,
-
-      referralCode: order.referralCode ?? null,
-
-      items: order.orderItems.map((item) => {
-        const productSnapshot = item.productSnapshot as {
-          name?: string;
-          sku?: string;
-          images?: string[];
-        } | null;
-
-        const variantSnapshot = this.normalizeVariantSnapshot(
-          item.variantSnapshot,
-        );
-
-        return {
-          productName: productSnapshot?.name ?? item.product.name,
-
-          variantName: variantSnapshot
-            ? variantSnapshot.options.map((option) => option.value).join(', ')
-            : undefined,
-
-          quantity: item.quantity,
-
-          unitPrice: Number(item.unitPrice),
-        };
-      }),
-
-      shippingAddress: order.shippingAddress ?? null,
-
-      createdAt: order.createdAt,
-
-      paymentExpiresAt:
-        order.status === OrderStatus.PENDING
-          ? new Date(
-              new Date(order.createdAt).getTime() +
-                UNPAID_ORDER_EXPIRATION.PENDING_TTL_MINUTES * 60 * 1000,
-            )
-          : null,
-    };
-  }
-
-  private toVendorResponse(
-    order: VendorOrderWithRelations | VendorOrderWithRelationsList,
-  ): VendorOrderResponseDto {
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-
-      totalAmount: Number(order.totalAmount),
-      discountAmount: Number(order.discountAmount),
-      referralDiscountAmount: Number(order.referralDiscountAmount),
-      finalAmount: Number(order.finalAmount),
-
-      discountCode: order.discountCode ?? null,
-
-      referralCode: order.referralCode ?? null,
-
-      shippingAddress: order.shippingAddress,
-
-      stockRestored: order.stockRestored,
-
-      isMultiVendor: !vendorMayChangeOrderStatus(
-        order.orderItems.map((item) => item.vendorId),
-      ),
-
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-
-      customer: {
-        id: order.user.id,
-        email: order.user.email,
-        firstName: order.user.firstName,
-        lastName: order.user.lastName,
-      },
-
-      items: order.orderItems.map((item) => ({
-        productId: item.productId,
-        variantId: item.variantId ?? null,
-        quantity: item.quantity,
-        unitPrice: Number(item.unitPrice),
-        totalPrice: Number(item.totalPrice),
-
-        productSnapshot: item.productSnapshot as {
-          name: string;
-          sku: string;
-          images: string[];
-        },
-
-        variantSnapshot: this.normalizeVariantSnapshot(item.variantSnapshot),
-      })),
-
-      statusHistory:
-        'statusHistory' in order
-          ? order.statusHistory.map((history) => {
-              const actor =
-                history.changedByUser ??
-                history.changedByVendor ??
-                history.changedByAdmin;
-
-              return {
-                id: history.id,
-                fromStatus: history.fromStatus ?? null,
-                toStatus: history.toStatus,
-                note: history.note ?? null,
-                createdAt: history.createdAt,
-                changedBy: actor
-                  ? {
-                      id: actor.id,
-                      email: actor.email,
-                      firstName: actor.firstName,
-                      lastName: actor.lastName,
-                    }
-                  : null,
-              };
-            })
-          : [],
-    };
-  }
-
-  private toAdminResponse(
-    order: AdminOrderWithRelations,
-  ): AdminOrderResponseDto {
-    const itemsTotal =
-      order.orderItems?.reduce(
-        (sum, item) => sum + Number(item.totalPrice),
-        0,
-      ) ?? 0;
-    const effectiveBase =
-      itemsTotal > 0
-        ? itemsTotal
-        : Number(order.finalAmount || order.totalAmount || 0);
-    const vendorRevenue =
-      Math.round(effectiveBase * VENDOR_COMMISSION_RATE * 100) / 100;
-    const platformFee = Math.round((effectiveBase - vendorRevenue) * 100) / 100;
-
-    return {
-      id: order.id,
-      orderNumber: order.orderNumber,
-      status: order.status,
-
-      paymentStatus: order.payment?.status ?? PaymentStatus.PENDING,
-
-      totalAmount: Number(order.totalAmount),
-
-      discountAmount: Number(order.discountAmount),
-
-      referralDiscountAmount: Number(order.referralDiscountAmount),
-
-      finalAmount: Number(order.finalAmount),
-
-      discountCode: order.discountCode ?? null,
-
-      referralCode: order.referralCode ?? null,
-
-      platformFee,
-      vendorRevenue,
-
-      shippingAddress: order.shippingAddress,
-
-      stockRestored: order.stockRestored,
-
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
-
-      customer: {
-        id: order.user.id,
-        email: order.user.email,
-        firstName: order.user.firstName,
-        lastName: order.user.lastName,
-      },
-
-      payment: order.payment
-        ? {
-            id: order.payment.id,
-            status: order.payment.status,
-            amount: Number(order.payment.amount),
-            currency: order.payment.currency,
-            transactionId: order.payment.transactionId,
-          }
-        : null,
-
-      items: order.orderItems.map((item) => ({
-        productId: item.productId,
-
-        productSku:
-          (
-            item.productSnapshot as {
-              sku?: string;
-            } | null
-          )?.sku ?? item.product.sku,
-
-        quantity: item.quantity,
-
-        unitPrice: Number(item.unitPrice),
-
-        totalPrice: Number(item.totalPrice),
-
-        productSnapshot: item.productSnapshot as {
-          name: string;
-          sku: string;
-          images: string[];
-        },
-
-        variantSnapshot: this.normalizeVariantSnapshot(item.variantSnapshot),
-      })),
-
-      statusHistory: order.statusHistory.map((history) => {
-        const actor =
-          history.changedByUser ??
-          history.changedByVendor ??
-          history.changedByAdmin;
-
-        return {
-          id: history.id,
-          fromStatus: history.fromStatus,
-          toStatus: history.toStatus,
-          note: history.note,
-          createdAt: history.createdAt,
-          changedBy: actor
-            ? {
-                id: actor.id,
-                email: actor.email,
-                firstName: actor.firstName,
-                lastName: actor.lastName,
-              }
-            : null,
-        };
-      }),
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // DOMAIN EVENTS
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Writes the order.shipped, order.delivered or order.cancelled event to the outbox in the same
-   * transaction as the status change, so it is never lost and never sent for a rolled-back change.
-   */
   private async publishStatusChangeEvent(
     tx: Prisma.TransactionClient,
     orderId: string,
