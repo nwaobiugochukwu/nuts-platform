@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
-import { ShopperActivityModule } from '@api/modules/shopper-activity/shopper-activity.module';
+import { TrackingModule } from '@api/modules/tracking/tracking.module';
 import { UsersModule } from '@api/modules/users/users.module';
 import { DiscountsModule } from '@api/modules/discounts/discounts.module';
 import { CartController } from './controllers/cart.controller';
@@ -15,7 +15,7 @@ import { AbandonedCartPurgeJob } from './jobs/abandoned-cart-purge.job';
     RedisModule,
     UsersModule,
     DiscountsModule,
-    ShopperActivityModule,
+    TrackingModule,
   ],
   controllers: [CartController],
   providers: [CartService, AbandonedCartJob, AbandonedCartPurgeJob],

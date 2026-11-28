@@ -16,7 +16,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | E4 | Referral rewards on delivery run in process with a log-only catch (`orders/orders.service.ts:1412`) | A failure or a crash loses a money reward silently | `order.delivered` event, a referral consumer with an idempotency key | High (money) |
 | E5 | Recommendation events (impression, click, dismiss) are written to Postgres inside the request, then the recommendation cache is invalidated each time (`analytics/tracking/recommendation-events.service.ts:55, 110, 30`) | One DB write per interaction, and every click forces the expensive feed to be recomputed (the `for-you` p95 was about 3 s in Grafana) | Buffer, then the analytics queue, then batched inserts; invalidate with a debounce | High (latency) (done: step 5.7) |
 | E6 | The feeds (`for-you`, `good-place-to-start`, `related`) are computed on read | p95 of 2 to 3 s measured in Grafana | Precompute candidate lists per user in the worker when views, clicks and purchases arrive; serve from Redis | High (largest latency win; bigger project) |
-| E7 | Marketplace events and search tracking write to the database directly per request (`shopper-activity.service.ts`, `search-tracking.service.ts`), while product views already use the buffered queue | Inconsistent, and avoidable writes on the request path | Move to the same buffer and queue path | Medium (done: step 5.7) |
+| E7 | Marketplace events and search tracking write to the database directly per request (`tracking.service.ts`, `search-tracking.service.ts`), while product views already use the buffered queue | Inconsistent, and avoidable writes on the request path | Move to the same buffer and queue path | Medium (done: step 5.7) |
 | E8 | Vendor and admin analytics aggregate raw events when read (`vendors/analytics` took about 1.2 s on first load, cached 20 s) | Heavy reads on first view | Hourly or daily rollup tables kept up to date by a consumer or cron | Medium |
 | E9 | Review lists are read and the rating breakdown is summed on each cache miss (`reviews/reviews.service.ts:132`) | Work grows with the number of reviews | Store rating count and average on the product, updated by a `review.changed` event | Medium (done: step 5.8) |
 | E10 | Cache invalidation is done inline after writes in 8 services (wishlists, follows, discounts, categories, variants, admin vendors, token, product views) | Small cost per request, scattered logic | Tag-based invalidation, or a `cache.invalidate` consumer | Low |
@@ -241,7 +241,7 @@ Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cooki
 
 | From | To |
 |---|---|
-| `infrastructure/messaging/rabbitmq/analytics.consumer.ts` | `modules/shopper-activity/consumers/shopper-activity.consumer.ts` |
+| `infrastructure/messaging/rabbitmq/analytics.consumer.ts` | `modules/tracking/consumers/tracking.consumer.ts` |
 | `infrastructure/messaging/rabbitmq/inventory.consumer.ts` | `modules/products/consumers/` |
 | `infrastructure/messaging/rabbitmq/email.consumer.ts` | `modules/notifications/consumers/` |
 | `common/audit-log/*` and `modules/security/audit/*` | `modules/audit/` (service, consumer, interceptor, decorator in their folders) |

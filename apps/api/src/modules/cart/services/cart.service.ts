@@ -17,9 +17,9 @@ import type { DiscountLineItem } from '@api/modules/discounts/utils/discount-eli
 import { UsersService } from '@api/modules/users/services/users.service';
 import { InsufficientStockException } from '@api/common/errors/insufficient-stock.exception';
 import {
-  ShopperActivityService,
+  TrackingService,
   type CartItemChange,
-} from '@api/modules/shopper-activity/services/shopper-activity.service';
+} from '@api/modules/tracking/services/tracking.service';
 
 import { UpdateCartItemDto } from '../dto/update-cart-item.dto';
 
@@ -131,7 +131,7 @@ export class CartService {
     private readonly discountCodeService: DiscountCodeService,
     private readonly cacheService: CacheService,
     private readonly transactions: TransactionRunnerService,
-    @Optional() private readonly shopperActivity?: ShopperActivityService,
+    @Optional() private readonly tracking?: TrackingService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -448,7 +448,7 @@ export class CartService {
       }
     });
 
-    await this.shopperActivity?.cartItemAdded({
+    await this.tracking?.cartItemAdded({
       vendorId,
       productId,
       variantId: normalizedVariantId,
@@ -693,8 +693,8 @@ export class CartService {
 
     if (quantityChange) {
       const { added, change } = quantityChange;
-      if (added) await this.shopperActivity?.cartItemAdded(change);
-      else await this.shopperActivity?.cartItemRemoved(change);
+      if (added) await this.tracking?.cartItemAdded(change);
+      else await this.tracking?.cartItemRemoved(change);
     }
 
     await this.invalidateCartCache(userId);
@@ -770,11 +770,11 @@ export class CartService {
 
     if (result.count > 0) {
       await this.invalidateCartCache(userId);
-      const shopperActivity = this.shopperActivity;
-      if (shopperActivity) {
+      const tracking = this.tracking;
+      if (tracking) {
         await Promise.all(
           removedItems.map((item) =>
-            shopperActivity.cartItemRemoved({
+            tracking.cartItemRemoved({
               vendorId: item.product.vendorId,
               productId: item.productId,
               variantId: item.variantId,
@@ -824,11 +824,11 @@ export class CartService {
     });
 
     if (result.count > 0) {
-      const shopperActivity = this.shopperActivity;
-      if (shopperActivity) {
+      const tracking = this.tracking;
+      if (tracking) {
         await Promise.all(
           removedItems.map((item) =>
-            shopperActivity.cartItemRemoved({
+            tracking.cartItemRemoved({
               vendorId: item.product.vendorId,
               productId: item.productId,
               variantId: item.variantId,

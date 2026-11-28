@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { ShopperActivity } from '../types/shopper-activity.types';
-import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
-import { ShopperActivityStoreService } from './shopper-activity-store.service';
+import type { ShopperActivity } from '../types/tracking.types';
+import { TrackingPublisherService } from './tracking-publisher.service';
+import { TrackingStoreService } from './tracking-store.service';
 
 /** An activity to record and, when it happened earlier than now, when. */
 export interface RecordedActivityInput {
@@ -19,10 +19,10 @@ export interface RecordedActivityInput {
  * can say it was not accepted.
  */
 @Injectable()
-export class ShopperActivityRecorderService {
+export class TrackingRecorderService {
   constructor(
-    private readonly publisher: ShopperActivityPublisherService,
-    private readonly store: ShopperActivityStoreService,
+    private readonly publisher: TrackingPublisherService,
+    private readonly store: TrackingStoreService,
   ) {}
 
   record(

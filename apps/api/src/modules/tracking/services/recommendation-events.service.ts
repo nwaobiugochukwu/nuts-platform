@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
 import type { RecommendationEventDto } from '../dto/recommendation-events.dto';
-import type { ShopperActivity } from '../types/shopper-activity.types';
-import { actionForShelfType } from '../utils/shopper-activity.mapper';
-import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
+import type { ShopperActivity } from '../types/tracking.types';
+import { actionForShelfType } from '../utils/tracking.mapper';
+import { TrackingRecorderService } from './tracking-recorder.service';
 
 /** The interaction types a browser may report; the rest are recorded by the server. */
 const CLIENT_TRACKABLE_EVENTS = new Set([
@@ -21,7 +21,7 @@ const CLIENT_TRACKABLE_EVENTS = new Set([
 export class RecommendationEventsService {
   private readonly logger = new Logger(RecommendationEventsService.name);
 
-  constructor(private readonly recorder: ShopperActivityRecorderService) {}
+  constructor(private readonly recorder: TrackingRecorderService) {}
 
   async record(
     userId: string | undefined,

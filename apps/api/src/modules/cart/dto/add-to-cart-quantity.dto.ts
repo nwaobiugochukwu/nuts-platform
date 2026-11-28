@@ -11,7 +11,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { RECOMMENDATION_SURFACES } from '@api/modules/shopper-activity/dto/recommendation-events.dto';
+import { RECOMMENDATION_SURFACES } from '@api/modules/tracking/dto/recommendation-events.dto';
 
 export class CartRecommendationContextDto {
   @IsUUID()

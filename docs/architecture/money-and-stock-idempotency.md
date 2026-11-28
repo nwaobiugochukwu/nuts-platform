@@ -32,7 +32,7 @@ The patterns, strongest first:
 | **Referral reward** | The referral row is claimed (`rewardGranted`) under a Serializable transaction with retries; one `REFERRAL` credit per wallet per referral at the ledger. | `referral.service.spec.ts`, `referral-reward.consumer.spec.ts`; ledger index |
 | **Inventory adjustment by queue** | `ProcessedEventService.runOnce` records the message id; redelivery is skipped. | `inventory.consumer.spec.ts` |
 | **Stock adjustment by an admin or vendor** | The request may carry a `requestId`. The first request with that id records it in the adjustment's own transaction; a repeat changes nothing and answers with the current stock. The web sends one id per intended adjustment (same product, amount and reason keep the id until it succeeds; a changed request gets a new one). | `product-stock-adjustment.spec.ts`; `intent-id.test.mjs` |
-| **Shopper activity** (not money) | Each row carries the id it becomes and is inserted with `skipDuplicates`. | `shopper-activity-store.service.spec.ts` |
+| **Shopper activity** (not money) | Each row carries the id it becomes and is inserted with `skipDuplicates`. | `tracking-store.service.spec.ts` |
 
 ## The ledger backstop
 

@@ -1,17 +1,17 @@
 import { ROLE } from '@prisma/client';
-import { ShopperActivityService } from '../services/shopper-activity.service';
+import { TrackingService } from '../services/tracking.service';
 
-describe('ShopperActivityService', () => {
+describe('TrackingService', () => {
   let prisma: { vendor: { findFirst: jest.Mock } };
   let recorder: { record: jest.Mock };
-  let service: ShopperActivityService;
+  let service: TrackingService;
 
   beforeEach(() => {
     prisma = {
       vendor: { findFirst: jest.fn().mockResolvedValue({ id: 'v1' }) },
     };
     recorder = { record: jest.fn().mockResolvedValue(undefined) };
-    service = new ShopperActivityService(prisma as never, recorder as never);
+    service = new TrackingService(prisma as never, recorder as never);
     jest
       .spyOn((service as any).logger, 'warn')
       .mockImplementation(() => undefined);
