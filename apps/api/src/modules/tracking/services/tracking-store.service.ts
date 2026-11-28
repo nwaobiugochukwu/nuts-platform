@@ -1,7 +1,7 @@
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { ShopperActivity } from '../types/shopper-activity.types';
+import type { ShopperActivity } from '../types/tracking.types';
 import {
   feedRefreshFor,
   storeFor,
@@ -9,7 +9,7 @@ import {
   toProductViewRow,
   toSearchRow,
   toShelfRow,
-} from '../utils/shopper-activity.mapper';
+} from '../utils/tracking.mapper';
 import { RecommendationRefreshService } from './recommendation-refresh.service';
 
 /** One activity and when it happened. */
@@ -32,8 +32,8 @@ export interface StoredActivityInput {
  * their feed rebuilt, once per burst (`RecommendationRefreshService`).
  */
 @Injectable()
-export class ShopperActivityStoreService {
-  private readonly logger = new Logger(ShopperActivityStoreService.name);
+export class TrackingStoreService {
+  private readonly logger = new Logger(TrackingStoreService.name);
 
   constructor(
     private readonly prisma: PrismaService,

@@ -5,8 +5,8 @@ import {
   withRole,
 } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { ShopperActivityStoreService } from '../services/shopper-activity-store.service';
-import { ShopperActivityConsumer } from '../consumers/shopper-activity.consumer';
+import { TrackingStoreService } from '../services/tracking-store.service';
+import { TrackingConsumer } from '../consumers/tracking.consumer';
 
 const missingRow = () =>
   new Prisma.PrismaClientKnownRequestError('fk', {
@@ -14,14 +14,14 @@ const missingRow = () =>
     clientVersion: 'test',
   });
 
-describe('ShopperActivityConsumer', () => {
+describe('TrackingConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;
   let prisma: any;
   let refresh: { schedule: jest.Mock };
-  let consumer: ShopperActivityConsumer;
+  let consumer: TrackingConsumer;
 
   const at = '2026-11-28T10:00:00.000Z';
-  /** A shopper-activity message, as the publisher sends it: the action is the event name. */
+  /** A tracking message, as the publisher sends it: the action is the event name. */
   const activity = (action: string, body: object) =>
     buildEnvelope(
       {
@@ -45,9 +45,9 @@ describe('ShopperActivityConsumer', () => {
       shopperActivity: table(),
     };
     refresh = { schedule: jest.fn() };
-    consumer = new ShopperActivityConsumer(
+    consumer = new TrackingConsumer(
       harness.rabbit,
-      new ShopperActivityStoreService(prisma, refresh as never),
+      new TrackingStoreService(prisma, refresh as never),
     );
     jest
       .spyOn((consumer as any).logger, 'error')

@@ -225,25 +225,25 @@
         "functions": 70,
         "lines": 50
       },
-      "./src/modules/shopper-activity/consumers/": {
+      "./src/modules/tracking/consumers/": {
         "statements": 90,
         "branches": 85,
         "functions": 90,
         "lines": 90
       },
-      "./src/modules/shopper-activity/services/shopper-activity-store.service.ts": {
+      "./src/modules/tracking/services/tracking-store.service.ts": {
         "statements": 90,
         "branches": 85,
         "functions": 90,
         "lines": 90
       },
-      "./src/modules/shopper-activity/services/shopper-activity-recorder.service.ts": {
+      "./src/modules/tracking/services/tracking-recorder.service.ts": {
         "statements": 90,
         "branches": 85,
         "functions": 90,
         "lines": 90
       },
-      "./src/modules/shopper-activity/jobs/activity-retention.job.ts": {
+      "./src/modules/tracking/jobs/activity-retention.job.ts": {
         "statements": 85,
         "branches": 75,
         "functions": 85,

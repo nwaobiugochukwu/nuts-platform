@@ -2,11 +2,8 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import type {
-  ShopperAction,
-  ShopperActivity,
-} from '../types/shopper-activity.types';
-import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
+import type { ShopperAction, ShopperActivity } from '../types/tracking.types';
+import { TrackingRecorderService } from './tracking-recorder.service';
 
 /** What the caller knows about a cart or wishlist change; the service adds the id and the action. */
 export type ShopperItemChange = Omit<ShopperActivity, 'id' | 'action'> & {
@@ -28,12 +25,12 @@ type Result = { accepted: boolean };
  * is lost.
  */
 @Injectable()
-export class ShopperActivityService {
-  private readonly logger = new Logger(ShopperActivityService.name);
+export class TrackingService {
+  private readonly logger = new Logger(TrackingService.name);
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly recorder: ShopperActivityRecorderService,
+    private readonly recorder: TrackingRecorderService,
   ) {}
 
   /** A shopper opened a vendor's store page. Not counted: staff, and a vendor viewing their own store. */

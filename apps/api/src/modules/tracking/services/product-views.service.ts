@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
-import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
+import { TrackingRecorderService } from './tracking-recorder.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { TRACKING } from '@api/common/constants';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -28,7 +28,7 @@ export class ProductViewsService {
 
   constructor(
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
-    private readonly recorder: ShopperActivityRecorderService,
+    private readonly recorder: TrackingRecorderService,
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
   ) {

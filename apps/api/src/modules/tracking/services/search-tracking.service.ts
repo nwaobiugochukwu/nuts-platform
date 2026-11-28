@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
+import { TrackingRecorderService } from './tracking-recorder.service';
 
 @Injectable()
 export class SearchTrackingService {
   private readonly logger = new Logger(SearchTrackingService.name);
 
-  constructor(private readonly recorder: ShopperActivityRecorderService) {}
+  constructor(private readonly recorder: TrackingRecorderService) {}
 
   /**
    * Records a search as shopper activity. What it changes in the shopper's recommendations is worked

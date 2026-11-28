@@ -39,7 +39,7 @@ Admins and vendors need consistent sales, product, traffic, and funnel reporting
 
 #### Current backend mechanism
 
-Two modules. `shopper-activity` takes in what shoppers do and stores it; `analytics` only reads it, for admin and vendor reports (PostgreSQL, short-lived caches).
+Two modules. `tracking` takes in what shoppers do and stores it; `analytics` only reads it, for admin and vendor reports (PostgreSQL, short-lived caches).
 
 ##### Event paths
 
@@ -53,7 +53,7 @@ Everything a shopper does is one kind of thing, a `ShopperActivity` (who, what t
 - **Retention:** one nightly job removes each kind of data after its own time (product views and shopper activity 730 days, recommendation events and guest recent views 180 days; follow events are kept).
 - **Reporting:** admin and vendor reports share PostgreSQL with commerce; browser dashboards poll cached report endpoints.
 
-Key code paths: [ActivityRecorder](../../apps/api/src/modules/shopper-activity/services/shopper-activity-recorder.service.ts), [ActivityStore](../../apps/api/src/modules/shopper-activity/services/shopper-activity-store.service.ts), [ShopperActivityConsumer](../../apps/api/src/modules/shopper-activity/consumers/shopper-activity.consumer.ts), [ProductViewsService](../../apps/api/src/modules/shopper-activity/services/product-views.service.ts), [ShopperActivityService](../../apps/api/src/modules/shopper-activity/services/shopper-activity.service.ts), [RecommendationEventsService](../../apps/api/src/modules/shopper-activity/services/recommendation-events.service.ts), [retention job](../../apps/api/src/modules/shopper-activity/jobs/activity-retention.job.ts), [engagement reporting](../../apps/api/src/modules/analytics/services/shopper-engagement.service.ts).
+Key code paths: [ActivityRecorder](../../apps/api/src/modules/tracking/services/tracking-recorder.service.ts), [ActivityStore](../../apps/api/src/modules/tracking/services/tracking-store.service.ts), [TrackingConsumer](../../apps/api/src/modules/tracking/consumers/tracking.consumer.ts), [ProductViewsService](../../apps/api/src/modules/tracking/services/product-views.service.ts), [TrackingService](../../apps/api/src/modules/tracking/services/tracking.service.ts), [RecommendationEventsService](../../apps/api/src/modules/tracking/services/recommendation-events.service.ts), [retention job](../../apps/api/src/modules/tracking/jobs/activity-retention.job.ts), [engagement reporting](../../apps/api/src/modules/analytics/services/shopper-engagement.service.ts).
 
 #### Failure scenarios and trade-offs
 

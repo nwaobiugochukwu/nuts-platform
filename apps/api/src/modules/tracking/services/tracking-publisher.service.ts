@@ -6,11 +6,8 @@ import { randomUUID } from 'node:crypto';
 import type {
   ShopperActivity,
   ShopperActivityBody,
-} from '../types/shopper-activity.types';
-import {
-  eventNameFor,
-  shopperAggregate,
-} from '../utils/shopper-activity.mapper';
+} from '../types/tracking.types';
+import { eventNameFor, shopperAggregate } from '../utils/tracking.mapper';
 
 /**
  * The one way shopper activity goes to the analytics queue instead of being written to Postgres
@@ -23,7 +20,7 @@ import {
  * lose an event; this path trades that guarantee for not needing a database write per click.)
  */
 @Injectable()
-export class ShopperActivityPublisherService {
+export class TrackingPublisherService {
   constructor(@Optional() private readonly rabbitmq?: RabbitMQService) {}
 
   /** True when the broker confirmed it. `occurredAt` is for activity that happened earlier than now. */

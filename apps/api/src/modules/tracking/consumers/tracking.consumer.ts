@@ -8,17 +8,17 @@ import { PermanentConsumerError } from '@api/infrastructure/messaging/rabbitmq/c
 import { RABBITMQ_QUEUES } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ShopperActivityStoreService } from '../services/shopper-activity-store.service';
+import { TrackingStoreService } from '../services/tracking-store.service';
 import type {
   ShopperAction,
   ShopperActivity,
   ShopperActivityBody,
-} from '../types/shopper-activity.types';
+} from '../types/tracking.types';
 import {
   SHOPPER_ACTIVITY_EVENTS,
   actionForEvent,
   missingFields,
-} from '../utils/shopper-activity.mapper';
+} from '../utils/tracking.mapper';
 
 /**
  * Takes shopper activity (a product viewed, a search, a store viewed, a cart or wishlist change, a
@@ -31,12 +31,12 @@ import {
  * written, and what happens to a row that points at something deleted, is the store's concern.
  */
 @Injectable()
-export class ShopperActivityConsumer implements OnModuleInit {
-  private readonly logger = new Logger(ShopperActivityConsumer.name);
+export class TrackingConsumer implements OnModuleInit {
+  private readonly logger = new Logger(TrackingConsumer.name);
 
   constructor(
     private readonly rabbitmq: RabbitMQService,
-    private readonly store: ShopperActivityStoreService,
+    private readonly store: TrackingStoreService,
   ) {}
 
   async onModuleInit() {
@@ -52,7 +52,7 @@ export class ShopperActivityConsumer implements OnModuleInit {
       type: SHOPPER_ACTIVITY_EVENTS,
       supportedVersions: [1],
     });
-    // parseEnvelope only lets the shopper-activity events through, so there is always an action.
+    // parseEnvelope only lets the tracking events through, so there is always an action.
     const action = actionForEvent(event.type) as ShopperAction;
     const activity = {
       ...(event.payload as unknown as ShopperActivityBody),
