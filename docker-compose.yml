@@ -298,13 +298,13 @@ services:
   # ── Temporal worker (opt-in: `--profile temporal`) ─────────────────────────
   # Not part of the prod/staging profiles, so enabling Temporal is an explicit
   # step. Needs TEMPORAL_ENABLED=true plus an address and namespace in the env file.
-  temporal-worker-prod:
+  workflow-worker-prod:
     build:
       context: .
       dockerfile: ./apps/api/Dockerfile
-      target: runner-temporal
+      target: runner-workflow
     image: nuts-api-temporal:latest
-    container_name: nuts_temporal_worker
+    container_name: nuts_workflow_worker
     restart: unless-stopped
     profiles: ["temporal"]
     env_file:

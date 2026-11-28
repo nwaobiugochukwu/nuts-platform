@@ -1,5 +1,5 @@
 import { WorkflowExecutionAlreadyStartedError } from '@temporalio/client';
-import { TemporalClientService } from './temporal-client.service';
+import { WorkflowClientService } from './workflow-client.service';
 
 const start = jest.fn();
 const signalWithStart = jest.fn();
@@ -29,7 +29,7 @@ const input = {
   args: [{ message: 'hi', delayMs: 1 }],
 };
 
-describe('TemporalClientService', () => {
+describe('WorkflowClientService', () => {
   const original = { ...process.env };
 
   beforeEach(() => {
@@ -47,7 +47,7 @@ describe('TemporalClientService', () => {
 
   it('is a logged no-op while disabled and never connects', async () => {
     delete process.env.TEMPORAL_ENABLED;
-    const service = new TemporalClientService();
+    const service = new WorkflowClientService();
     await expect(service.startWorkflow(input)).resolves.toEqual({
       started: false,
       workflowId: 'sample:1',
@@ -60,7 +60,7 @@ describe('TemporalClientService', () => {
 
   it('starts a workflow with the business key as its id', async () => {
     process.env.TEMPORAL_ENABLED = 'true';
-    const service = new TemporalClientService();
+    const service = new WorkflowClientService();
     const result = await service.startWorkflow(input);
     expect(result).toEqual({
       started: true,
@@ -83,7 +83,7 @@ describe('TemporalClientService', () => {
         'sampleDelayedEchoWorkflow',
       ),
     );
-    const result = await new TemporalClientService().startWorkflow(input);
+    const result = await new WorkflowClientService().startWorkflow(input);
     expect(result).toMatchObject({ started: false, reason: 'already_started' });
   });
 
@@ -91,13 +91,13 @@ describe('TemporalClientService', () => {
     process.env.TEMPORAL_ENABLED = 'true';
     start.mockRejectedValue(new Error('unavailable'));
     await expect(
-      new TemporalClientService().startWorkflow(input),
+      new WorkflowClientService().startWorkflow(input),
     ).rejects.toThrow('unavailable');
   });
 
   it('connects once and reuses the connection', async () => {
     process.env.TEMPORAL_ENABLED = 'true';
-    const service = new TemporalClientService();
+    const service = new WorkflowClientService();
     await service.startWorkflow(input);
     await service.startWorkflow({ ...input, workflowId: 'sample:2' });
     expect(connect).toHaveBeenCalledTimes(1);
@@ -110,7 +110,7 @@ describe('TemporalClientService', () => {
     connect
       .mockRejectedValueOnce(new Error('refused'))
       .mockResolvedValue({ close });
-    const service = new TemporalClientService();
+    const service = new WorkflowClientService();
     await expect(service.startWorkflow(input)).rejects.toThrow('refused');
     await expect(service.startWorkflow(input)).resolves.toMatchObject({
       started: true,
@@ -119,7 +119,7 @@ describe('TemporalClientService', () => {
 
   it('signals with start so an early signal is not lost', async () => {
     process.env.TEMPORAL_ENABLED = 'true';
-    await new TemporalClientService().signalWithStart({
+    await new WorkflowClientService().signalWithStart({
       ...input,
       signal: 'paymentConfirmed',
       signalArgs: [{ ref: 'r1' }],

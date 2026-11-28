@@ -34,7 +34,7 @@
     "pm2:api": "pm2-runtime ecosystem.config.cjs --only api",
     "pm2:worker": "pm2-runtime ecosystem.config.cjs --only worker",
     "pm2:jobs": "pm2-runtime ecosystem.config.cjs --only jobs",
-    "pm2:temporal-worker": "pm2-runtime ecosystem.config.cjs --only temporal-worker",
+    "pm2:workflow-worker": "pm2-runtime ecosystem.config.cjs --only workflow-worker",
     "start:prod": "cross-env NODE_ENV=production TS_NODE_PROJECT=tsconfig.runtime.json node --max-old-space-size=350 -r tsconfig-paths/register dist/main",
     "prestart:staging": "cross-env NODE_ENV=staging npm run migrate:deploy",
     "lint": "eslint \"{src,apps,libs}/**/*.ts\"",

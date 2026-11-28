@@ -45,7 +45,7 @@ describe('portFor', () => {
   it('gives worker, jobs and the temporal worker their own health ports by default', () => {
     expect(portFor('health', 'worker', env({}))).toBe(3002);
     expect(portFor('health', 'jobs', env({}))).toBe(3003);
-    expect(portFor('health', 'temporal-worker', env({}))).toBe(3004);
+    expect(portFor('health', 'workflow-worker', env({}))).toBe(3004);
     expect(portFor('health', 'api', env({}))).toBeNull();
   });
 
@@ -60,7 +60,7 @@ describe('portFor', () => {
       9466,
     );
     expect(
-      portFor('metrics', 'temporal-worker', env({ NODE_ENV: 'development' })),
+      portFor('metrics', 'workflow-worker', env({ NODE_ENV: 'development' })),
     ).toBe(9467);
     expect(
       portFor('metrics', 'api', env({ NODE_ENV: 'production' })),

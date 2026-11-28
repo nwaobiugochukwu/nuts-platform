@@ -4,7 +4,7 @@ import { Params } from 'nestjs-pino';
 import { currentRequestId } from '@api/common/request-context/request-context.util';
 
 /**
- * Which program wrote a log line (api, worker, jobs, all, temporal-worker). Added
+ * Which program wrote a log line (api, worker, jobs, all, workflow-worker). Added
  * to every line so interleaved output, and logs shipped from several services,
  * can be told apart.
  */

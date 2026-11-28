@@ -4,7 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { PrismaService } from './prisma.service';
 import { OutboxService } from '../messaging/outbox/outbox.service';
 import { MetricsService } from '../observability/metrics/metrics.service';
-import type { StartWorkflowInput } from '../workflows/temporal-client.service';
+import type { StartWorkflowInput } from '../workflows/workflow-client.service';
 import { RABBITMQ_ROUTING_KEYS } from '../messaging/rabbitmq/rabbitmq.constants';
 import { currentProcessRole } from '../../config/process-role.config';
 import {

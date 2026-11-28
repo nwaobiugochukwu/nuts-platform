@@ -1,12 +1,12 @@
 import {
   queuesToPoll,
-  readTemporalConfig,
+  readWorkflowConfig,
   TASK_QUEUES,
-} from './temporal.config';
+} from './workflow.config';
 
-describe('readTemporalConfig', () => {
+describe('readWorkflowConfig', () => {
   it('is disabled with local defaults when nothing is set', () => {
-    expect(readTemporalConfig({})).toEqual({
+    expect(readWorkflowConfig({})).toEqual({
       enabled: false,
       address: 'localhost:7233',
       namespace: 'default',
@@ -16,12 +16,12 @@ describe('readTemporalConfig', () => {
   });
 
   it('enables only on an explicit "true"', () => {
-    expect(readTemporalConfig({ TEMPORAL_ENABLED: 'TRUE' }).enabled).toBe(true);
-    expect(readTemporalConfig({ TEMPORAL_ENABLED: '1' }).enabled).toBe(false);
+    expect(readWorkflowConfig({ TEMPORAL_ENABLED: 'TRUE' }).enabled).toBe(true);
+    expect(readWorkflowConfig({ TEMPORAL_ENABLED: '1' }).enabled).toBe(false);
   });
 
   it('uses TLS for Cloud (API key) or when asked', () => {
-    const cloud = readTemporalConfig({
+    const cloud = readWorkflowConfig({
       TEMPORAL_API_KEY: ' key ',
       TEMPORAL_ADDRESS: 'ns.acct.tmprl.cloud:7233',
       TEMPORAL_NAMESPACE: 'nuts-prod.acct',
@@ -31,7 +31,7 @@ describe('readTemporalConfig', () => {
       tls: true,
       namespace: 'nuts-prod.acct',
     });
-    expect(readTemporalConfig({ TEMPORAL_TLS: 'true' }).tls).toBe(true);
+    expect(readWorkflowConfig({ TEMPORAL_TLS: 'true' }).tls).toBe(true);
   });
 });
 
