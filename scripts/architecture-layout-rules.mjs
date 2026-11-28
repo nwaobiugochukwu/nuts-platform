@@ -94,6 +94,13 @@ export function checkConsumerLocation(relFromSrc) {
   return [`queue consumers belong in modules/<domain>/consumers/ (or infrastructure/workflows); found ${relFromSrc}`];
 }
 
+/** A module's unit tests live in its `tests/` folder (mirroring the folders of what they test), not beside the source. */
+export function checkSpecLocation(relFromSrc) {
+  const m = relFromSrc.match(/^modules\/([^/]+)\/(.+\.spec\.ts)$/);
+  if (!m) return [];
+  return /^tests\/[^/]+$/.test(m[2]) ? [] : [`specs belong directly in modules/${m[1]}/tests/ (no subfolders); found ${relFromSrc}`];
+}
+
 /** Internal aliases other than @api/* are not allowed. */
 export function checkAlias(spec) {
   return /^@(common|infra|infrastructure|modules)\//.test(spec) ? [`import "${spec}" uses a removed alias; use @api/*`] : [];
