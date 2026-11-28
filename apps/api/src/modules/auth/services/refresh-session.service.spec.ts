@@ -2,6 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { ROLE } from '@prisma/client';
 import { createHmac } from 'crypto';
 import { RefreshSessionService } from './refresh-session.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('RefreshSessionService user sessions', () => {
   const refreshSecret = 'test-refresh-secret';
@@ -77,6 +78,7 @@ describe('RefreshSessionService user sessions', () => {
 
     service = new RefreshSessionService(
       prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
       jwtService as never,
       config as never,
     );
@@ -86,6 +88,7 @@ describe('RefreshSessionService user sessions', () => {
     const devices = { recordSignIn: jest.fn().mockResolvedValue(false) };
     const withDevices = new RefreshSessionService(
       prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
       jwtService as never,
       config as never,
       undefined,
@@ -305,6 +308,7 @@ describe('RefreshSessionService user sessions', () => {
 
     const graceService = new RefreshSessionService(
       prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
       jwtService as never,
       configService as never,
       undefined,
@@ -361,6 +365,7 @@ describe('RefreshSessionService user sessions', () => {
 
     const reuseService = new RefreshSessionService(
       prisma as never,
+      new TransactionRunnerService(prisma as never, {} as never),
       jwtService as never,
       configService as never,
       undefined,

@@ -7,6 +7,7 @@ import { OrderStatus, Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 import {
   PRODUCT_BY_SLUG,
@@ -621,6 +622,7 @@ export class ProductsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly cacheService: CacheService,
     private readonly searchService: SearchService,
     private readonly auditLog: AuditLogService,
@@ -1803,123 +1805,126 @@ export class ProductsService {
     }
 
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        /*
-         * Fetch only fields required for validation.
-         */
-        const product = await tx.product.findFirst({
-          where: {
-            id,
-            isDeleted: false,
-          },
-          select: {
-            id: true,
-            slug: true,
-            stock: true,
-            hasVariants: true,
-            vendor: {
-              select: {
-                storeSlug: true,
+      const result = await this.transactions.run(
+        async ({ tx }) => {
+          /*
+           * Fetch only fields required for validation.
+           */
+          const product = await tx.product.findFirst({
+            where: {
+              id,
+              isDeleted: false,
+            },
+            select: {
+              id: true,
+              slug: true,
+              stock: true,
+              hasVariants: true,
+              vendor: {
+                select: {
+                  storeSlug: true,
+                },
               },
             },
-          },
-        });
+          });
 
-        if (!product) {
-          throw new NotFoundException('Product not found');
-        }
+          if (!product) {
+            throw new NotFoundException('Product not found');
+          }
 
-        if (product.hasVariants) {
-          throw new BadRequestException(
-            'Stock is managed at the variant level for variant products. Use the variant stock endpoint instead.',
-          );
-        }
+          if (product.hasVariants) {
+            throw new BadRequestException(
+              'Stock is managed at the variant level for variant products. Use the variant stock endpoint instead.',
+            );
+          }
 
-        /*
-         * The UPDATE is guarded when decreasing stock.
-         *
-         * This prevents:
-         *
-         * currentStock = 2
-         * quantity = -5
-         *
-         * from ever producing -3.
-         *
-         * The database performs the increment/decrement atomically.
-         */
-        const updatedCount = await tx.product.updateMany({
-          where: {
-            id,
-            isDeleted: false,
+          /*
+           * The UPDATE is guarded when decreasing stock.
+           *
+           * This prevents:
+           *
+           * currentStock = 2
+           * quantity = -5
+           *
+           * from ever producing -3.
+           *
+           * The database performs the increment/decrement atomically.
+           */
+          const updatedCount = await tx.product.updateMany({
+            where: {
+              id,
+              isDeleted: false,
 
-            ...(quantity < 0
-              ? {
-                  stock: {
-                    gte: -quantity,
-                  },
-                }
-              : {}),
-          },
-
-          data: {
-            stock: {
-              increment: quantity,
+              ...(quantity < 0
+                ? {
+                    stock: {
+                      gte: -quantity,
+                    },
+                  }
+                : {}),
             },
-          },
-        });
 
-        if (updatedCount.count !== 1) {
-          throw new BadRequestException(
-            `Insufficient stock: cannot apply ${quantity} to the current stock level`,
-          );
-        }
+            data: {
+              stock: {
+                increment: quantity,
+              },
+            },
+          });
 
-        /*
-         * This SELECT occurs inside the same transaction after the atomic
-         * update. The returned stock is therefore the value produced by
-         * this adjustment.
-         */
-        const updated = await tx.product.findUniqueOrThrow({
-          where: {
-            id,
-          },
-          select: {
-            id: true,
-            slug: true,
-            stock: true,
-            updatedAt: true,
-          },
-        });
+          if (updatedCount.count !== 1) {
+            throw new BadRequestException(
+              `Insufficient stock: cannot apply ${quantity} to the current stock level`,
+            );
+          }
 
-        /*
-         * Deriving oldStock from the resulting value + adjustment avoids
-         * relying on a stale pre-transaction read.
-         *
-         * newStock = oldStock + quantity
-         * oldStock = newStock - quantity
-         */
-        const oldStock = updated.stock - quantity;
+          /*
+           * This SELECT occurs inside the same transaction after the atomic
+           * update. The returned stock is therefore the value produced by
+           * this adjustment.
+           */
+          const updated = await tx.product.findUniqueOrThrow({
+            where: {
+              id,
+            },
+            select: {
+              id: true,
+              slug: true,
+              stock: true,
+              updatedAt: true,
+            },
+          });
 
-        await tx.stockHistory.create({
-          data: {
-            productId: id,
-            adjustment: quantity,
-            oldStockQuantity: oldStock,
-            newStockQuantity: updated.stock,
-            description:
-              description ??
-              (quantity > 0
-                ? 'Manual stock adjustment'
-                : 'Manual stock reduction'),
-          },
-        });
+          /*
+           * Deriving oldStock from the resulting value + adjustment avoids
+           * relying on a stale pre-transaction read.
+           *
+           * newStock = oldStock + quantity
+           * oldStock = newStock - quantity
+           */
+          const oldStock = updated.stock - quantity;
 
-        return {
-          product,
-          updated,
-          oldStock,
-        };
-      });
+          await tx.stockHistory.create({
+            data: {
+              productId: id,
+              adjustment: quantity,
+              oldStockQuantity: oldStock,
+              newStockQuantity: updated.stock,
+              description:
+                description ??
+                (quantity > 0
+                  ? 'Manual stock adjustment'
+                  : 'Manual stock reduction'),
+            },
+          });
+
+          return {
+            product,
+            updated,
+            oldStock,
+          };
+        },
+        { name: 'product.update-stock' },
+      );
 
       const { updated, oldStock, product } = result;
 

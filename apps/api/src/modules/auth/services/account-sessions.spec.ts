@@ -4,6 +4,7 @@ import { createHmac } from 'crypto';
 
 import { authCookieRoleForPath } from '../constants/auth-cookies.constants';
 import { RefreshSessionService } from './refresh-session.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const refreshSecret = 'test-refresh-secret';
 const hash = (id: string) =>
@@ -68,6 +69,7 @@ function make(opts: { redisGrace?: string | null } = {}) {
   };
   const service = new RefreshSessionService(
     prisma as never,
+    new TransactionRunnerService(prisma as never, {} as never),
     jwt as never,
     config as never,
     sessions as never,

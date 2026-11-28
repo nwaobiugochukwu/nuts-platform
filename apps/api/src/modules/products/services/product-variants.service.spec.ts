@@ -1,8 +1,9 @@
-﻿import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { ProductVariantsService } from './product-variants.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const mockPrisma = {
   product: {
@@ -44,6 +45,13 @@ describe('ProductVariantsService', () => {
       providers: [
         ProductVariantsService,
         { provide: PrismaService, useValue: mockPrisma },
+        {
+          provide: TransactionRunnerService,
+          useValue: new TransactionRunnerService(
+            mockPrisma as never,
+            {} as never,
+          ),
+        },
         { provide: CacheService, useValue: mockCacheService },
       ],
     }).compile();

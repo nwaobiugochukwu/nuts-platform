@@ -1,10 +1,12 @@
 import { PersonalizedFeedService } from './personalized-feed.service';
 import { PopularProductsService } from './popular-products.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('PersonalizedFeedService feed warming', () => {
   const build = () => {
     const refresh = { registerWarmer: jest.fn() };
     const service = new PersonalizedFeedService(
+      {} as never,
       {} as never,
       {} as never,
       new PopularProductsService({} as never),
@@ -63,6 +65,7 @@ describe('PersonalizedFeedService feed warming', () => {
 
   it('works without the refresh service at all (it is optional)', () => {
     const service = new PersonalizedFeedService(
+      {} as never,
       {} as never,
       {} as never,
       new PopularProductsService({} as never),

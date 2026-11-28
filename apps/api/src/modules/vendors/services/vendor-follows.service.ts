@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
@@ -25,6 +26,7 @@ export class VendorFollowsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly outbox: OutboxService,
     @Optional() private readonly cache?: CacheService,
   ) {}
@@ -108,50 +110,53 @@ export class VendorFollowsService {
 
   async follow(userId: string, vendorId: string) {
     try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const vendor = await tx.vendor.findFirst({
-          where: { id: vendorId, isActive: true, isApproved: true },
-          select: { id: true },
-        });
-        if (!vendor) throw new NotFoundException('Vendor store not found');
+      const result = await this.transactions.run(
+        async ({ tx }) => {
+          const vendor = await tx.vendor.findFirst({
+            where: { id: vendorId, isActive: true, isApproved: true },
+            select: { id: true },
+          });
+          if (!vendor) throw new NotFoundException('Vendor store not found');
 
-        const existing = await tx.vendorFollow.findUnique({
-          where: { userId_vendorId: { userId, vendorId } },
-          select: { id: true },
-        });
-        if (existing) {
+          const existing = await tx.vendorFollow.findUnique({
+            where: { userId_vendorId: { userId, vendorId } },
+            select: { id: true },
+          });
+          if (existing) {
+            return {
+              following: true,
+              changed: false,
+              followerCount: await this.activeFollowerCount(vendorId, tx),
+            };
+          }
+
+          await tx.vendorFollow.create({ data: { userId, vendorId } });
+          await tx.recommendationEvent.create({
+            data: {
+              eventType: 'FOLLOW',
+              surface: 'VENDOR_STORE',
+              vendorId,
+              userId,
+            },
+          });
+          await this.outbox.appendEvent(
+            tx,
+            'vendor',
+            vendorId,
+            DomainEvents.VENDOR_FOLLOWED,
+            {
+              userId,
+              vendorId,
+            },
+          );
           return {
             following: true,
-            changed: false,
+            changed: true,
             followerCount: await this.activeFollowerCount(vendorId, tx),
           };
-        }
-
-        await tx.vendorFollow.create({ data: { userId, vendorId } });
-        await tx.recommendationEvent.create({
-          data: {
-            eventType: 'FOLLOW',
-            surface: 'VENDOR_STORE',
-            vendorId,
-            userId,
-          },
-        });
-        await this.outbox.appendEvent(
-          tx,
-          'vendor',
-          vendorId,
-          DomainEvents.VENDOR_FOLLOWED,
-          {
-            userId,
-            vendorId,
-          },
-        );
-        return {
-          following: true,
-          changed: true,
-          followerCount: await this.activeFollowerCount(vendorId, tx),
-        };
-      });
+        },
+        { name: 'vendor-follow.follow' },
+      );
       // Invalidate only after commit so a concurrent read cannot re-cache
       // pre-follow data.
       if (result.changed) await this.cache?.invalidateRecommendations(userId);
@@ -175,36 +180,39 @@ export class VendorFollowsService {
   }
 
   async unfollow(userId: string, vendorId: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      const deleted = await tx.vendorFollow.deleteMany({
-        where: { userId, vendorId },
-      });
-      if (deleted.count > 0) {
-        await tx.recommendationEvent.create({
-          data: {
-            eventType: 'UNFOLLOW',
-            surface: 'VENDOR_STORE',
-            vendorId,
-            userId,
-          },
+    const result = await this.transactions.run(
+      async ({ tx }) => {
+        const deleted = await tx.vendorFollow.deleteMany({
+          where: { userId, vendorId },
         });
-        await this.outbox.appendEvent(
-          tx,
-          'vendor',
-          vendorId,
-          DomainEvents.VENDOR_UNFOLLOWED,
-          {
-            userId,
+        if (deleted.count > 0) {
+          await tx.recommendationEvent.create({
+            data: {
+              eventType: 'UNFOLLOW',
+              surface: 'VENDOR_STORE',
+              vendorId,
+              userId,
+            },
+          });
+          await this.outbox.appendEvent(
+            tx,
+            'vendor',
             vendorId,
-          },
-        );
-      }
-      return {
-        following: false,
-        changed: deleted.count > 0,
-        followerCount: await this.activeFollowerCount(vendorId, tx),
-      };
-    });
+            DomainEvents.VENDOR_UNFOLLOWED,
+            {
+              userId,
+              vendorId,
+            },
+          );
+        }
+        return {
+          following: false,
+          changed: deleted.count > 0,
+          followerCount: await this.activeFollowerCount(vendorId, tx),
+        };
+      },
+      { name: 'vendor-follow.unfollow' },
+    );
     if (result.changed) await this.cache?.invalidateRecommendations(userId);
     return result;
   }

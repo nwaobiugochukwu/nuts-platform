@@ -5,6 +5,7 @@ import {
   WalletTransactionType,
 } from '@prisma/client';
 import { ReferralService } from './referral.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const known = (code: string) =>
   new Prisma.PrismaClientKnownRequestError('boom', {
@@ -41,7 +42,11 @@ describe('ReferralService', () => {
       appendEnvelope: jest.fn().mockResolvedValue('e-1'),
       wakeRelay: jest.fn(),
     };
-    service = new ReferralService(prisma, outbox as never);
+    service = new ReferralService(
+      prisma,
+      new TransactionRunnerService(prisma, {} as never),
+      outbox as never,
+    );
     jest
       .spyOn((service as any).logger, 'warn')
       .mockImplementation(() => undefined);

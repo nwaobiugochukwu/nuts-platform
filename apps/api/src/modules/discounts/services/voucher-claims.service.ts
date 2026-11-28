@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 import {
   describeDiscountTargets,
@@ -55,7 +56,10 @@ export interface VoucherClaimView {
  */
 @Injectable()
 export class VoucherClaimsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
+  ) {}
 
   private normalize(code: string): string {
     return code.trim().toUpperCase();
@@ -81,103 +85,106 @@ export class VoucherClaimsService {
     const code = this.normalize(rawCode);
     if (!code) throw new BadRequestException('A voucher code is required.');
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      // Serialise concurrent claims of the same code: the capacity check and
-      // the insert below must see each other.
-      const locked = await tx.$queryRaw<Array<{ id: string }>>(
-        Prisma.sql`SELECT "id" FROM "discount_codes" WHERE "code" = ${code} FOR UPDATE`,
-      );
-      if (locked.length !== 1) {
-        throw new NotFoundException('Invalid or inactive voucher code.');
-      }
-
-      const discount = await tx.discountCode.findFirst({
-        where: { id: locked[0].id, isActive: true, deletedAt: null },
-      });
-      if (!discount) {
-        throw new NotFoundException('Invalid or inactive voucher code.');
-      }
-
-      if (discount.autoApply) {
-        throw new BadRequestException(
-          'This offer applies automatically when your cart qualifies. There is nothing to claim.',
+    const result = await this.transactions.run(
+      async ({ tx }) => {
+        // Serialise concurrent claims of the same code: the capacity check and
+        // the insert below must see each other.
+        const locked = await tx.$queryRaw<Array<{ id: string }>>(
+          Prisma.sql`SELECT "id" FROM "discount_codes" WHERE "code" = ${code} FOR UPDATE`,
         );
-      }
+        if (locked.length !== 1) {
+          throw new NotFoundException('Invalid or inactive voucher code.');
+        }
 
-      const now = new Date();
-      if (discount.startsAt && now < discount.startsAt) {
-        throw new BadRequestException('This voucher is not active yet.');
-      }
-      if (discount.expiresAt && now >= discount.expiresAt) {
-        throw new BadRequestException('This voucher has expired.');
-      }
-
-      if (discount.firstOrderOnly) {
-        const prior = await tx.order.count({
-          where: { userId, status: { not: OrderStatus.CANCELLED } },
+        const discount = await tx.discountCode.findFirst({
+          where: { id: locked[0].id, isActive: true, deletedAt: null },
         });
-        if (prior > 0) {
-          throw new ConflictException(
-            'This voucher is exclusively reserved for first-time shoppers.',
+        if (!discount) {
+          throw new NotFoundException('Invalid or inactive voucher code.');
+        }
+
+        if (discount.autoApply) {
+          throw new BadRequestException(
+            'This offer applies automatically when your cart qualifies. There is nothing to claim.',
           );
         }
-      }
 
-      if (discount.perUserUsageLimit !== null) {
-        const used = await tx.discountCodeUserUsage.findUnique({
+        const now = new Date();
+        if (discount.startsAt && now < discount.startsAt) {
+          throw new BadRequestException('This voucher is not active yet.');
+        }
+        if (discount.expiresAt && now >= discount.expiresAt) {
+          throw new BadRequestException('This voucher has expired.');
+        }
+
+        if (discount.firstOrderOnly) {
+          const prior = await tx.order.count({
+            where: { userId, status: { not: OrderStatus.CANCELLED } },
+          });
+          if (prior > 0) {
+            throw new ConflictException(
+              'This voucher is exclusively reserved for first-time shoppers.',
+            );
+          }
+        }
+
+        if (discount.perUserUsageLimit !== null) {
+          const used = await tx.discountCodeUserUsage.findUnique({
+            where: {
+              discountCodeId_userId: { discountCodeId: discount.id, userId },
+            },
+            select: { usageCount: true },
+          });
+          if (used && used.usageCount >= discount.perUserUsageLimit) {
+            throw new ConflictException(
+              'You have already used this voucher the maximum number of times.',
+            );
+          }
+        }
+
+        if (discount.usageLimit !== null) {
+          const others = await VoucherClaimsService.reservedByOthers(
+            tx,
+            discount.id,
+            userId,
+          );
+          if (discount.usageCount + others >= discount.usageLimit) {
+            throw new ConflictException(
+              'All available vouchers of this offer have been claimed.',
+            );
+          }
+        }
+
+        const ttlEnd = new Date(now.getTime() + CLAIM_TTL_MS);
+        const expiresAt =
+          discount.expiresAt && discount.expiresAt < ttlEnd
+            ? discount.expiresAt
+            : ttlEnd;
+
+        const claim = await tx.discountCodeClaim.upsert({
           where: {
             discountCodeId_userId: { discountCodeId: discount.id, userId },
           },
-          select: { usageCount: true },
+          create: {
+            discountCodeId: discount.id,
+            userId,
+            status: DiscountClaimStatus.ACTIVE,
+            expiresAt,
+          },
+          // Re-claiming revives a released/expired/redeemed claim and refreshes
+          // the hold; an already-active one is simply extended (idempotent).
+          update: {
+            status: DiscountClaimStatus.ACTIVE,
+            claimedAt: now,
+            expiresAt,
+            orderId: null,
+          },
         });
-        if (used && used.usageCount >= discount.perUserUsageLimit) {
-          throw new ConflictException(
-            'You have already used this voucher the maximum number of times.',
-          );
-        }
-      }
 
-      if (discount.usageLimit !== null) {
-        const others = await VoucherClaimsService.reservedByOthers(
-          tx,
-          discount.id,
-          userId,
-        );
-        if (discount.usageCount + others >= discount.usageLimit) {
-          throw new ConflictException(
-            'All available vouchers of this offer have been claimed.',
-          );
-        }
-      }
-
-      const ttlEnd = new Date(now.getTime() + CLAIM_TTL_MS);
-      const expiresAt =
-        discount.expiresAt && discount.expiresAt < ttlEnd
-          ? discount.expiresAt
-          : ttlEnd;
-
-      const claim = await tx.discountCodeClaim.upsert({
-        where: {
-          discountCodeId_userId: { discountCodeId: discount.id, userId },
-        },
-        create: {
-          discountCodeId: discount.id,
-          userId,
-          status: DiscountClaimStatus.ACTIVE,
-          expiresAt,
-        },
-        // Re-claiming revives a released/expired/redeemed claim and refreshes
-        // the hold; an already-active one is simply extended (idempotent).
-        update: {
-          status: DiscountClaimStatus.ACTIVE,
-          claimedAt: now,
-          expiresAt,
-          orderId: null,
-        },
-      });
-
-      return { discount, claim };
-    });
+        return { discount, claim };
+      },
+      { name: 'voucher.claim' },
+    );
     const [appliesTo] = await describeDiscountTargets(this.prisma, [
       result.discount,
     ]);

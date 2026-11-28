@@ -4,6 +4,7 @@ import {
   fakeProcessed,
   fakeRabbit,
 } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('InventoryConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;
@@ -27,6 +28,7 @@ describe('InventoryConsumer', () => {
     consumer = new InventoryConsumer(
       harness.rabbit,
       prisma,
+      new TransactionRunnerService(prisma, {} as never),
       idempotency.processed,
     );
     jest
@@ -133,7 +135,12 @@ describe('InventoryConsumer', () => {
 
   it('does not apply the same adjustment twice when the broker redelivers it', async () => {
     const dup = fakeProcessed(['m-1']);
-    consumer = new InventoryConsumer(harness.rabbit, prisma, dup.processed);
+    consumer = new InventoryConsumer(
+      harness.rabbit,
+      prisma,
+      new TransactionRunnerService(prisma, {} as never),
+      dup.processed,
+    );
     harness.consumers.length = 0;
     await consumer.onModuleInit();
 

@@ -7,6 +7,7 @@ import {
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { NotificationsService } from './notifications.service';
@@ -40,6 +41,7 @@ export class OrderEventNotificationsService {
     private readonly emailService: EmailService,
     private readonly emailTemplates: EmailTemplatesService,
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly notificationsService: NotificationsService,
     @Optional()
     private readonly preferencesService?: NotificationPreferencesService,
@@ -113,14 +115,15 @@ export class OrderEventNotificationsService {
     category?: NotificationCategory;
   }): Promise<void> {
     try {
-      await this.prisma.$transaction((tx) =>
-        this.outbox.appendEvent(
-          tx,
-          'notification',
-          data.dedupeKey || data.userId,
-          RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-          data,
-        ),
+      await this.transactions.run(
+        (ctx) =>
+          ctx.emit(
+            'notification',
+            data.dedupeKey || data.userId,
+            RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
+            data,
+          ),
+        { name: 'notification.enqueue' },
       );
     } catch (error) {
       this.logger.error(
