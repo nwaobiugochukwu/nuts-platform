@@ -46,6 +46,7 @@ X
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useMemo,useState } from "react";
+import { createIntentIds } from "@/lib/intent-id";
 import { FormProvider,useForm,useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -274,6 +275,8 @@ export default function AdminProductPage() {
       toast.error(err?.response?.data?.message ?? "Failed to update status"),
   });
 
+  // A double click or a retry of the same adjustment must not apply it twice.
+  const stockIntents = useMemo(() => createIntentIds(), []);
   const adjustStockMutation = useMutation({
     mutationFn: ({
       id,
@@ -287,8 +290,10 @@ export default function AdminProductPage() {
       adminApi.patch(`/admin/products/${id}/stock`, {
         quantity,
         ...(description ? { description } : {}),
+        requestId: stockIntents.forIntent(`${id}|${quantity}|${description ?? ""}`),
       }),
     onSuccess: () => {
+      stockIntents.done();
       toast.success("Stock inventory updated");
       refreshProducts();
       setStockOpen(false);

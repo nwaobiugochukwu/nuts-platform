@@ -20,6 +20,7 @@ import {
 } from '../dto/create-variant.dto';
 import { UpdateVariantStockDto } from '../dto/update-variant-stock.dto';
 import { UpdateVariantDto } from '../dto/update-variant.dto';
+import { claimStockAdjustment } from '../utils/stock-adjustment-claim.util';
 
 @Injectable()
 export class ProductVariantsService {
@@ -433,19 +434,7 @@ export class ProductVariantsService {
    * The conditional update prevents stock from ever becoming negative,
    * even when multiple requests attempt to decrement simultaneously.
    */
-  async updateStock(
-    id: string,
-    quantityOrDto: number | UpdateVariantStockDto,
-    descriptionOrCreatedBy?: string,
-    createdBy?: string,
-  ) {
-    const dto: UpdateVariantStockDto =
-      typeof quantityOrDto === 'number'
-        ? { quantity: quantityOrDto, description: descriptionOrCreatedBy ?? '' }
-        : quantityOrDto;
-    const author =
-      typeof quantityOrDto === 'number' ? createdBy : descriptionOrCreatedBy;
-
+  async updateStock(id: string, dto: UpdateVariantStockDto, author?: string) {
     if (dto.quantity === 0) {
       throw new BadRequestException('Stock adjustment cannot be zero');
     }
@@ -473,8 +462,24 @@ export class ProductVariantsService {
       throw new NotFoundException('Product variant not found');
     }
 
-    const updated = await this.transactions.run(
+    const { updated, replayed } = await this.transactions.run(
       async ({ tx }) => {
+        // A repeat of an adjustment already applied (same request id) changes nothing and answers
+        // with the stock as it is now.
+        if (!(await claimStockAdjustment(tx, dto.requestId))) {
+          const current = await tx.productVariant.findUniqueOrThrow({
+            where: { id },
+            select: {
+              id: true,
+              productId: true,
+              stock: true,
+              isActive: true,
+              updatedAt: true,
+            },
+          });
+          return { updated: current, replayed: true };
+        }
+
         /**
          * Atomic stock update.
          *
@@ -551,12 +556,14 @@ export class ProductVariantsService {
           },
         });
 
-        return updatedVariant;
+        return { updated: updatedVariant, replayed: false };
       },
       { name: 'product-variant.update-stock' },
     );
 
-    await this.invalidateVariantCaches(updated.id, updated.productId);
+    if (!replayed) {
+      await this.invalidateVariantCaches(updated.id, updated.productId);
+    }
 
     return {
       id: updated.id,
@@ -842,8 +849,7 @@ export class ProductVariantsService {
   async updateStockForVendor(
     vendorId: string,
     id: string,
-    quantity: number,
-    description?: string,
+    dto: UpdateVariantStockDto,
   ) {
     const variant = await this.prisma.productVariant.findFirst({
       where: {
@@ -862,11 +868,7 @@ export class ProductVariantsService {
       );
     }
 
-    return this.updateStock(
-      id,
-      { quantity, description: description ?? '' },
-      vendorId,
-    );
+    return this.updateStock(id, dto, vendorId);
   }
 
   // ---------------------------------------------------------------------------

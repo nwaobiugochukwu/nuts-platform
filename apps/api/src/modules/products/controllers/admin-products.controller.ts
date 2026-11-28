@@ -151,6 +151,7 @@ export class AdminProductsController {
       dto.quantity,
       adminId,
       dto.description,
+      dto.requestId,
     );
   }
 

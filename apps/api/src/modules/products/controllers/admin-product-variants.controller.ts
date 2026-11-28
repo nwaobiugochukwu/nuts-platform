@@ -140,11 +140,7 @@ export class AdminProductVariantsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVariantStockDto,
   ): Promise<VariantStockUpdateResponseDto> {
-    return this.productVariantsService.updateStock(
-      id,
-      dto.quantity,
-      dto.description,
-    );
+    return this.productVariantsService.updateStock(id, dto);
   }
 
   @Delete(':id/permanent')

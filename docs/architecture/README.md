@@ -140,6 +140,7 @@ The Redis/RabbitMQ path applies to product views; other event types can write di
 - [How production teams run several services](how-production-teams-run-services.md)
 - [Event-driven and resilience audit](event-driven-and-resilience-audit.md)
 - [Scheduled work review](scheduled-work-review.md) (what stays a cron, what waits for Temporal)
+- [Money and stock idempotency](money-and-stock-idempotency.md) (what happens when a payment, order, refund or stock write repeats)
 - [Isolation and scale audit](isolation-and-scale-audit.md) (fault isolation, independent scaling, capacity formulas)
 - [Master roadmap](master-roadmap.md) (the final plan, batches and future directions considered)
 - [Platform reliability plan](platform-reliability-plan.md) (proposed)
