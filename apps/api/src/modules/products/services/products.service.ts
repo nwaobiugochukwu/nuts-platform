@@ -58,6 +58,7 @@ import {
   toResponse,
   toVendorResponse,
 } from '../utils/product-response.mapper';
+import { claimStockAdjustment } from '../utils/stock-adjustment-claim.util';
 import { ProductCategoryResolverService } from './product-category-resolver.service';
 
 /* ============================================================================
@@ -521,6 +522,7 @@ export class ProductsService {
     quantity: number,
     userId?: string,
     description?: string,
+    requestId?: string,
   ): Promise<StockUpdateResponseDto> {
     if (!Number.isInteger(quantity)) {
       throw new BadRequestException(
@@ -604,6 +606,23 @@ export class ProductsService {
           }
 
           /*
+           * A repeat of an adjustment already applied (same request id) changes nothing and
+           * answers with the stock as it is now.
+           */
+          if (!(await claimStockAdjustment(tx, requestId))) {
+            const current = await tx.product.findUniqueOrThrow({
+              where: { id },
+              select: { id: true, slug: true, stock: true, updatedAt: true },
+            });
+            return {
+              product,
+              updated: current,
+              oldStock: current.stock,
+              replayed: true,
+            };
+          }
+
+          /*
            * The UPDATE is guarded when decreasing stock.
            *
            * This prevents:
@@ -679,6 +698,7 @@ export class ProductsService {
                 (quantity > 0
                   ? 'Manual stock adjustment'
                   : 'Manual stock reduction'),
+              createdBy: userId,
             },
           });
 
@@ -686,12 +706,13 @@ export class ProductsService {
             product,
             updated,
             oldStock,
+            replayed: false,
           };
         },
         { name: 'product.update-stock' },
       );
 
-      const { updated, oldStock, product } = result;
+      const { updated, oldStock, product, replayed } = result;
 
       const { inStock, stockStatus } = getStockStatus(updated.stock, true);
 
@@ -703,6 +724,15 @@ export class ProductsService {
         stockStatus,
         updatedAt: updated.updatedAt,
       };
+
+      if (replayed) {
+        // Already applied by the request with this id: nothing changed, so nothing to clear or audit.
+        auditDetails({
+          entityId: id,
+          payload: { replayed: true, requestId },
+        });
+        return response;
+      }
 
       /*
        * Cache invalidation happens AFTER the transaction has committed.

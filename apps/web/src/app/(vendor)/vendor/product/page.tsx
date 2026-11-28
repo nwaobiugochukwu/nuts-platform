@@ -40,7 +40,8 @@ Plus,
 RotateCcw,
 Trash2
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { createIntentIds } from "@/lib/intent-id";
 import { FormProvider,useForm,useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -232,6 +233,8 @@ export default function DashboardProductPage() {
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, "Failed to update product status")),
   });
 
+  // A double click or a retry of the same adjustment must not apply it twice.
+  const stockIntents = useMemo(() => createIntentIds(), []);
   const adjustStockMutation = useMutation({
     mutationFn: ({
       id,
@@ -245,8 +248,10 @@ export default function DashboardProductPage() {
       vendorApi.patch(`/vendors/products/${id}/stock`, {
         quantity,
         ...(description ? { description } : {}),
+        requestId: stockIntents.forIntent(`${id}|${quantity}|${description ?? ""}`),
       }),
     onSuccess: () => {
+      stockIntents.done();
       toast.success("Inventory stock adjusted");
       refreshProducts();
       setStockOpen(false);
