@@ -9,6 +9,7 @@ import { WalletsModule } from '@api/modules/wallets/wallets.module';
 import { OrdersController } from './controllers/orders.controller';
 import { AdminOrdersController } from './controllers/admin-orders.controller';
 import { VendorOrdersController } from './controllers/vendor-orders.controller';
+import { OrderStatusService } from './services/order-status.service';
 import { OrdersService } from './services/orders.service';
 import { UnpaidOrdersJob } from './jobs/unpaid-orders.job';
 
@@ -27,7 +28,7 @@ import { UnpaidOrdersJob } from './jobs/unpaid-orders.job';
     AdminOrdersController,
     VendorOrdersController,
   ],
-  providers: [OrdersService, UnpaidOrdersJob],
+  providers: [OrdersService, OrderStatusService, UnpaidOrdersJob],
   exports: [OrdersService],
 })
 export class OrdersModule {}
