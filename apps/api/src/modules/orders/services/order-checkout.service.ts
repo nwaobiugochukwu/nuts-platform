@@ -19,6 +19,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { CART_CACHE_PREFIX } from '@api/modules/cart/services/cart.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { FirstOrderEligibilityService } from '@api/modules/discounts/services/first-order-eligibility.service';
 import { PaymentsService } from '@api/modules/payments/services/payments.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { CheckoutResponseDto } from '../dto/checkout-response.dto';
@@ -118,6 +119,7 @@ export class OrderCheckoutService {
     private readonly transactions: TransactionRunnerService,
     private readonly usersService: UsersService,
     private readonly discountCodeService: DiscountCodeService,
+    private readonly firstOrder: FirstOrderEligibilityService,
     private readonly paymentsService: PaymentsService,
     config: ConfigService,
     @Optional() private readonly cacheService?: CacheService,
@@ -312,9 +314,7 @@ export class OrderCheckoutService {
         ctx.afterCommit(async () => {
           await this.invalidateCartCache(userId);
           // The user now has a prior order: first-order promos must stop showing.
-          await this.discountCodeService
-            .invalidateFirstOrderCache(userId)
-            .catch(() => undefined);
+          await this.firstOrder.invalidate(userId).catch(() => undefined);
         });
 
         const loaded = await this.loadCart(tx, userId, idempotencyKey);

@@ -1,6 +1,6 @@
 import { roleCan } from '@api/config/process-role.config';
 import { CategoriesService } from '@api/modules/categories/services/categories.service';
-import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { PublicPromotionsService } from '@api/modules/discounts/services/public-promotions.service';
 import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import {
@@ -50,7 +50,7 @@ export class CacheWarmupService
   async warm(): Promise<void> {
     const startedAt = Date.now();
     const categories = this.moduleRef.get(CategoriesService, { strict: false });
-    const discounts = this.moduleRef.get(DiscountCodeService, {
+    const discounts = this.moduleRef.get(PublicPromotionsService, {
       strict: false,
     });
     const products = this.moduleRef.get(ProductCatalogService, {

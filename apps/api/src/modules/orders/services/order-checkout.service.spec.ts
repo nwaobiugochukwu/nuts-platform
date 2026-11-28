@@ -19,8 +19,8 @@ describe('OrderCheckoutService', () => {
   let discounts: {
     resolveVoucherStack: jest.Mock;
     recordUsage: jest.Mock;
-    invalidateFirstOrderCache: jest.Mock;
   };
+  let firstOrder: { invalidate: jest.Mock };
   let payments: { initializeForOrder: jest.Mock };
   let cache: { del: jest.Mock };
   let service: OrderCheckoutService;
@@ -158,8 +158,8 @@ describe('OrderCheckoutService', () => {
         .fn()
         .mockResolvedValue({ applied: [], totalDiscount: D(0) }),
       recordUsage: jest.fn().mockResolvedValue(undefined),
-      invalidateFirstOrderCache: jest.fn().mockResolvedValue(undefined),
     };
+    firstOrder = { invalidate: jest.fn().mockResolvedValue(undefined) };
     payments = {
       initializeForOrder: jest.fn().mockResolvedValue({
         authorizationUrl: 'https://paystack/auth',
@@ -174,6 +174,7 @@ describe('OrderCheckoutService', () => {
       runner as never,
       users as never,
       discounts as never,
+      firstOrder as never,
       payments as never,
       config() as never,
       cache as never,
@@ -351,7 +352,7 @@ describe('OrderCheckoutService', () => {
       await checkout();
 
       expect(cache.del).toHaveBeenCalledWith(`${CART_CACHE_PREFIX}u-1`);
-      expect(discounts.invalidateFirstOrderCache).toHaveBeenCalledWith('u-1');
+      expect(firstOrder.invalidate).toHaveBeenCalledWith('u-1');
       expect(whenCleared).toBe(1);
     });
 
@@ -479,6 +480,7 @@ describe('OrderCheckoutService', () => {
         runner as never,
         users as never,
         discounts as never,
+        firstOrder as never,
         payments as never,
         config('false') as never,
         cache as never,
