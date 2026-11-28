@@ -35,7 +35,7 @@ import { PaymentResponseDto } from '../dto/payment-response.dto';
 import type { PaystackWebhookEvent } from '../types/paystack.types';
 import { toPaystackAmount, moneyEquals } from '../utils/payment-money.util';
 import { toPaymentResponse } from '../utils/payment-response.util';
-import { restoreOrderStock } from '../utils/restore-order-stock.util';
+import { restoreOrderStock } from '@api/common/utils/restore-order-stock.util';
 import { PaystackClientService } from './paystack-client.service';
 
 interface PaystackRefundRecord {
