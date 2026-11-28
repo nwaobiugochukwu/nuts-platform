@@ -231,6 +231,7 @@ export class VendorProductsController {
       dto.quantity,
       undefined,
       dto.description,
+      dto.requestId,
     );
   }
 

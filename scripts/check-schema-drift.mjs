@@ -4,8 +4,8 @@
 //   DRIFT_DATABASE_URL=postgresql://user:pass@host:5432/empty_db node scripts/check-schema-drift.mjs
 //
 // It applies every migration to an EMPTY database, then asks Prisma what would still have to
-// change to reach schema.prisma. The only differences allowed are the trigram search indexes:
-// Prisma cannot declare them, so they live in migrations and would otherwise always show up.
+// change to reach schema.prisma. The only differences allowed are indexes Prisma cannot declare (the trigram search indexes and
+// the wallet ledger's partial unique indexes): they live in migrations and would otherwise always show up.
 // The database must be empty and disposable; the script refuses to run against one with tables.
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -51,7 +51,9 @@ if (diff.status !== 0) {
   process.exit(1);
 }
 
-const ALLOWED = /^DROP INDEX "[A-Za-z0-9_]+_trgm_idx";$/;
+// Indexes Prisma cannot declare: trigram search indexes, and the partial unique indexes that make a
+// wallet ledger entry exist at most once (`*_once_idx`).
+const ALLOWED = /^DROP INDEX "[A-Za-z0-9_]+_(trgm|once)_idx";$/;
 const unexpected = diff.stdout
   .split('\n')
   .map((line) => line.trim())

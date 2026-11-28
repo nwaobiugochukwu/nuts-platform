@@ -280,12 +280,7 @@ export class VendorProductVariantsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVariantStockDto,
   ): Promise<VariantStockUpdateResponseDto> {
-    return this.productVariantsService.updateStockForVendor(
-      vendorId,
-      id,
-      dto.quantity,
-      dto.description,
-    );
+    return this.productVariantsService.updateStockForVendor(vendorId, id, dto);
   }
 }
 

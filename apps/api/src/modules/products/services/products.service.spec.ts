@@ -1,9 +1,8 @@
-﻿import { NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
-import { SearchService } from '@api/modules/search/services/search.service';
 import { CategoriesService } from '../../categories/services/categories.service';
 import { ProductCategoryResolverService } from './product-category-resolver.service';
 import { ProductsService } from './products.service';
@@ -22,12 +21,6 @@ const mockCacheService = {
 
 const mockAuditLogService = {
   log: jest.fn(),
-};
-
-const mockSearchService = {
-  searchProducts: jest.fn(),
-  searchProductsWithDetails: jest.fn(),
-  searchMarketplace: jest.fn(),
 };
 
 const mockCategoriesService = {
@@ -74,7 +67,6 @@ describe('ProductsService â€“ Products CRUD', () => {
           ),
         },
         { provide: CacheService, useValue: mockCacheService },
-        { provide: SearchService, useValue: mockSearchService },
         { provide: AuditLogService, useValue: mockAuditLogService },
         { provide: CategoriesService, useValue: mockCategoriesService },
       ],

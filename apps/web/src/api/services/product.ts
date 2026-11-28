@@ -63,6 +63,8 @@ export type UpdateProductPayload = Partial<CreateProductPayload>;
 export interface UpdateStockPayload {
   quantity: number;
   description?: string;
+  /** One id per intended adjustment: sending it again (a retry, a double click) does not apply it twice. */
+  requestId?: string;
 }
 
 export const productService = {
