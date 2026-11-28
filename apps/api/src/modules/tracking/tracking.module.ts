@@ -4,7 +4,6 @@ import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
 import { TrackingConsumer } from './consumers/tracking.consumer';
 import { ActivityEventsController } from './controllers/activity-events.controller';
-import { StoreViewController } from './controllers/store-view.controller';
 import { ActivityRetentionJob } from './jobs/activity-retention.job';
 import { ProductViewsService } from './services/product-views.service';
 import { RecommendationEventsService } from './services/recommendation-events.service';
@@ -23,7 +22,7 @@ import { TrackingService } from './services/tracking.service';
  */
 @Module({
   imports: [PrismaModule, RedisModule, CacheModule],
-  controllers: [ActivityEventsController, StoreViewController],
+  controllers: [ActivityEventsController],
   providers: [
     ProductViewsService,
     SearchTrackingService,
