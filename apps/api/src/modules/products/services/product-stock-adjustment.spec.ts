@@ -81,7 +81,6 @@ describe('ProductsService.updateStock', () => {
       new FakeTransactionRunner(tx) as never,
       cache as never,
       {} as never,
-      {} as never,
       { invalidateLookup: jest.fn() } as never,
     );
   });

@@ -29,7 +29,6 @@ import {
 } from '@api/common/utils/cursor-pagination.util';
 
 import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
-import { SearchService } from '@api/modules/search/services/search.service';
 
 import { AdminCreateProductDto } from '../dto/admin-create-product.dto';
 import { AdminProductResponseDto } from '../dto/admin-product-response.dto';
@@ -71,7 +70,6 @@ export class ProductsService {
     private readonly prisma: PrismaService,
     private readonly transactions: TransactionRunnerService,
     private readonly cacheService: CacheService,
-    private readonly searchService: SearchService,
     private readonly auditLog: AuditLogService,
     private readonly categories: ProductCategoryResolverService,
   ) {}

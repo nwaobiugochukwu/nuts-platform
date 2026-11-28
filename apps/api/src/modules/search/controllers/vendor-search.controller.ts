@@ -11,7 +11,7 @@ import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 import { GetVendor } from '@api/common/decorators/get-vendor.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
-import { SearchService } from '../services/search.service';
+import { VendorSearchService } from '../services/vendor-search.service';
 import { QuerySearchDto } from '../dto/query-search.dto';
 import { SearchResponseDto, SearchResultDto } from '../dto/search-result.dto';
 
@@ -21,7 +21,7 @@ import { SearchResponseDto, SearchResultDto } from '../dto/search-result.dto';
 @Controller('vendors/search')
 @Roles(ROLE.VENDOR)
 export class VendorSearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(private readonly vendorSearch: VendorSearchService) {}
 
   @Get()
   @ApiOperation({
@@ -59,7 +59,7 @@ export class VendorSearchController {
 
     const limit = query.limit ?? 10;
 
-    const result = await this.searchService.searchVendorGlobal(
+    const result = await this.vendorSearch.searchVendorGlobal(
       vendorId,
       query.query ?? '',
       query.types,
@@ -97,7 +97,7 @@ export class VendorSearchController {
   ): Promise<SearchResponseDto> {
     const limit = query.limit ?? 10;
 
-    const results = await this.searchService.autocompleteVendor(
+    const results = await this.vendorSearch.autocompleteVendor(
       vendorId,
       query.query ?? '',
       query.types,
