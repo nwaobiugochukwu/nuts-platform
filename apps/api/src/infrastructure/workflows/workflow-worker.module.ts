@@ -19,4 +19,4 @@ import { SampleActivities } from './activities/sample.activities';
   ],
   providers: [SampleActivities],
 })
-export class TemporalWorkerModule {}
+export class WorkflowWorkerModule {}

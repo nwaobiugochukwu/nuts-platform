@@ -1,7 +1,5 @@
-# ==============================================================================
 # Multi-stage Dockerfile — NestJS API (Monorepo)
-# Stages: builder → dev | runner (prod, Alpine) ; builder-glibc → runner-temporal (Temporal worker, Debian)
-# ==============================================================================
+# Stages: builder → dev | runner (prod, Alpine) ; builder-glibc → runner-workflow (Temporal worker, Debian)
 
 # ─── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
@@ -31,8 +29,7 @@ COPY apps/api ./apps/api
 # 5. Build NestJS API
 RUN npm run build:api
 
-# ─── Stage 2: Dev ─────────────────────────────────────────────────────────────
-FROM node:22-alpine AS dev
+# Stage 2: Dev 
 
 WORKDIR /app
 
@@ -61,7 +58,7 @@ CMD ["npm", "run", "dev"]
 
 # ─── Stage 2b: glibc builder + runtime for the Temporal worker ────────────────
 # The Temporal native core ships glibc builds only (no musl), so the
-# temporal-worker role cannot run on the Alpine image. These two stages mirror
+# workflow-worker role cannot run on the Alpine image. These two stages mirror
 # builder and runner on Debian. They are defined BEFORE `runner` on purpose:
 # a build without --target must keep producing the Alpine `runner` image.
 FROM node:22-bookworm-slim AS builder-glibc
@@ -84,7 +81,7 @@ COPY packages ./packages
 COPY apps/api ./apps/api
 RUN npm run build:api
 
-FROM node:22-bookworm-slim AS runner-temporal
+FROM node:22-bookworm-slim AS runner-workflow
 
 WORKDIR /app
 
@@ -103,7 +100,7 @@ COPY --from=builder-glibc --chown=node:node /app/apps/api/tsconfig.runtime.json 
 COPY --from=builder-glibc --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=builder-glibc --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 COPY --chown=node:node apps/api/ecosystem.config.cjs ./apps/api/ecosystem.config.cjs
-RUN test -s /app/apps/api/dist/bootstrap/temporal-worker.js \
+RUN test -s /app/apps/api/dist/bootstrap/workflow-worker.js \
   && test -s /app/apps/api/ecosystem.config.cjs
 
 USER node
@@ -114,7 +111,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD curl -fsS "http://localhost:${HEALTH_PORT}/health" || exit 1
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["dumb-init", "/app/node_modules/.bin/pm2-runtime", "ecosystem.config.cjs", "--only", "temporal-worker"]
+ENTRYPOINT ["dumb-init", "/app/node_modules/.bin/pm2-runtime", "ecosystem.config.cjs", "--only", "workflow-worker"]
 
 # ─── Stage 3: Production Runtime ──────────────────────────────────────────────
 FROM node:22-alpine AS runner

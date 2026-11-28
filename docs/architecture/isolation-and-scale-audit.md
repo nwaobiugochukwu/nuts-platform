@@ -11,7 +11,7 @@ The architecture stays a modular monolith. One image runs as separate roles, and
 | api | `main.ts` | HTTP, SSE | `:3001/api/v1/health` (liveness), `/health/ready` (database and Redis) | 9464 | Yes |
 | worker | `bootstrap/worker.ts` | RabbitMQ consumers, outbox relay | `:3002/health` (heartbeat plus broker state) | 9465 | Yes, with the caveats in section 3 |
 | jobs | `bootstrap/worker.ts` | every scheduled job | `:3003/health` | 9466 | **No**, exactly one |
-| temporal-worker | `bootstrap/temporal-worker.ts` | Temporal workflows and activities | `:3004/health` | 9467 | Yes (Temporal supports it), dev only today |
+| workflow-worker | `bootstrap/workflow-worker.ts` | Temporal workflows and activities | `:3004/health` | 9467 | Yes (Temporal supports it), dev only today |
 | all | `main.ts` | everything in one process | api health | 9464 | No (it includes crons) |
 
 - Supervision: PM2 inside each container (`ecosystem.config.cjs`) with crash-loop protection (`min_uptime 20s`, `max_restarts 10`, exponential backoff), a graceful memory restart (`PM2_MAX_MEMORY` 600M) and `wait_ready`. Docker then restarts the container if PM2 gives up.
@@ -101,7 +101,7 @@ Metrics, logs, traces and error tracking stay separate tools: Prometheus holds n
 
 ## 6. Temporal: what has actually been built
 
-- Foundation only, development only (`TEMPORAL_ENABLED=false` by default): client configuration, a worker started by `temporal-worker.ts` (glibc image), a task queue `q.nuts.workflows`, a workflow-start consumer on RabbitMQ, a sandbox rule that keeps workflow files deterministic (architecture rule api:4).
+- Foundation only, development only (`TEMPORAL_ENABLED=false` by default): client configuration, a worker started by `workflow-worker.ts` (glibc image), a task queue `q.nuts.workflows`, a workflow-start consumer on RabbitMQ, a sandbox rule that keeps workflow files deterministic (architecture rule api:4).
 - No business workflow is implemented. Retry policies, timeouts, heartbeats, signals, timers, versioning and saga compensation are therefore not yet exercised; they are written per workflow in phase 8.
 - Suitable processes, in order of value: order payment expiry (replaces the unpaid-orders cron), refunds (multi-step, must not duplicate), fulfillment, creator payouts and settlement, abandoned-cart timers, account deletion. Checkout, payment initialisation and inventory reservation stay inside one database transaction plus the outbox; Temporal is for long waits and multi-step recovery, not for a single request.
 - Compatibility rule for later: each workflow change goes through Temporal's patching or a new workflow type name, so running executions are never broken by a deploy.

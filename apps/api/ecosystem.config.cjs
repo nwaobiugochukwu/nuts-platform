@@ -11,7 +11,7 @@
  *   api     HTTP + SSE (PROCESS_ROLE=api)
  *   worker  RabbitMQ consumers + outbox relay (PROCESS_ROLE=worker)
  *   jobs    scheduled jobs, exactly one instance (PROCESS_ROLE=jobs)
- *   temporal-worker  Temporal workflows and activities (glibc image only)
+ *   workflow-worker  Temporal workflows and activities (glibc image only)
  *
  * Tunables (all optional):
  *   PM2_API_INSTANCES   api instances; >1 switches api to cluster mode (needs spare CPUs)
@@ -76,10 +76,10 @@ module.exports = {
     },
     {
       // Temporal workflows and activities. Needs a glibc image (see Dockerfile
-      // target runner-temporal); do not start it from the Alpine image.
+      // target runner-workflow); do not start it from the Alpine image.
       ...common,
-      name: 'temporal-worker',
-      script: 'dist/bootstrap/temporal-worker.js',
+      name: 'workflow-worker',
+      script: 'dist/bootstrap/workflow-worker.js',
       exec_mode: 'fork',
       instances: 1,
       env: { ...common.env },

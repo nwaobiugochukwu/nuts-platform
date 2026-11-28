@@ -5,7 +5,7 @@ import {
   WorkflowExecutionAlreadyStartedError,
 } from '@temporalio/client';
 import { currentRequestId } from '@api/common/request-context/request-context.util';
-import { readTemporalConfig, type TemporalConfig } from './temporal.config';
+import { readWorkflowConfig, type WorkflowConfig } from './workflow.config';
 
 export interface StartWorkflowInput {
   /** The workflow function name exported from workflows/index.ts. */
@@ -33,9 +33,9 @@ export interface StartWorkflowResult {
  * lost, for example a payment webhook racing order creation).
  */
 @Injectable()
-export class TemporalClientService implements OnModuleDestroy {
-  private readonly logger = new Logger(TemporalClientService.name);
-  private readonly config: TemporalConfig = readTemporalConfig();
+export class WorkflowClientService implements OnModuleDestroy {
+  private readonly logger = new Logger(WorkflowClientService.name);
+  private readonly config: WorkflowConfig = readWorkflowConfig();
   private connection: Connection | null = null;
   private client: Client | null = null;
   private connecting: Promise<Client> | null = null;

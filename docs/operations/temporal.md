@@ -8,11 +8,11 @@ Temporal runs the multi-step, long-running business processes (payment expiry, r
 
 | Piece | Where | Notes |
 |---|---|---|
-| Client | `TemporalClientService` | Lazy connection, idempotent `startWorkflow` (the workflow id is the business key), `signalWithStart`, `signal`, `describe`. A logged no-op while `TEMPORAL_ENABLED` is not `true`. |
+| Client | `WorkflowClientService` | Lazy connection, idempotent `startWorkflow` (the workflow id is the business key), `signalWithStart`, `signal`, `describe`. A logged no-op while `TEMPORAL_ENABLED` is not `true`. |
 | Start from a transaction | `ctx.startWorkflow(...)` | Written to the outbox in the same transaction as the change; the relay publishes `workflow.start`; the `worker` role's `WorkflowStartConsumer` starts it. Duplicates are harmless. |
 | Workflows | `infrastructure/workflows/workflows/` | Deterministic sandbox code: only `@temporalio/workflow` and pure modules (enforced by `npm run check:architecture`). Export each one from `index.ts`. |
-| Activities | `infrastructure/workflows/activities/` | All I/O (database, HTTP, messages). Must be idempotent; Temporal retries them. Register new providers in `TemporalWorkerModule` and `buildActivities`. |
-| Worker | `temporal-worker.ts`, role `temporal-worker` | Polls the task queues in `TEMPORAL_TASK_QUEUES` (default all five). Health on `HEALTH_PORT` (default 3004); SDK metrics on `TEMPORAL_METRICS_PORT`. |
+| Activities | `infrastructure/workflows/activities/` | All I/O (database, HTTP, messages). Must be idempotent; Temporal retries them. Register new providers in `WorkflowWorkerModule` and `buildActivities`. |
+| Worker | `workflow-worker.ts`, role `workflow-worker` | Polls the task queues in `TEMPORAL_TASK_QUEUES` (default all five). Health on `HEALTH_PORT` (default 3004); SDK metrics on `TEMPORAL_METRICS_PORT`. |
 
 Task queues: `nuts-default`, `nuts-payments`, `nuts-fulfillment`, `nuts-comms`, `nuts-lifecycle`, one per concern so a noisy queue cannot starve payments.
 
@@ -25,14 +25,14 @@ docker compose --profile dev up -d temporal        # server on :7233, UI on http
 #   TEMPORAL_ADDRESS=localhost:7233
 #   TEMPORAL_NAMESPACE=nuts-dev
 npm run build --prefix apps/api
-npm run pm2:temporal-worker --prefix apps/api      # or: node -r tsconfig-paths/register dist/temporal-worker.js
+npm run pm2:workflow-worker --prefix apps/api      # or: node -r tsconfig-paths/register dist/workflow-worker.js
 ```
 
 Workflow tests use Temporal's time-skipping test server (downloaded on first run), so a six-hour timer finishes in milliseconds: `npm run test:workflows --prefix apps/api` (also part of `npm test`). They need Node's `--experimental-vm-modules` flag, which would break other specs, so they run as a separate Jest invocation.
 
 ## The image
 
-The Temporal native core has **no musl build**, so the worker cannot run on the Alpine API image. The Dockerfile has a Debian target, `runner-temporal`, built from `builder-glibc`; compose service `temporal-worker-prod` (profile `temporal`, opt-in, not in `prod` or `staging`) uses it. A plain `docker build` still produces the Alpine `runner`, because that stage stays last.
+The Temporal native core has **no musl build**, so the worker cannot run on the Alpine API image. The Dockerfile has a Debian target, `runner-workflow`, built from `builder-glibc`; compose service `workflow-worker-prod` (profile `temporal`, opt-in, not in `prod` or `staging`) uses it. A plain `docker build` still produces the Alpine `runner`, because that stage stays last.
 
 ## Production
 

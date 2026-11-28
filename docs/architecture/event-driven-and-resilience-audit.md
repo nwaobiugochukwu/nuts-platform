@@ -62,7 +62,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | L5 | Plural and singular folder names mix: `cart`, `upload`, `search`, `health` against `wishlists`, `reviews`, `referrals`, `wallets` | One convention | Small |
 | L6 | Type folders overlap: `src/types`, `common/types`, `common/interfaces` | One place for shared types | Small |
 | L7 | Very large files: `products.service.ts` 3,721 lines, `orders.service.ts` 2,978, `discount-code.service.ts` 2,377, `payments.service.ts` 2,350, `search.service.ts` 1,883 | Split by use case so each file has one reason to change | Large; best done together with the money-code work |
-| L8 | Entry points (`main.ts`, `worker.ts`, `temporal-worker.ts`, `instrument.ts`, `load-env.ts`) sat beside `app.module.ts` (done: only `main.ts` and the app module are at the root now; the others are in `bootstrap/`) | A `bootstrap/` folder, or a documented convention | Small |
+| L8 | Entry points (`main.ts`, `worker.ts`, `workflow-worker.ts`, `instrument.ts`, `load-env.ts`) sat beside `app.module.ts` (done: only `main.ts` and the app module are at the root now; the others are in `bootstrap/`) | A `bootstrap/` folder, or a documented convention | Small |
 | L9 | `modules/admin` is three unrelated domains grouped by audience (announcements, platform configuration, staff accounts), while other modules group by domain; `modules/security` holds token and account-lock services that belong to authentication | Group by domain, then by audience inside the domain | Medium |
 | L10 | Duplicate modules: `auth/auth-cookies.module.ts` and `auth/cookies/auth-cookie.module.ts`; `google-auth.service.ts`, `auth.selects.ts` and `admin-auth.service.ts` sit at the module root while other auth code is in folders | One module per concern, one folder per kind of file | Small |
 | L11 | File-kind suffixes are inconsistent: `type` (5) and `types` (2); `response` (5) next to `dto` (133); 32 files carry no kind suffix at all; `selects`, `util`, `config`, `storage` appear once or twice each | A fixed set of kinds (see the naming rules below) | Small |
@@ -185,7 +185,7 @@ This is the target. It follows the common NestJS and domain-module convention: *
 | Thing | Rule | Example |
 |---|---|---|
 | Files and folders | `kebab-case`; file name is `<name>.<kind>.ts` | `order-status-history.service.ts` |
-| Allowed kinds | `module`, `controller`, `service`, `consumer`, `job`, `listener`, `guard`, `interceptor`, `pipe`, `filter`, `middleware`, `decorator`, `dto`, `enum`, `constants`, `types`, `mapper`, `util`, plus the technical roles already in use: `config`, `strategy`, `provider`, `validator`, `validation`, `exception`, `storage`, `throttler`, `relay`, `health`, `workflow`, `activities`, `templates`, `extractor`, `setup`. Entry points (`main.ts`, `worker.ts`, `temporal-worker.ts`, `instrument.ts`, `load-env.ts`) and `index.ts` barrels have no kind. Test helpers end in `-spec.ts` (built out, not run). | |
+| Allowed kinds | `module`, `controller`, `service`, `consumer`, `job`, `listener`, `guard`, `interceptor`, `pipe`, `filter`, `middleware`, `decorator`, `dto`, `enum`, `constants`, `types`, `mapper`, `util`, plus the technical roles already in use: `config`, `strategy`, `provider`, `validator`, `validation`, `exception`, `storage`, `throttler`, `relay`, `health`, `workflow`, `activities`, `templates`, `extractor`, `setup`. Entry points (`main.ts`, `worker.ts`, `workflow-worker.ts`, `instrument.ts`, `load-env.ts`) and `index.ts` barrels have no kind. Test helpers end in `-spec.ts` (built out, not run). | |
 | One class per file | The file name is the class name in kebab-case | `CreateOrderDto` in `create-order.dto.ts` |
 | Classes | `PascalCase` with a suffix that matches the kind | `OrdersService`, `OrderShippedConsumer` |
 | Response shapes | Always `dto` (no `response` kind) | `order-response.dto.ts` |
@@ -207,7 +207,7 @@ This is the target. It follows the common NestJS and domain-module convention: *
 apps/api/src/
   main.ts  app.module.ts                     the API's entry point and root module; app.e2e-spec.ts and jest-e2e.json (the end-to-end suite) sit beside them
   e2e-env.setup.ts                           settings the end-to-end suite needs on a machine with no environment file
-  bootstrap/                                 start-up concerns that compose the app and may use any layer: the worker and temporal-worker entry points (built to `dist/bootstrap/`, which PM2 and Docker run), instrument.ts, load-env.ts, swagger setup, process-error handlers, cache warm-up
+  bootstrap/                                 start-up concerns that compose the app and may use any layer: the worker and workflow-worker entry points (built to `dist/bootstrap/`, which PM2 and Docker run), instrument.ts, load-env.ts, swagger setup, process-error handlers, cache warm-up
   config/                                    env validation, process roles, ports
   common/                                    generic, knows nothing about the business
     decorators/ filters/ guards/ interceptors/ middleware/ pipes/ errors/ utils/ constants/ types/ dto/
