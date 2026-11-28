@@ -13,7 +13,7 @@
  *          Only providers (services), DTOs, constants and types are shared.
  *       3. Database transactions are opened only through `TransactionRunner`
  *          (infrastructure/database). Files that still call `$transaction`
- *          directly are listed in API_RAW_TRANSACTION_LEGACY and may only shrink.
+ *          directly are listed in API_RAW_TRANSACTION_ALLOWED and may only shrink.
  *       4. Temporal workflow files (`infrastructure/workflows/workflows/`) are deterministic
  *          sandbox code: they may import only `@temporalio/workflow`, relative pure
  *          modules and type-only imports. No Nest, Prisma, `@api/` or Node built-ins.
@@ -68,10 +68,10 @@ const API_SRC = path.join(root, "apps/api/src");
 // The outbox relay is infrastructure the runner is built on: `OutboxService` wakes the relay, and the
 // runner depends on `OutboxService`, so the relay cannot depend on the runner. Its claim transaction
 // (`FOR UPDATE SKIP LOCKED`) is part of the outbox mechanism itself.
-const API_RAW_TRANSACTION_LEGACY = new Set([
+const API_RAW_TRANSACTION_ALLOWED = new Set([
   "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
-  "apps/api/src/modules/orders/services/orders.service.ts",
 ]);
+
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.
 const API_DIRECT_AUDIT_ALLOWED = new Map([
@@ -104,7 +104,7 @@ for (const file of walk(API_SRC)) {
       violations.push(`[api:5] ${r} calls the audit log directly ${calls} time(s) (allowed ${allowed}); declare it with @Audit on the controller and auditDetails(...) instead`);
     }
   }
-  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_LEGACY.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
+  if (!isSpec && r !== TRANSACTION_RUNNER_FILE && !API_RAW_TRANSACTION_ALLOWED.has(r) && /\$transaction\s*\(/.test(fs.readFileSync(file, "utf8"))) {
     violations.push(`[api:3] ${r} opens a transaction directly; use TransactionRunner.run(...)`);
   }
   if (!r.includes("/test/")) {
