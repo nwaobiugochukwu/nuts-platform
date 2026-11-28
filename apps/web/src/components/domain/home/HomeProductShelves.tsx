@@ -53,10 +53,10 @@ export function HomeProductShelves({
 
   const {
     products: forYou,
-    starterPicks,
-    isLoadingStarterPicks,
-    isErrorStarterPicks,
-    refetchStarterPicks,
+    goodPlaceToStart,
+    isLoadingGoodPlaceToStart,
+    isErrorGoodPlaceToStart,
+    refetchGoodPlaceToStart,
     storesToDiscover,
     isLoadingStores,
     isErrorStores,
@@ -128,8 +128,8 @@ export function HomeProductShelves({
         toast.error("Couldn't save that. Please try again.");
       });
   };
-  const visibleStarterPicks = dedupeOrKeep(
-    starterPicks,
+  const visibleGoodPlaceToStart = dedupeOrKeep(
+    goodPlaceToStart,
     new Set(
       [...visibleRecent, ...visibleFollowing, ...visibleForYou].map(({ id }) => id),
     ),
@@ -151,10 +151,10 @@ export function HomeProductShelves({
 
   // "A good place to start": show skeleton loader while client query resolves,
   // preventing jarring UI flashes where generic SSR items are suddenly replaced.
-  const showStarterSkeleton = clientHydrating || isLoadingStarterPicks;
-  const starterSettled = !clientHydrating && !isLoadingStarterPicks;
-  const displayedStarterPicks =
-    visibleStarterPicks.length > 0 ? visibleStarterPicks : initialProducts;
+  const showGoodPlaceToStartSkeleton = clientHydrating || isLoadingGoodPlaceToStart;
+  const goodPlaceToStartSettled = !clientHydrating && !isLoadingGoodPlaceToStart;
+  const displayedGoodPlaceToStart =
+    visibleGoodPlaceToStart.length > 0 ? visibleGoodPlaceToStart : initialProducts;
 
   // "New from followed vendors" — customer-only shelf.
   const showFollowingSkeleton = isCustomer && (clientHydrating || isLoadingFollowing);
@@ -167,7 +167,7 @@ export function HomeProductShelves({
 
   // Final fallback: shown only when everything is settled AND empty.
   const hasHomeContent = Boolean(
-    displayedStarterPicks.length ||
+    displayedGoodPlaceToStart.length ||
     visibleRecent.length ||
     visibleForYou.length ||
     visibleFollowing.length ||
@@ -176,7 +176,7 @@ export function HomeProductShelves({
   );
   const everythingSettled =
     !clientHydrating &&
-    !isLoadingStarterPicks &&
+    !isLoadingGoodPlaceToStart &&
     !isLoadingRecentlyViewed &&
     !isLoadingForYou &&
     !isLoadingStores &&
@@ -187,9 +187,9 @@ export function HomeProductShelves({
       {/* ------------------------------------------------------------------ */}
       {/* 1. A good place to start                                            */}
       {/* Shows skeleton while recommendations resolve, then renders curated   */}
-      {/* marketplace mix without jarring item swap flashes.                  */}
+      {/* good-place-to-start shelf without jarring item swap flashes.        */}
       {/* ------------------------------------------------------------------ */}
-      {showStarterSkeleton && (
+      {showGoodPlaceToStartSkeleton && (
         <section className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8" aria-busy="true" aria-label="A good place to start — loading">
           <div className="space-y-6">
             <div className="flex items-start sm:items-end justify-between gap-4">
@@ -226,13 +226,13 @@ export function HomeProductShelves({
           </div>
         </section>
       )}
-      {starterSettled && (displayedStarterPicks.length > 0 || isErrorStarterPicks) && (
+      {goodPlaceToStartSettled && (displayedGoodPlaceToStart.length > 0 || isErrorGoodPlaceToStart) && (
         <GoodPlaceToStartSection
-          products={displayedStarterPicks}
+          products={displayedGoodPlaceToStart}
           sessionId={sessionId}
-          isLoading={isLoadingStarterPicks}
-          isError={isErrorStarterPicks}
-          onRetry={() => void refetchStarterPicks()}
+          isLoading={isLoadingGoodPlaceToStart}
+          isError={isErrorGoodPlaceToStart}
+          onRetry={() => void refetchGoodPlaceToStart()}
         />
       )}
 

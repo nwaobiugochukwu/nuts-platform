@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { GoodPlaceToStartService } from './good-place-to-start.service';
 import { PersonalizedFeedService } from './personalized-feed.service';
 import { PopularProductsService } from './popular-products.service';
 import { RelatedProductsService } from './related-products.service';
@@ -18,6 +19,7 @@ export class RecommendationsService {
     private readonly search: SearchDiscoveryService,
     private readonly stores: StoreDiscoveryService,
     private readonly relatedProducts: RelatedProductsService,
+    private readonly goodPlaceToStartShelf: GoodPlaceToStartService,
   ) {}
 
   discover() {
@@ -56,8 +58,12 @@ export class RecommendationsService {
     return this.search.searchDiscover(...args);
   }
 
-  marketplaceMix(...args: Parameters<StoreDiscoveryService['marketplaceMix']>) {
-    return this.stores.marketplaceMix(...args);
+  goodPlaceToStart(...args: Parameters<GoodPlaceToStartService['picks']>) {
+    return this.goodPlaceToStartShelf.picks(...args);
+  }
+
+  starterSampler(...args: Parameters<StoreDiscoveryService['starterSampler']>) {
+    return this.stores.starterSampler(...args);
   }
 
   discoverStores(...args: Parameters<StoreDiscoveryService['discoverStores']>) {

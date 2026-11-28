@@ -1,4 +1,4 @@
-/** Marketplace mix and store discovery shelves. */
+/** Store discovery shelves: the starter sampler (one product per store) and stores to discover. */
 import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
@@ -7,14 +7,14 @@ import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { getStockStatus } from '@api/common/utils/stock-status.util';
 
 import {
-  MARKETPLACE_MIX_VENDOR_LIMIT,
-  MARKETPLACE_MIX_PRODUCT_LIMIT,
-  MARKETPLACE_MIX_MAX_PRODUCTS_PER_VENDOR,
-  MARKETPLACE_MIX_POOL_LIMIT,
+  STARTER_SAMPLER_VENDOR_LIMIT,
+  STARTER_SAMPLER_PRODUCT_LIMIT,
+  STARTER_SAMPLER_MAX_PRODUCTS_PER_VENDOR,
+  STARTER_SAMPLER_POOL_LIMIT,
   HISTORY_DAYS,
   AVAILABLE_PRODUCT,
-  MarketplaceMixCandidate,
-  MarketplaceMixVendor,
+  StarterSamplerCandidate,
+  StarterSamplerVendor,
   addWeight,
   stableHash,
   stableUuidCursor,
@@ -28,7 +28,7 @@ export class StoreDiscoveryService {
     @Optional() private readonly cacheService?: CacheService,
   ) {}
 
-  async marketplaceMix(
+  async starterSampler(
     userId?: string,
     sessionId?: string,
     visitorId?: string,
@@ -61,10 +61,10 @@ export class StoreDiscoveryService {
       const tail = await this.prisma.product.findMany({
         where: { AND: [mixWhere, { id: { gte: cursorId } }] },
         orderBy: { id: 'asc' },
-        take: MARKETPLACE_MIX_POOL_LIMIT,
+        take: STARTER_SAMPLER_POOL_LIMIT,
         select: { id: true, categoryId: true, vendorId: true, createdAt: true },
       });
-      const remaining = MARKETPLACE_MIX_POOL_LIMIT - tail.length;
+      const remaining = STARTER_SAMPLER_POOL_LIMIT - tail.length;
       const head =
         remaining > 0
           ? await this.prisma.product.findMany({
@@ -79,7 +79,7 @@ export class StoreDiscoveryService {
               },
             })
           : [];
-      const candidates: MarketplaceMixCandidate[] = [...tail, ...head];
+      const candidates: StarterSamplerCandidate[] = [...tail, ...head];
       const now = Date.now();
       const rankedCandidates = candidates
         .map((candidate) => {
@@ -103,7 +103,7 @@ export class StoreDiscoveryService {
       const selectedVendorIdSet = new Set<string>();
       const selectedCategories = new Set<string>();
       for (const candidate of rankedCandidates) {
-        if (selectedVendorIds.length >= MARKETPLACE_MIX_VENDOR_LIMIT) break;
+        if (selectedVendorIds.length >= STARTER_SAMPLER_VENDOR_LIMIT) break;
         if (
           selectedVendorIdSet.has(candidate.vendorId) ||
           selectedCategories.has(candidate.categoryId)
@@ -114,13 +114,13 @@ export class StoreDiscoveryService {
         selectedCategories.add(candidate.categoryId);
       }
       for (const candidate of rankedCandidates) {
-        if (selectedVendorIds.length >= MARKETPLACE_MIX_VENDOR_LIMIT) break;
+        if (selectedVendorIds.length >= STARTER_SAMPLER_VENDOR_LIMIT) break;
         if (selectedVendorIdSet.has(candidate.vendorId)) continue;
         selectedVendorIds.push(candidate.vendorId);
         selectedVendorIdSet.add(candidate.vendorId);
       }
 
-      if (selectedVendorIds.length < MARKETPLACE_MIX_VENDOR_LIMIT) {
+      if (selectedVendorIds.length < STARTER_SAMPLER_VENDOR_LIMIT) {
         const remainingVendors = await this.prisma.vendor.findMany({
           where: {
             isActive: true,
@@ -139,7 +139,7 @@ export class StoreDiscoveryService {
             },
           },
           orderBy: [{ isVerified: 'desc' }, { createdAt: 'desc' }],
-          take: MARKETPLACE_MIX_VENDOR_LIMIT - selectedVendorIds.length,
+          take: STARTER_SAMPLER_VENDOR_LIMIT - selectedVendorIds.length,
           select: { id: true },
         });
         selectedVendorIds.push(...remainingVendors.map(({ id }) => id));
@@ -162,15 +162,15 @@ export class StoreDiscoveryService {
           isVerified: true,
         },
       });
-      const vendorsById = new Map<string, MarketplaceMixVendor>(
+      const vendorsById = new Map<string, StarterSamplerVendor>(
         vendorRows.map((vendor) => [vendor.id, vendor]),
       );
       const vendorIds = selectedVendorIds.filter((id) => vendorsById.has(id));
       if (vendorIds.length === 0) return { vendors: [] };
 
       const productSlots = Math.min(
-        MARKETPLACE_MIX_PRODUCT_LIMIT,
-        vendorIds.length * MARKETPLACE_MIX_MAX_PRODUCTS_PER_VENDOR,
+        STARTER_SAMPLER_PRODUCT_LIMIT,
+        vendorIds.length * STARTER_SAMPLER_MAX_PRODUCTS_PER_VENDOR,
       );
       const baseSlotsPerVendor = Math.floor(productSlots / vendorIds.length);
       const extraSlots = productSlots % vendorIds.length;
@@ -232,7 +232,7 @@ export class StoreDiscoveryService {
 
     return this.cacheService
       ? this.cacheService.wrap(
-          `recommendations:mix:${actorId}:${dayKey}`,
+          `recommendations:starter-sampler:${actorId}:${dayKey}`,
           600,
           fetcher,
         )

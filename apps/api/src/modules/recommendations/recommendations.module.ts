@@ -4,6 +4,7 @@ import { ShopperActivityModule } from '@api/modules/shopper-activity/shopper-act
 import { ProductsModule } from '@api/modules/products/products.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { RecommendationsController } from './controllers/recommendations.controller';
+import { GoodPlaceToStartService } from './services/good-place-to-start.service';
 import { PersonalizedFeedService } from './services/personalized-feed.service';
 import { PopularProductsService } from './services/popular-products.service';
 import { RecommendationsService } from './services/recommendations.service';
@@ -20,6 +21,7 @@ import { StoreDiscoveryService } from './services/store-discovery.service';
     SearchDiscoveryService,
     PersonalizedFeedService,
     RelatedProductsService,
+    GoodPlaceToStartService,
     RecommendationsService,
   ],
 })

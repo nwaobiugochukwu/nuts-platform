@@ -1,7 +1,7 @@
 import { publicApi, userApi } from "@/api/core/client";
 import type { ProductCardDto } from "@/api/dto/product";
 import type {
-  MarketplaceMixResponseDto,
+  GoodPlaceToStartResponseDto,
   SearchDiscoveryResponseDto,
 } from "@/api/dto/recommendations";
 import type { FeaturedVendorDto } from "@/api/dto/vendor";
@@ -17,9 +17,9 @@ export const recommendationService = {
       signal,
     });
   },
-  marketplaceMix(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
+  goodPlaceToStart(sessionId: string, authenticated: boolean, visitorId?: string, signal?: AbortSignal) {
     const client = authenticated ? userApi : publicApi;
-    return client.get<MarketplaceMixResponseDto>("/recommendations/marketplace-mix", {
+    return client.get<GoodPlaceToStartResponseDto>("/recommendations/good-place-to-start", {
       params: { sessionId, ...(visitorId ? { visitorId } : {}) },
       signal,
     });

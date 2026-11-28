@@ -48,7 +48,7 @@ The staged proposal is in the [Recommendation Scaling Plan](../../scaling/recomm
 ## Failure modes and scale boundaries
 
 1. **Missing or duplicated exposure events:** results can be biased. Use stable event IDs, deduplicate retries, and measure exposure completeness before training.
-2. **Sparse or anonymous history:** do not claim personalized quality where the shopper has no useful history; use a labeled cold-start or marketplace mix.
+2. **Sparse or anonymous history:** do not claim personalized quality where the shopper has no useful history; use a labeled cold-start shelf such as the daily spread across stores.
 3. **Stale or unavailable inventory:** filter candidates against current eligibility and stock; a recommendation must never be treated as a reservation.
 4. **Database pressure from analytics:** product views have a Redis/RabbitMQ path but still synchronously upsert recent history; other event families may write directly to PostgreSQL. Measure before adding stream infrastructure.
 5. **Slow or failed inference:** retain deterministic fallback and record fallback rate without blocking browse or checkout.

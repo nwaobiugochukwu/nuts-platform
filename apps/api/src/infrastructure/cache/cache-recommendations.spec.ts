@@ -38,11 +38,11 @@ describe('CacheService recommendation invalidation', () => {
     expect(redis.del).not.toHaveBeenCalled();
   });
 
-  it('never clears the deterministic daily marketplace mix', async () => {
+  it('never clears the deterministic daily starter sampler', async () => {
     const { redis, service } = make();
     await service.invalidateRecommendations('user-1');
     const keys = redis.del.mock.calls[0] as string[];
-    expect(keys.some((k) => k.includes(':mix:'))).toBe(false);
+    expect(keys.some((k) => k.includes(':starter-sampler:'))).toBe(false);
   });
 
   it('a redis failure is swallowed (cache clearing must never fail a request)', async () => {

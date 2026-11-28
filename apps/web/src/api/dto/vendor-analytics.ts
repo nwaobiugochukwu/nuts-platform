@@ -58,10 +58,10 @@ export interface VendorAnalyticsSummaryDto {
   avgOrderValue: string;
   recentOrders?: VendorRecentOrderDto[];
   conversionRate: number;
-  engagement: MarketplaceAnalyticsSummaryDto;
+  engagement: ShopperEngagementSummaryDto;
 }
 
-export interface MarketplaceAnalyticsSummaryDto {
+export interface ShopperEngagementSummaryDto {
   storeViews: number;
   uniqueStoreVisitors: number;
   productViews: number;

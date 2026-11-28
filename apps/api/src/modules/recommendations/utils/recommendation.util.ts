@@ -14,10 +14,10 @@ export const PURCHASE_STATUSES: OrderStatus[] = [
 
 export const RECOMMENDATION_LIMIT = 12;
 export const PERSONALIZED_RECOMMENDATION_POOL_LIMIT = 24;
-export const MARKETPLACE_MIX_VENDOR_LIMIT = 12;
-export const MARKETPLACE_MIX_PRODUCT_LIMIT = 12;
-export const MARKETPLACE_MIX_MAX_PRODUCTS_PER_VENDOR = 1;
-export const MARKETPLACE_MIX_POOL_LIMIT = 160;
+export const STARTER_SAMPLER_VENDOR_LIMIT = 12;
+export const STARTER_SAMPLER_PRODUCT_LIMIT = 12;
+export const STARTER_SAMPLER_MAX_PRODUCTS_PER_VENDOR = 1;
+export const STARTER_SAMPLER_POOL_LIMIT = 160;
 export const SEARCH_DISCOVERY_PRODUCT_LIMIT = 8;
 export const SEARCH_DISCOVERY_VENDOR_LIMIT = 4;
 export const SEARCH_DISCOVERY_POOL_LIMIT = 160;
@@ -49,7 +49,7 @@ export type CandidateProduct = {
   category: { name: string };
 };
 
-export type MarketplaceMixCandidate = {
+export type StarterSamplerCandidate = {
   id: string;
   categoryId: string;
   vendorId: string;
@@ -57,11 +57,11 @@ export type MarketplaceMixCandidate = {
 };
 
 export type SearchDiscoveryCandidate = Omit<
-  MarketplaceMixCandidate,
+  StarterSamplerCandidate,
   'createdAt'
 >;
 
-export type MarketplaceMixVendor = {
+export type StarterSamplerVendor = {
   id: string;
   storeName: string;
   storeSlug: string;
