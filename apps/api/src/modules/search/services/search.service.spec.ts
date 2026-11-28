@@ -1,4 +1,5 @@
-﻿import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule } from '@nestjs/testing';
+import { SearchCacheService } from './search-cache.service';
 import { SearchService } from './search.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
@@ -32,6 +33,7 @@ describe('SearchService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SearchService,
+        SearchCacheService,
         {
           provide: REDIS_CLIENT,
           useValue: mockRedis,

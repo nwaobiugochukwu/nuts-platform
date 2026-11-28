@@ -18,6 +18,7 @@ import { ROLE } from '@prisma/client';
 
 import { Roles } from '@api/common/decorators/role.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
+import { SearchOperationsService } from '../services/search-operations.service';
 import { SearchService } from '../services/search.service';
 import { QuerySearchDto } from '../dto/query-search.dto';
 import { SearchResponseDto, SearchResultDto } from '../dto/search-result.dto';
@@ -37,7 +38,10 @@ import {
 @Controller('admin/search')
 @Roles(ROLE.ADMIN)
 export class AdminSearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(
+    private readonly searchService: SearchService,
+    private readonly operations: SearchOperationsService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -136,7 +140,7 @@ export class AdminSearchController {
     type: SearchStatusDto,
   })
   async getStatus(): Promise<SearchStatusDto> {
-    return this.searchService.getSearchStatus();
+    return this.operations.getSearchStatus();
   }
 
   @Post('reindex')
@@ -151,6 +155,6 @@ export class AdminSearchController {
     type: SearchReindexResponseDto,
   })
   async reindex(): Promise<SearchReindexResponseDto> {
-    return this.searchService.reindex();
+    return this.operations.reindex();
   }
 }

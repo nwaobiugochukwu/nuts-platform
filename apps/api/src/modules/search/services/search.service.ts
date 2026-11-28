@@ -1,185 +1,47 @@
-﻿import { Inject, Injectable, Logger } from '@nestjs/common';
-import Redis from 'ioredis';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  ADMIN_INDEXES,
+  MARKETPLACE_INDEXES,
+  MAX_LIMIT,
+  MIN_SEARCH_LENGTH,
+  SIMILARITY_THRESHOLD,
+} from '../constants/search.constants';
+import type {
+  CategoryRow,
+  DiscountCodeRow,
+  OrderRow,
+  ProductRow,
+  ProductSearchIdRow,
+  SearchIndex,
+  SearchProductsResponsePayload,
+  SearchResponsePayload,
+  SearchResultItem,
+  UserRow,
+  VendorRow,
+} from '../types/search.types';
+import {
+  buildCacheKey,
+  filterIndexes,
+  normalizeLimit,
+  normalizePage,
+  normalizeSearch,
+} from '../utils/search-input.util';
+import { SearchCacheService } from './search-cache.service';
 
-interface ProductRow {
-  id: string;
-  name: string;
-  sku: string;
-  slug?: string;
-  price?: number | string;
-  imageUrl?: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface VendorRow {
-  id: string;
-  storeName: string;
-  storeSlug?: string;
-  storeLogoUrl?: string | null;
-  storeDescription: string | null;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface CategoryRow {
-  id: string;
-  name: string;
-  description: string | null;
-  imageUrl: string | null;
-  slug: string;
-  parentId: string | null;
-  parentName: string | null;
-  parentSlug: string | null;
-  path: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface UserRow {
-  id: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  referralCode: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface OrderRow {
-  id: string;
-  orderNumber: string;
-  status: string;
-  discountCode: string | null;
-  referralCode: string | null;
-  shippingAddress: string | null;
-  userEmail: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface DiscountCodeRow {
-  id: string;
-  code: string;
-  description: string | null;
-  score: number | string;
-  total_count: number;
-}
-
-interface ProductSearchIdRow {
-  id: string;
-  score: number | string;
-  total_count: number;
-}
-
-export type SearchIndex =
-  | 'products'
-  | 'vendors'
-  | 'categories'
-  | 'users'
-  | 'orders'
-  | 'discount_codes';
-
-const MARKETPLACE_INDEXES: SearchIndex[] = [
-  'products',
-  'vendors',
-  'categories',
-];
-
-const ADMIN_INDEXES: SearchIndex[] = [
-  'products',
-  'vendors',
-  'categories',
-  'users',
-  'orders',
-  'discount_codes',
-];
-
-const VENDOR_INDEXES: SearchIndex[] = ['products', 'orders', 'discount_codes'];
-
-const MAX_LIMIT = 50;
-const MIN_SEARCH_LENGTH = 2;
-const SIMILARITY_THRESHOLD = 0.25;
-const CACHE_TTL_SECONDS = 900;
-
-export interface SearchResultItem {
-  id: string;
-  index: SearchIndex;
-  type: string;
-  title: string;
-  subtitle?: string;
-  score: number;
-  payload: Record<string, unknown>;
-}
-
-export interface SearchResponsePayload {
-  results: SearchResultItem[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
-export interface SearchProductHit {
-  type: string;
-  title: string;
-  description: string | null;
-  image: string | null;
-  searchKeywords: string[];
-  createdAt: Date;
-  updatedAt: Date;
-  slug: string;
-  price: number;
-  vendor: {
-    slug: string;
-    logo: string | null;
-    banner: string | null;
-    businessName: string;
-  };
-  category: {
-    id: string;
-    slug: string;
-    name: string;
-  };
-  subcategory: {
-    id: string;
-    slug: string;
-    name: string;
-  } | null;
-  section: string | null;
-  hasDiscount: boolean;
-  discountDetails: {
-    type: 'PERCENTAGE' | 'FIXED';
-    value: number;
-    maxAmount: number | null;
-  } | null;
-  objectID: string;
-}
-
-export interface SearchProductsResponsePayload {
-  hits: SearchProductHit[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
+/**
+ * Search for shoppers and for administrators: products (with full details), the marketplace
+ * (products, stores and categories), autocomplete, and the admin-wide search that also covers users,
+ * orders and discount codes. Vendor search is `VendorSearchService`; status and cache maintenance are
+ * `SearchOperationsService`.
+ */
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
 
   constructor(
-    @Inject('REDIS_CLIENT')
-    private readonly redis: Redis,
     private readonly prisma: PrismaService,
+    private readonly cache: SearchCacheService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -195,16 +57,16 @@ export class SearchService {
     ids: string[];
     total: number;
   } | null> {
-    const normalizedSearch = this.normalizeSearch(search);
+    const normalizedSearch = normalizeSearch(search);
 
     if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
       return null;
     }
 
-    const safePage = this.normalizePage(page);
-    const safeLimit = this.normalizeLimit(limit);
+    const safePage = normalizePage(page);
+    const safeLimit = normalizeLimit(limit);
 
-    const cacheKey = this.buildCacheKey(
+    const cacheKey = buildCacheKey(
       'products:ids',
       normalizedSearch,
       categoryId ?? 'all',
@@ -212,7 +74,7 @@ export class SearchService {
       safeLimit,
     );
 
-    const cached = await this.getCache<{
+    const cached = await this.cache.get<{
       ids: string[];
       total: number;
     }>(cacheKey);
@@ -338,7 +200,7 @@ export class SearchService {
       total,
     };
 
-    await this.setCache(cacheKey, result);
+    await this.cache.set(cacheKey, result);
 
     return result;
   }
@@ -352,23 +214,24 @@ export class SearchService {
     page = 1,
     limit = 10,
   ): Promise<SearchProductsResponsePayload | null> {
-    const normalizedSearch = this.normalizeSearch(search);
+    const normalizedSearch = normalizeSearch(search);
 
     if (!normalizedSearch) {
       return null;
     }
 
-    const safePage = this.normalizePage(page);
-    const safeLimit = this.normalizeLimit(limit);
+    const safePage = normalizePage(page);
+    const safeLimit = normalizeLimit(limit);
 
-    const cacheKey = this.buildCacheKey(
+    const cacheKey = buildCacheKey(
       'products:details',
       normalizedSearch,
       safePage,
       safeLimit,
     );
 
-    const cached = await this.getCache<SearchProductsResponsePayload>(cacheKey);
+    const cached =
+      await this.cache.get<SearchProductsResponsePayload>(cacheKey);
 
     if (cached) {
       return cached;
@@ -447,7 +310,7 @@ export class SearchService {
         },
       };
 
-      await this.setCache(cacheKey, response);
+      await this.cache.set(cacheKey, response);
 
       return response;
     }
@@ -536,7 +399,7 @@ export class SearchService {
       },
     };
 
-    await this.setCache(cacheKey, response);
+    await this.cache.set(cacheKey, response);
 
     return response;
   }
@@ -552,7 +415,7 @@ export class SearchService {
     limit = 10,
   ): Promise<SearchResponsePayload | null> {
     return this.executeSearch(
-      this.filterIndexes(types, MARKETPLACE_INDEXES),
+      filterIndexes(types, MARKETPLACE_INDEXES),
       search,
       page,
       limit,
@@ -576,7 +439,7 @@ export class SearchService {
      * here, so users/orders/discount codes were never searched.
      */
     return this.executeSearch(
-      this.filterIndexes(types, ADMIN_INDEXES),
+      filterIndexes(types, ADMIN_INDEXES),
       search,
       page,
       limit,
@@ -592,24 +455,24 @@ export class SearchService {
     types?: SearchIndex[],
     limit = 10,
   ): Promise<SearchResultItem[] | null> {
-    const normalizedSearch = this.normalizeSearch(search);
+    const normalizedSearch = normalizeSearch(search);
 
     if (!normalizedSearch) {
       return null;
     }
 
-    const indexes = this.filterIndexes(types, MARKETPLACE_INDEXES);
+    const indexes = filterIndexes(types, MARKETPLACE_INDEXES);
 
-    const safeLimit = this.normalizeLimit(limit);
+    const safeLimit = normalizeLimit(limit);
 
-    const cacheKey = this.buildCacheKey(
+    const cacheKey = buildCacheKey(
       'autocomplete-v2',
       normalizedSearch,
       indexes.join(','),
       safeLimit,
     );
 
-    const cached = await this.getCache<SearchResultItem[]>(cacheKey);
+    const cached = await this.cache.get<SearchResultItem[]>(cacheKey);
 
     if (cached) {
       return cached;
@@ -626,7 +489,7 @@ export class SearchService {
       return null;
     }
 
-    await this.setCache(cacheKey, result.results);
+    await this.cache.set(cacheKey, result.results);
 
     return result.results;
   }
@@ -635,91 +498,25 @@ export class SearchService {
   // VENDOR SEARCH
   // ---------------------------------------------------------------------------
 
-  async searchVendorGlobal(
-    vendorId: string,
-    search: string,
-    types?: SearchIndex[],
-    page = 1,
-    limit = 10,
-  ): Promise<SearchResponsePayload | null> {
-    return this.executeVendorSearch(
-      vendorId,
-      this.filterIndexes(types, VENDOR_INDEXES),
-      search,
-      page,
-      limit,
-    );
-  }
-
-  async autocompleteVendor(
-    vendorId: string,
-    search: string,
-    types?: SearchIndex[],
-    limit = 10,
-  ): Promise<SearchResultItem[] | null> {
-    const normalizedSearch = this.normalizeSearch(search);
-
-    if (!normalizedSearch) {
-      return null;
-    }
-
-    const indexes = this.filterIndexes(types, VENDOR_INDEXES);
-
-    const safeLimit = this.normalizeLimit(limit);
-
-    const cacheKey = this.buildCacheKey(
-      `vendor:${vendorId}:autocomplete`,
-      normalizedSearch,
-      indexes.join(','),
-      safeLimit,
-    );
-
-    const cached = await this.getCache<SearchResultItem[]>(cacheKey);
-
-    if (cached) {
-      return cached;
-    }
-
-    const result = await this.executeVendorSearch(
-      vendorId,
-      indexes,
-      normalizedSearch,
-      1,
-      safeLimit,
-    );
-
-    if (!result) {
-      return null;
-    }
-
-    await this.setCache(cacheKey, result.results);
-
-    return result.results;
-  }
-
-  // ---------------------------------------------------------------------------
-  // GENERIC SEARCH
-  // ---------------------------------------------------------------------------
-
   private async executeSearch(
     indexes: SearchIndex[],
     search: string,
     page: number,
     limit: number,
   ): Promise<SearchResponsePayload | null> {
-    const normalizedSearch = this.normalizeSearch(search);
+    const normalizedSearch = normalizeSearch(search);
 
     if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
       return null;
     }
 
-    const safePage = this.normalizePage(page);
+    const safePage = normalizePage(page);
 
-    const safeLimit = this.normalizeLimit(limit);
+    const safeLimit = normalizeLimit(limit);
 
     const sortedIndexes = [...indexes].sort();
 
-    const cacheKey = this.buildCacheKey(
+    const cacheKey = buildCacheKey(
       'global',
       normalizedSearch,
       sortedIndexes.join(','),
@@ -727,7 +524,7 @@ export class SearchService {
       safeLimit,
     );
 
-    const cached = await this.getCache<SearchResponsePayload>(cacheKey);
+    const cached = await this.cache.get<SearchResponsePayload>(cacheKey);
 
     if (cached) {
       return cached;
@@ -774,80 +571,10 @@ export class SearchService {
       },
     };
 
-    await this.setCache(cacheKey, response);
+    await this.cache.set(cacheKey, response);
 
     return response;
   }
-
-  private async executeVendorSearch(
-    vendorId: string,
-    indexes: SearchIndex[],
-    search: string,
-    page: number,
-    limit: number,
-  ): Promise<SearchResponsePayload | null> {
-    const normalizedSearch = this.normalizeSearch(search);
-
-    if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
-      return null;
-    }
-
-    const safePage = this.normalizePage(page);
-
-    const safeLimit = this.normalizeLimit(limit);
-
-    const sortedIndexes = [...indexes].sort();
-
-    const cacheKey = this.buildCacheKey(
-      `vendor:${vendorId}`,
-      normalizedSearch,
-      sortedIndexes.join(','),
-      safePage,
-      safeLimit,
-    );
-
-    const cached = await this.getCache<SearchResponsePayload>(cacheKey);
-
-    if (cached) {
-      return cached;
-    }
-
-    const searchLimit = Math.min(safePage * safeLimit, MAX_LIMIT);
-
-    const results = await Promise.all(
-      sortedIndexes.map((index) =>
-        this.searchVendorIndex(vendorId, index, normalizedSearch, searchLimit),
-      ),
-    );
-
-    const allItems = results
-      .flatMap((entry) => entry.items)
-      .sort((a, b) => b.score - a.score);
-
-    const total = results.reduce((sum, entry) => sum + entry.total, 0);
-
-    const start = (safePage - 1) * safeLimit;
-
-    const items = allItems.slice(start, start + safeLimit);
-
-    const response = {
-      results: items,
-      pagination: {
-        total,
-        page: safePage,
-        limit: safeLimit,
-        totalPages: Math.ceil(total / safeLimit),
-      },
-    };
-
-    await this.setCache(cacheKey, response);
-
-    return response;
-  }
-
-  // ---------------------------------------------------------------------------
-  // INDEX DISPATCH
-  // ---------------------------------------------------------------------------
 
   private async searchIndex(
     index: SearchIndex,
@@ -877,37 +604,6 @@ export class SearchService {
         return this.searchDiscountCodesDb(search, limit);
     }
   }
-
-  private async searchVendorIndex(
-    vendorId: string,
-    index: SearchIndex,
-    search: string,
-    limit: number,
-  ): Promise<{
-    items: SearchResultItem[];
-    total: number;
-  }> {
-    switch (index) {
-      case 'products':
-        return this.searchVendorProductsDb(vendorId, search, limit);
-
-      case 'orders':
-        return this.searchVendorOrdersDb(vendorId, search, limit);
-
-      case 'discount_codes':
-        return this.searchVendorDiscountCodesDb(vendorId, search, limit);
-
-      default:
-        return {
-          items: [],
-          total: 0,
-        };
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // PRODUCTS
-  // ---------------------------------------------------------------------------
 
   private async searchProductsDb(
     search: string,
@@ -1462,422 +1158,4 @@ export class SearchService {
   // ---------------------------------------------------------------------------
   // VENDOR PRODUCTS
   // ---------------------------------------------------------------------------
-
-  private async searchVendorProductsDb(
-    vendorId: string,
-    search: string,
-    limit: number,
-  ): Promise<{
-    items: SearchResultItem[];
-    total: number;
-  }> {
-    const pattern = `%${search}%`;
-    const prefixPattern = `${search}%`;
-
-    const rows = await this.prisma.$queryRaw<ProductRow[]>`
-        SELECT
-          id,
-          name,
-          sku,
-          (
-            CASE
-              WHEN LOWER(name) = LOWER(${search})
-                THEN 10.0 + similarity(name, ${search})
-              WHEN name ILIKE ${prefixPattern}
-                THEN 6.0 + similarity(name, ${search})
-              WHEN LOWER(sku) = LOWER(${search})
-                THEN 5.0
-              WHEN sku ILIKE ${prefixPattern}
-                THEN 4.0
-              WHEN name ILIKE ${pattern}
-                THEN 3.0 + similarity(name, ${search})
-              WHEN to_tsvector('simple', name) @@ plainto_tsquery('simple', ${search})
-                THEN 2.8 + similarity(name, ${search})
-              WHEN sku ILIKE ${pattern}
-                THEN 2.5 + similarity(sku, ${search})
-              WHEN to_tsvector('simple', name || ' ' || COALESCE(description, '')) @@ plainto_tsquery('simple', ${search})
-                THEN 1.5 + similarity(name, ${search})
-              WHEN COALESCE(description, '') ILIKE ${pattern}
-                THEN 1.2 + similarity(COALESCE(description, ''), ${search})
-              ELSE similarity(name, ${search})
-            END
-          ) AS score,
-          COUNT(*) OVER()::integer AS total_count
-        FROM products
-        WHERE
-          "vendorId" = ${vendorId}
-          AND "isDeleted" = false
-          AND (
-            name ILIKE ${pattern}
-            OR sku ILIKE ${pattern}
-            OR COALESCE(description, '') ILIKE ${pattern}
-            OR to_tsvector('simple', name || ' ' || COALESCE(description, '')) @@ plainto_tsquery('simple', ${search})
-            OR similarity(name, ${search}) > ${SIMILARITY_THRESHOLD}
-            OR similarity(sku, ${search}) > ${SIMILARITY_THRESHOLD}
-            OR similarity(COALESCE(description, ''), ${search}) > ${SIMILARITY_THRESHOLD}
-          )
-        ORDER BY score DESC, "createdAt" DESC
-        LIMIT ${limit};
-      `;
-
-    return {
-      total: rows.length > 0 ? Number(rows[0].total_count) : 0,
-
-      items: rows.map((product) => ({
-        id: product.id,
-        index: 'products',
-        type: 'product',
-        title: product.name,
-        subtitle: product.sku,
-        score: Number(product.score),
-        payload: {
-          id: product.id,
-          name: product.name,
-          sku: product.sku,
-        },
-      })),
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // VENDOR ORDERS
-  // ---------------------------------------------------------------------------
-
-  private async searchVendorOrdersDb(
-    vendorId: string,
-    search: string,
-    limit: number,
-  ): Promise<{
-    items: SearchResultItem[];
-    total: number;
-  }> {
-    const pattern = `%${search}%`;
-    const prefixPattern = `${search}%`;
-
-    const rows = await this.prisma.$queryRaw<OrderRow[]>`
-        WITH unique_orders AS (
-          SELECT DISTINCT
-            o.id,
-            o."orderNumber",
-            o.status,
-            o."discountCode",
-            o."referralCode",
-            o."shippingAddress",
-            u.email AS "userEmail",
-            o."createdAt"
-          FROM orders o
-          LEFT JOIN users u
-            ON u.id = o."userId"
-          INNER JOIN order_items oi
-            ON oi."orderId" = o.id
-          WHERE
-            oi."vendorId" = ${vendorId}
-            AND (
-              o."orderNumber" ILIKE ${pattern}
-              OR o."discountCode" ILIKE ${pattern}
-              OR o."referralCode" ILIKE ${pattern}
-              OR o."shippingAddress" ILIKE ${pattern}
-              OR u.email ILIKE ${pattern}
-              OR similarity(o."orderNumber", ${search}) > ${SIMILARITY_THRESHOLD}
-              OR similarity(COALESCE(o."shippingAddress", ''), ${search}) > ${SIMILARITY_THRESHOLD}
-              OR similarity(u.email, ${search}) > ${SIMILARITY_THRESHOLD}
-            )
-        )
-        SELECT
-          id,
-          "orderNumber",
-          status,
-          "discountCode",
-          "referralCode",
-          "shippingAddress",
-          "userEmail",
-          (
-            CASE
-              WHEN LOWER("orderNumber") = LOWER(${search})
-                THEN 10.0 + similarity("orderNumber", ${search})
-              WHEN "orderNumber" ILIKE ${prefixPattern}
-                THEN 6.0 + similarity("orderNumber", ${search})
-              WHEN LOWER(COALESCE("userEmail", '')) = LOWER(${search})
-                THEN 5.0
-              WHEN "orderNumber" ILIKE ${pattern}
-                THEN 3.0 + similarity("orderNumber", ${search})
-              WHEN "userEmail" ILIKE ${pattern}
-                THEN 2.0 + similarity("userEmail", ${search})
-              ELSE similarity(
-                COALESCE(
-                  "shippingAddress",
-                  ''
-                ),
-                ${search}
-              )
-            END
-          ) AS score,
-          COUNT(*) OVER()::integer AS total_count
-        FROM unique_orders
-        ORDER BY score DESC, "createdAt" DESC
-        LIMIT ${limit};
-      `;
-
-    return {
-      total: rows.length > 0 ? Number(rows[0].total_count) : 0,
-
-      items: rows.map((order) => ({
-        id: order.id,
-        index: 'orders',
-        type: 'order',
-        title: order.orderNumber,
-        subtitle: [order.userEmail, order.status, order.shippingAddress]
-          .filter(Boolean)
-          .join(' â€¢ '),
-        score: Number(order.score),
-        payload: {
-          id: order.id,
-          orderNumber: order.orderNumber,
-          status: order.status,
-          discountCode: order.discountCode,
-          referralCode: order.referralCode,
-          shippingAddress: order.shippingAddress,
-          user: order.userEmail
-            ? {
-                email: order.userEmail,
-              }
-            : null,
-        },
-      })),
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // VENDOR DISCOUNT CODES
-  // ---------------------------------------------------------------------------
-
-  private async searchVendorDiscountCodesDb(
-    vendorId: string,
-    search: string,
-    limit: number,
-  ): Promise<{
-    items: SearchResultItem[];
-    total: number;
-  }> {
-    const pattern = `%${search}%`;
-
-    const rows = await this.prisma.$queryRaw<DiscountCodeRow[]>`
-        SELECT
-          id,
-          code,
-          description,
-          (
-            CASE
-              WHEN code ILIKE ${pattern}
-                THEN 2.0 + similarity(
-                  code,
-                  ${search}
-                )
-              WHEN description ILIKE ${pattern}
-                THEN 1.0 + similarity(
-                  COALESCE(description, ''),
-                  ${search}
-                )
-              ELSE similarity(
-                code,
-                ${search}
-              )
-            END
-          ) AS score,
-          COUNT(*) OVER()::integer AS total_count
-        FROM discount_codes
-        WHERE
-          "vendorId" = ${vendorId}
-          AND (
-            code ILIKE ${pattern}
-            OR COALESCE(description, '') ILIKE ${pattern}
-            OR similarity(code, ${search}) > ${SIMILARITY_THRESHOLD}
-            OR similarity(
-              COALESCE(description, ''),
-              ${search}
-            ) > ${SIMILARITY_THRESHOLD}
-          )
-        ORDER BY score DESC, "createdAt" DESC
-        LIMIT ${limit};
-      `;
-
-    return {
-      total: rows.length > 0 ? Number(rows[0].total_count) : 0,
-
-      items: rows.map((discountCode) => ({
-        id: discountCode.id,
-        index: 'discount_codes',
-        type: 'discount_code',
-        title: discountCode.code,
-        subtitle: discountCode.description ?? undefined,
-        score: Number(discountCode.score),
-        payload: {
-          id: discountCode.id,
-          code: discountCode.code,
-          description: discountCode.description,
-        },
-      })),
-    };
-  }
-
-  // ---------------------------------------------------------------------------
-  // HELPERS
-  // ---------------------------------------------------------------------------
-
-  private filterIndexes(
-    requested: SearchIndex[] | undefined,
-    allowed: SearchIndex[],
-  ): SearchIndex[] {
-    if (!requested?.length) {
-      return [...allowed];
-    }
-
-    return requested.filter((index) => allowed.includes(index));
-  }
-
-  private normalizeSearch(search: string): string {
-    return search.trim().replace(/\s+/g, ' ');
-  }
-
-  private normalizePage(page: number): number {
-    if (!Number.isFinite(page)) {
-      return 1;
-    }
-
-    return Math.max(1, Math.floor(page));
-  }
-
-  private normalizeLimit(limit: number): number {
-    if (!Number.isFinite(limit)) {
-      return 10;
-    }
-
-    return Math.min(MAX_LIMIT, Math.max(1, Math.floor(limit)));
-  }
-
-  private buildCacheKey(
-    namespace: string,
-    ...parts: Array<string | number>
-  ): string {
-    return [
-      'search',
-      namespace,
-      ...parts.map((part) => encodeURIComponent(String(part))),
-    ].join(':');
-  }
-
-  private async getCache<T>(key: string): Promise<T | null> {
-    try {
-      const cached = await this.redis.get(key);
-
-      if (!cached) {
-        return null;
-      }
-
-      return JSON.parse(cached) as T;
-    } catch (error) {
-      /*
-       * Redis is a performance layer.
-       *
-       * A Redis failure should not make database search unavailable.
-       */
-      this.logger.warn(`Search cache read failed for key ${key}`, error);
-
-      return null;
-    }
-  }
-
-  private async setCache<T>(key: string, value: T): Promise<void> {
-    try {
-      await this.redis.set(key, JSON.stringify(value), 'EX', CACHE_TTL_SECONDS);
-    } catch (error) {
-      /*
-       * Search results remain correct even if caching fails.
-       */
-      this.logger.warn(`Search cache write failed for key ${key}`, error);
-    }
-  }
-
-  /**
-   * Diagnostic metrics for admin system management dashboard.
-   * Returns search engine readiness and indexed document counts.
-   */
-  async getSearchStatus(): Promise<{
-    ready: boolean;
-    totalDocuments: number;
-    breakdown: {
-      products: number;
-      vendors: number;
-      categories: number;
-      orders: number;
-    };
-  }> {
-    try {
-      const [products, vendors, categories, orders] = await Promise.all([
-        this.prisma.product.count({
-          where: { isDeleted: false, isActive: true },
-        }),
-        this.prisma.vendor.count({
-          where: { isActive: true, isApproved: true },
-        }),
-        this.prisma.category.count({
-          where: { isActive: true },
-        }),
-        this.prisma.order.count(),
-      ]);
-
-      const totalDocuments = products + vendors + categories + orders;
-
-      return {
-        ready: true,
-        totalDocuments,
-        breakdown: {
-          products,
-          vendors,
-          categories,
-          orders,
-        },
-      };
-    } catch (error) {
-      this.logger.error('Failed to retrieve search status metrics', error);
-      return {
-        ready: false,
-        totalDocuments: 0,
-        breakdown: {
-          products: 0,
-          vendors: 0,
-          categories: 0,
-          orders: 0,
-        },
-      };
-    }
-  }
-
-  /**
-   * Purges cached search queries in Redis.
-   */
-  async flushSearchCache(): Promise<number> {
-    try {
-      const keys = await this.redis.keys('search:*');
-      if (keys.length > 0) {
-        await this.redis.del(...keys);
-      }
-      return keys.length;
-    } catch (error) {
-      this.logger.warn('Failed to flush search cache keys', error);
-      return 0;
-    }
-  }
-
-  /**
-   * Synchronizes search indices and purges stale Redis query cache.
-   */
-  async reindex(): Promise<{ message: string; indexedCount: number }> {
-    await this.flushSearchCache();
-    const status = await this.getSearchStatus();
-    return {
-      message: 'Search indices synchronized and cache purged successfully',
-      indexedCount: status.totalDocuments,
-    };
-  }
 }
