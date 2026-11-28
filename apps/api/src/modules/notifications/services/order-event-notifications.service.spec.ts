@@ -1,4 +1,5 @@
 import { OrderEventNotificationsService } from './order-event-notifications.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('OrderEventNotificationsService referral reward', () => {
   const payload = {
@@ -32,6 +33,7 @@ describe('OrderEventNotificationsService referral reward', () => {
           .mockReturnValue('<html>reward</html>'),
       } as never,
       prisma as never,
+      new TransactionRunnerService(prisma as never, outbox as never),
       { create: jest.fn() } as never,
       preferences as never,
     );

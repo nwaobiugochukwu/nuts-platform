@@ -62,23 +62,15 @@ const rel = (p) => path.relative(root, p).split(path.sep).join("/");
 // ── API ───────────────────────────────────────────────────────────────────────
 const API_SRC = path.join(root, "apps/api/src");
 
-// Files that still open transactions with `prisma.$transaction` directly. Convert them to
-// `TransactionRunner.run(...)` and remove them from this list. Do not add to it.
+// Files allowed to open transactions with `prisma.$transaction` directly. Everything else uses
+// `TransactionRunner.run(...)` (context, hooks, metrics, retries). Do not add to it.
+//
+// The outbox relay is infrastructure the runner is built on: `OutboxService` wakes the relay, and the
+// runner depends on `OutboxService`, so the relay cannot depend on the runner. Its claim transaction
+// (`FOR UPDATE SKIP LOCKED`) is part of the outbox mechanism itself.
 const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/infrastructure/messaging/outbox/outbox.relay.ts",
-  "apps/api/src/modules/products/consumers/inventory.consumer.ts",
-  "apps/api/src/modules/auth/services/admin-auth.service.ts",
-  "apps/api/src/modules/auth/services/auth.service.ts",
-  "apps/api/src/modules/auth/services/refresh-session.service.ts",
-  "apps/api/src/modules/categories/services/categories.service.ts",
-  "apps/api/src/modules/discounts/services/voucher-claims.service.ts",
-  "apps/api/src/modules/notifications/services/order-event-notifications.service.ts",
   "apps/api/src/modules/orders/services/orders.service.ts",
-  "apps/api/src/modules/products/services/product-variants.service.ts",
-  "apps/api/src/modules/products/services/products.service.ts",
-  "apps/api/src/modules/recommendations/services/personalized-feed.service.ts",
-  "apps/api/src/modules/referrals/services/referral.service.ts",
-  "apps/api/src/modules/vendors/services/vendor-follows.service.ts",
 ]);
 // Direct audit-log calls that run OUTSIDE a request, where there is no controller to
 // carry `@Audit`. path -> number of calls allowed. Do not raise a number; lower it.

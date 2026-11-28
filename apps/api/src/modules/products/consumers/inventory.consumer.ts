@@ -1,6 +1,7 @@
 ﻿import { roleCan } from '@api/config/process-role.config';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { RabbitMQService } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.service';
 import { getErrorCode } from '@api/common/utils/error-details.util';
@@ -22,6 +23,7 @@ export class InventoryConsumer implements OnModuleInit {
   constructor(
     private readonly rabbitmq: RabbitMQService,
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly processed: ProcessedEventService,
   ) {}
 
@@ -53,41 +55,44 @@ export class InventoryConsumer implements OnModuleInit {
       ? new Date(payload.timestamp)
       : new Date();
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      let raw: number;
-      try {
-        const updated = await tx.product.update({
-          where: { id: payload.productId },
-          data: { stock: { increment: payload.adjustment } },
-          select: { stock: true },
+    const result = await this.transactions.run(
+      async ({ tx }) => {
+        let raw: number;
+        try {
+          const updated = await tx.product.update({
+            where: { id: payload.productId },
+            data: { stock: { increment: payload.adjustment } },
+            select: { stock: true },
+          });
+          raw = updated.stock;
+        } catch (err: unknown) {
+          if (getErrorCode(err) === 'P2025') return null; // the product no longer exists
+          throw err;
+        }
+        const newStock = Math.max(0, raw);
+        if (newStock !== raw) {
+          await tx.product.update({
+            where: { id: payload.productId },
+            data: { stock: newStock },
+          });
+        }
+        const oldStock = raw - payload.adjustment;
+        await tx.stockHistory.create({
+          data: {
+            productId: payload.productId,
+            variantId: payload.variantId ?? null,
+            adjustment: payload.adjustment,
+            oldStockQuantity: oldStock,
+            newStockQuantity: newStock,
+            description: payload.reason || 'Inventory adjustment',
+            createdBy: payload.createdBy ?? 'rabbitmq-inventory-worker',
+            createdAt,
+          },
         });
-        raw = updated.stock;
-      } catch (err: unknown) {
-        if (getErrorCode(err) === 'P2025') return null; // the product no longer exists
-        throw err;
-      }
-      const newStock = Math.max(0, raw);
-      if (newStock !== raw) {
-        await tx.product.update({
-          where: { id: payload.productId },
-          data: { stock: newStock },
-        });
-      }
-      const oldStock = raw - payload.adjustment;
-      await tx.stockHistory.create({
-        data: {
-          productId: payload.productId,
-          variantId: payload.variantId ?? null,
-          adjustment: payload.adjustment,
-          oldStockQuantity: oldStock,
-          newStockQuantity: newStock,
-          description: payload.reason || 'Inventory adjustment',
-          createdBy: payload.createdBy ?? 'rabbitmq-inventory-worker',
-          createdAt,
-        },
-      });
-      return { oldStock, newStock };
-    });
+        return { oldStock, newStock };
+      },
+      { name: 'inventory.apply-adjustment' },
+    );
 
     if (result) {
       this.logger.log(

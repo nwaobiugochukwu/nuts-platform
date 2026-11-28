@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { ReferralService } from '@api/modules/referrals/services/referral.service';
 import { AccountLockService } from '@api/modules/security/services/account-lock.service';
 
@@ -47,6 +48,7 @@ export class AuthService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly otpService: OtpService,
     private readonly referralService: ReferralService,
     private readonly accountLockService: AccountLockService,
@@ -92,82 +94,85 @@ export class AuthService {
        * constraints already protect things such as duplicate email/code,
        * while Serializable would add unnecessary contention to registration.
        */
-      const user = await this.prisma.$transaction(async (tx) => {
-        const createdUser = await tx.user.create({
-          data: {
-            email,
-            password,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            phone: dto.phone,
-            isEmailVerified: true,
-          },
-          select: USER_AUTH_SELECT,
-        });
+      const user = await this.transactions.run(
+        async ({ tx }) => {
+          const createdUser = await tx.user.create({
+            data: {
+              email,
+              password,
+              firstName: dto.firstName,
+              lastName: dto.lastName,
+              phone: dto.phone,
+              isEmailVerified: true,
+            },
+            select: USER_AUTH_SELECT,
+          });
 
-        await tx.userWallet.create({
-          data: {
-            userId: createdUser.id,
-          },
-        });
-
-        if (dto.shippingAddress) {
-          await tx.shippingAddress.create({
+          await tx.userWallet.create({
             data: {
               userId: createdUser.id,
-              fullName: dto.shippingAddress.fullName,
-              phone: dto.shippingAddress.phone,
-              street: dto.shippingAddress.street,
-              city: dto.shippingAddress.city,
-              state: dto.shippingAddress.state,
-              country: dto.shippingAddress.country ?? 'Nigeria',
-              isDefault: true,
             },
           });
-        }
 
-        /*
-         * Create the user's own referral code using the SAME transaction
-         * client. This means the code cannot survive if registration fails.
-         */
-        await this.referralService.createReferralCode(tx, createdUser.id);
+          if (dto.shippingAddress) {
+            await tx.shippingAddress.create({
+              data: {
+                userId: createdUser.id,
+                fullName: dto.shippingAddress.fullName,
+                phone: dto.shippingAddress.phone,
+                street: dto.shippingAddress.street,
+                city: dto.shippingAddress.city,
+                state: dto.shippingAddress.state,
+                country: dto.shippingAddress.country ?? 'Nigeria',
+                isDefault: true,
+              },
+            });
+          }
 
-        /*
-         * If a referral was supplied, create the relationship using the
-         * transaction client as well.
-         *
-         * Do not call this.prisma here. That would escape the transaction.
-         */
-        if (referral) {
-          await this.referralService.applyReferralAtSignupById(
+          /*
+           * Create the user's own referral code using the SAME transaction
+           * client. This means the code cannot survive if registration fails.
+           */
+          await this.referralService.createReferralCode(tx, createdUser.id);
+
+          /*
+           * If a referral was supplied, create the relationship using the
+           * transaction client as well.
+           *
+           * Do not call this.prisma here. That would escape the transaction.
+           */
+          if (referral) {
+            await this.referralService.applyReferralAtSignupById(
+              tx,
+              createdUser.id,
+              referral.id,
+              referral.userId,
+            );
+          }
+
+          // The welcome email is sent by a consumer of this event; it exists only if the
+          // account does.
+          await this.outbox.appendEnvelope(
             tx,
-            createdUser.id,
-            referral.id,
-            referral.userId,
-          );
-        }
-
-        // The welcome email is sent by a consumer of this event; it exists only if the
-        // account does.
-        await this.outbox.appendEnvelope(
-          tx,
-          {
-            type: DomainEvents.USER_REGISTERED,
-            aggregate: { type: 'user', id: createdUser.id },
-            actor: { type: 'user', id: createdUser.id },
-            payload: {
-              userId: createdUser.id,
-              email: createdUser.email,
-              firstName: createdUser.firstName,
-              authProvider: 'LOCAL',
-              hasReferral: Boolean(referral),
+            {
+              type: DomainEvents.USER_REGISTERED,
+              aggregate: { type: 'user', id: createdUser.id },
+              actor: { type: 'user', id: createdUser.id },
+              payload: {
+                userId: createdUser.id,
+                email: createdUser.email,
+                firstName: createdUser.firstName,
+                authProvider: 'LOCAL',
+                hasReferral: Boolean(referral),
+              },
             },
-          },
-          { wakeRelay: false },
-        );
+            { wakeRelay: false },
+          );
 
-        return createdUser;
-      });
+          return createdUser;
+        },
+        { name: 'auth.register' },
+      );
       this.outbox.wakeRelay();
 
       /*
@@ -439,58 +444,61 @@ export class AuthService {
         )
       : null;
 
-    const newUser = await this.prisma
-      .$transaction(async (tx) => {
-        const created = await tx.user.create({
-          data: {
-            email: payload.email,
-            password: null,
-            firstName: payload.firstName,
-            lastName: payload.lastName,
-            googleId: payload.googleId,
-            authProvider: 'GOOGLE',
-            avatarUrl: payload.avatarUrl,
-            isEmailVerified: true,
-          },
-          select: USER_AUTH_SELECT,
-        });
-
-        await tx.userWallet.create({
-          data: {
-            userId: created.id,
-          },
-        });
-
-        await this.referralService.createReferralCode(tx, created.id);
-
-        if (referral) {
-          await this.referralService.applyReferralAtSignupById(
-            tx,
-            created.id,
-            referral.id,
-            referral.userId,
-          );
-        }
-
-        await this.outbox.appendEnvelope(
-          tx,
-          {
-            type: DomainEvents.USER_REGISTERED,
-            aggregate: { type: 'user', id: created.id },
-            actor: { type: 'user', id: created.id },
-            payload: {
-              userId: created.id,
-              email: created.email,
-              firstName: created.firstName,
+    const newUser = await this.transactions
+      .run(
+        async ({ tx }) => {
+          const created = await tx.user.create({
+            data: {
+              email: payload.email,
+              password: null,
+              firstName: payload.firstName,
+              lastName: payload.lastName,
+              googleId: payload.googleId,
               authProvider: 'GOOGLE',
-              hasReferral: Boolean(referral),
+              avatarUrl: payload.avatarUrl,
+              isEmailVerified: true,
             },
-          },
-          { wakeRelay: false },
-        );
+            select: USER_AUTH_SELECT,
+          });
 
-        return created;
-      })
+          await tx.userWallet.create({
+            data: {
+              userId: created.id,
+            },
+          });
+
+          await this.referralService.createReferralCode(tx, created.id);
+
+          if (referral) {
+            await this.referralService.applyReferralAtSignupById(
+              tx,
+              created.id,
+              referral.id,
+              referral.userId,
+            );
+          }
+
+          await this.outbox.appendEnvelope(
+            tx,
+            {
+              type: DomainEvents.USER_REGISTERED,
+              aggregate: { type: 'user', id: created.id },
+              actor: { type: 'user', id: created.id },
+              payload: {
+                userId: created.id,
+                email: created.email,
+                firstName: created.firstName,
+                authProvider: 'GOOGLE',
+                hasReferral: Boolean(referral),
+              },
+            },
+            { wakeRelay: false },
+          );
+
+          return created;
+        },
+        { name: 'auth.google-sign-in' },
+      )
       .catch((error: unknown) => {
         if (
           this.isUserEmailUniqueViolation(error) ||
@@ -681,35 +689,38 @@ export class AuthService {
     try {
       // The new password and the "password changed" event commit together; the confirmation
       // email is sent by a consumer of the event.
-      const user = await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.user.update({
-          where: { email },
-          data: {
-            password,
-          },
-          select: {
-            id: true,
-            firstName: true,
-          },
-        });
-        await this.outbox.appendEnvelope(
-          tx,
-          {
-            type: DomainEvents.USER_PASSWORD_CHANGED,
-            aggregate: { type: 'user', id: updated.id },
-            actor: { type: 'user', id: updated.id },
-            payload: {
-              userId: updated.id,
-              email,
-              firstName: updated.firstName,
-              role: 'USER',
-              via: 'password-reset',
+      const user = await this.transactions.run(
+        async ({ tx }) => {
+          const updated = await tx.user.update({
+            where: { email },
+            data: {
+              password,
             },
-          },
-          { wakeRelay: false },
-        );
-        return updated;
-      });
+            select: {
+              id: true,
+              firstName: true,
+            },
+          });
+          await this.outbox.appendEnvelope(
+            tx,
+            {
+              type: DomainEvents.USER_PASSWORD_CHANGED,
+              aggregate: { type: 'user', id: updated.id },
+              actor: { type: 'user', id: updated.id },
+              payload: {
+                userId: updated.id,
+                email,
+                firstName: updated.firstName,
+                role: 'USER',
+                via: 'password-reset',
+              },
+            },
+            { wakeRelay: false },
+          );
+          return updated;
+        },
+        { name: 'auth.reset-password' },
+      );
       this.outbox.wakeRelay();
 
       // Revoke ALL sessions atomically (UserAuthSession + account-level tokens + Redis stamp)

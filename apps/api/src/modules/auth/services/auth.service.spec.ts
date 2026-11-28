@@ -8,6 +8,7 @@ import { AccountLockService } from '@api/modules/security/services/account-lock.
 import { AuthService } from './auth.service';
 import { OtpService } from './otp.service';
 import { RefreshSessionService } from './refresh-session.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -78,6 +79,7 @@ describe('AuthService', () => {
 
     service = new AuthService(
       mockPrisma,
+      new TransactionRunnerService(mockPrisma, mockOutbox),
       mockOtpService,
       mockReferralService,
       mockAccountLockService,

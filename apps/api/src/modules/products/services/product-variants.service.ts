@@ -12,6 +12,7 @@ import {
   CacheService,
 } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 import {
   CreateVariantDto,
@@ -71,6 +72,7 @@ export class ProductVariantsService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly transactions: TransactionRunnerService,
     private readonly cacheService: CacheService,
   ) {}
 
@@ -136,7 +138,7 @@ export class ProductVariantsService {
       },
     };
 
-    const [total, variants] = await this.prisma.$transaction([
+    const [total, variants] = await Promise.all([
       this.prisma.productVariant.count({
         where,
       }),
@@ -471,85 +473,88 @@ export class ProductVariantsService {
       throw new NotFoundException('Product variant not found');
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      /**
-       * Atomic stock update.
-       *
-       * For a negative adjustment of -5:
-       *
-       * stock >= 5
-       *
-       * must be true at the time PostgreSQL performs
-       * the UPDATE.
-       */
-      const result = await tx.productVariant.updateMany({
-        where: {
-          id,
-          isDeleted: false,
-          ...(dto.quantity < 0
-            ? {
-                stock: {
-                  gte: Math.abs(dto.quantity),
-                },
-              }
-            : {}),
-        },
-        data: {
-          stock: {
-            increment: dto.quantity,
+    const updated = await this.transactions.run(
+      async ({ tx }) => {
+        /**
+         * Atomic stock update.
+         *
+         * For a negative adjustment of -5:
+         *
+         * stock >= 5
+         *
+         * must be true at the time PostgreSQL performs
+         * the UPDATE.
+         */
+        const result = await tx.productVariant.updateMany({
+          where: {
+            id,
+            isDeleted: false,
+            ...(dto.quantity < 0
+              ? {
+                  stock: {
+                    gte: Math.abs(dto.quantity),
+                  },
+                }
+              : {}),
           },
-        },
-      });
+          data: {
+            stock: {
+              increment: dto.quantity,
+            },
+          },
+        });
 
-      if (result.count !== 1) {
-        if (dto.quantity < 0) {
-          throw new BadRequestException(
-            'Insufficient stock for this adjustment',
-          );
+        if (result.count !== 1) {
+          if (dto.quantity < 0) {
+            throw new BadRequestException(
+              'Insufficient stock for this adjustment',
+            );
+          }
+
+          throw new NotFoundException('Product variant not found');
         }
 
-        throw new NotFoundException('Product variant not found');
-      }
+        const updatedVariant = await tx.productVariant.findUniqueOrThrow({
+          where: {
+            id,
+          },
+          select: {
+            id: true,
+            productId: true,
+            stock: true,
+            isActive: true,
+            updatedAt: true,
+          },
+        });
 
-      const updatedVariant = await tx.productVariant.findUniqueOrThrow({
-        where: {
-          id,
-        },
-        select: {
-          id: true,
-          productId: true,
-          stock: true,
-          isActive: true,
-          updatedAt: true,
-        },
-      });
+        /**
+         * Because:
+         *
+         * newStock = oldStock + adjustment
+         *
+         * oldStock = newStock - adjustment
+         *
+         * we can derive the exact previous quantity
+         * from the committed update.
+         */
+        const oldStockQuantity = updatedVariant.stock - dto.quantity;
 
-      /**
-       * Because:
-       *
-       * newStock = oldStock + adjustment
-       *
-       * oldStock = newStock - adjustment
-       *
-       * we can derive the exact previous quantity
-       * from the committed update.
-       */
-      const oldStockQuantity = updatedVariant.stock - dto.quantity;
+        await tx.stockHistory.create({
+          data: {
+            adjustment: dto.quantity,
+            oldStockQuantity,
+            newStockQuantity: updatedVariant.stock,
+            description: dto.description?.trim() || 'Manual stock adjustment',
+            productId: updatedVariant.productId,
+            variantId: updatedVariant.id,
+            createdBy: author,
+          },
+        });
 
-      await tx.stockHistory.create({
-        data: {
-          adjustment: dto.quantity,
-          oldStockQuantity,
-          newStockQuantity: updatedVariant.stock,
-          description: dto.description?.trim() || 'Manual stock adjustment',
-          productId: updatedVariant.productId,
-          variantId: updatedVariant.id,
-          createdBy: author,
-        },
-      });
-
-      return updatedVariant;
-    });
+        return updatedVariant;
+      },
+      { name: 'product-variant.update-stock' },
+    );
 
     await this.invalidateVariantCaches(updated.id, updated.productId);
 

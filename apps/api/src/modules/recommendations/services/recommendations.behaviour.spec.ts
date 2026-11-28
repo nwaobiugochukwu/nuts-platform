@@ -1,5 +1,6 @@
 import { PersonalizedFeedService } from './personalized-feed.service';
 import { PopularProductsService } from './popular-products.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
 const card = (id: string) => ({ id, name: id }) as never;
 
@@ -39,6 +40,7 @@ describe('PersonalizedFeedService behaviour', () => {
         products,
         service: new PersonalizedFeedService(
           prisma as never,
+          new TransactionRunnerService(prisma as never, {} as never),
           products as never,
           new PopularProductsService(products as never),
         ),
@@ -117,6 +119,7 @@ describe('PersonalizedFeedService behaviour', () => {
       };
       const service = new PersonalizedFeedService(
         prisma as never,
+        new TransactionRunnerService(prisma as never, {} as never),
         products as never,
         new PopularProductsService(products as never),
       );
@@ -153,6 +156,7 @@ describe('PersonalizedFeedService behaviour', () => {
         cache,
         service: new PersonalizedFeedService(
           prisma as never,
+          new TransactionRunnerService(prisma as never, {} as never),
           products as never,
           new PopularProductsService(products as never),
           cache as never,
@@ -230,6 +234,7 @@ describe('PersonalizedFeedService behaviour', () => {
       };
       const service = new PersonalizedFeedService(
         prisma as never,
+        new TransactionRunnerService(prisma as never, {} as never),
         products as never,
         new PopularProductsService(products as never),
       );
