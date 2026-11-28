@@ -887,8 +887,8 @@ async function main() {
     });
   }
 
-  await chunkedInsert("Marketplace Analytics Events", marketplaceEvents, 1000, async (batch) => {
-    await prisma.marketplaceEvent.createMany({ data: batch });
+  await chunkedInsert("Shopper activity", marketplaceEvents, 1000, async (batch) => {
+    await prisma.shopperActivity.createMany({ data: batch });
   });
 
   // 11. System Announcements & User Notifications

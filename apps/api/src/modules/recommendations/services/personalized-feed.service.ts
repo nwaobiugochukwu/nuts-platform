@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { roleCan } from '@api/config/process-role.config';
-import { RecommendationRefreshService } from '@api/modules/analytics/services/recommendation-refresh.service';
+import { RecommendationRefreshService } from '@api/modules/shopper-activity/services/recommendation-refresh.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 import { ProductsService } from '@api/modules/products/services/products.service';

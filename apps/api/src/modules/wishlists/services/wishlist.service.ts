@@ -6,7 +6,7 @@ import { Optional } from '@nestjs/common';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { ShopperActivityService } from '@api/modules/analytics/services/shopper-activity.service';
+import { ShopperActivityService } from '@api/modules/shopper-activity/services/shopper-activity.service';
 
 import { WishlistResponseDto } from '../dto/wishlist.dto';
 

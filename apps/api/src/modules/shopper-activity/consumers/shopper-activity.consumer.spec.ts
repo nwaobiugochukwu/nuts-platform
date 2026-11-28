@@ -1,8 +1,12 @@
 import { Prisma } from '@prisma/client';
 import { buildEnvelope } from '../../../infrastructure/messaging/events/event-envelope.util';
-import { fakeRabbit } from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
+import {
+  fakeRabbit,
+  withRole,
+} from '../../../infrastructure/messaging/rabbitmq/consumer-harness-spec';
 import { RABBITMQ_QUEUES } from '../../../infrastructure/messaging/rabbitmq/rabbitmq.constants';
-import { AnalyticsConsumer } from './analytics.consumer';
+import { ShopperActivityStoreService } from '../services/shopper-activity-store.service';
+import { ShopperActivityConsumer } from './shopper-activity.consumer';
 
 const missingRow = () =>
   new Prisma.PrismaClientKnownRequestError('fk', {
@@ -10,11 +14,11 @@ const missingRow = () =>
     clientVersion: 'test',
   });
 
-describe('AnalyticsConsumer', () => {
+describe('ShopperActivityConsumer', () => {
   let harness: ReturnType<typeof fakeRabbit>;
   let prisma: any;
   let refresh: { schedule: jest.Mock };
-  let consumer: AnalyticsConsumer;
+  let consumer: ShopperActivityConsumer;
 
   const at = '2026-11-28T10:00:00.000Z';
   /** A shopper-activity message, as the publisher sends it: the action is the event name. */
@@ -38,10 +42,13 @@ describe('AnalyticsConsumer', () => {
       productView: table(),
       searchQuery: table(),
       recommendationEvent: table(),
-      marketplaceEvent: table(),
+      shopperActivity: table(),
     };
     refresh = { schedule: jest.fn() };
-    consumer = new AnalyticsConsumer(harness.rabbit, prisma, refresh as never);
+    consumer = new ShopperActivityConsumer(
+      harness.rabbit,
+      new ShopperActivityStoreService(prisma, refresh as never),
+    );
     jest
       .spyOn((consumer as any).logger, 'error')
       .mockImplementation(() => undefined);
@@ -295,9 +302,9 @@ describe('AnalyticsConsumer', () => {
       async (action, body, rowType, expected) => {
         await handle(activity(action, body));
 
-        expect(prisma.marketplaceEvent.createMany).toHaveBeenCalledTimes(1);
+        expect(prisma.shopperActivity.createMany).toHaveBeenCalledTimes(1);
         const { data, skipDuplicates } =
-          prisma.marketplaceEvent.createMany.mock.calls[0][0];
+          prisma.shopperActivity.createMany.mock.calls[0][0];
         expect(skipDuplicates).toBe(true);
         expect(data).toHaveLength(1);
         expect(data[0]).toMatchObject({
@@ -310,7 +317,7 @@ describe('AnalyticsConsumer', () => {
     );
 
     it('drops activity that references a deleted user or product instead of poisoning the queue', async () => {
-      prisma.marketplaceEvent.createMany.mockRejectedValue(missingRow());
+      prisma.shopperActivity.createMany.mockRejectedValue(missingRow());
 
       await expect(
         handle(activity('cart_item_added', cart)),
@@ -318,11 +325,25 @@ describe('AnalyticsConsumer', () => {
     });
 
     it('rethrows any other storage error so the queue retries it', async () => {
-      prisma.marketplaceEvent.createMany.mockRejectedValue(new Error('down'));
+      prisma.shopperActivity.createMany.mockRejectedValue(new Error('down'));
 
       await expect(handle(activity('cart_item_added', cart))).rejects.toThrow(
         'down',
       );
+    });
+  });
+
+  describe('which processes consume', () => {
+    it('does not consume in the API process (consumers run only in the worker)', async () => {
+      await withRole('api', () => consumer.onModuleInit());
+
+      expect(harness.consumers).toHaveLength(0);
+    });
+
+    it('consumes the analytics queue in the worker', async () => {
+      await withRole('worker', () => consumer.onModuleInit());
+
+      expect(harness.consumers).toHaveLength(1);
     });
   });
 
@@ -399,7 +420,7 @@ describe('AnalyticsConsumer', () => {
 
       expect(prisma.searchQuery.createMany).toHaveBeenCalledTimes(1);
       expect(prisma.recommendationEvent.createMany).toHaveBeenCalledTimes(2);
-      expect(prisma.marketplaceEvent.createMany).toHaveBeenCalledTimes(1);
+      expect(prisma.shopperActivity.createMany).toHaveBeenCalledTimes(1);
     });
 
     it.each([

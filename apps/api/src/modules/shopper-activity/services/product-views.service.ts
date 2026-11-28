@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma, ROLE } from '@prisma/client';
 import Redis from 'ioredis';
 import { randomUUID } from 'node:crypto';
-import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
+import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { TRACKING } from '@api/common/constants';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
@@ -28,7 +28,7 @@ export class ProductViewsService {
 
   constructor(
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
-    private readonly tracking: ShopperActivityPublisherService,
+    private readonly recorder: ShopperActivityRecorderService,
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
   ) {
@@ -95,19 +95,17 @@ export class ProductViewsService {
     if (!this.redis || this.redis.status !== 'ready') {
       // Keep recommendation signals usable during a Redis outage instead of
       // acknowledging a view that was never stored.
-      await this.prisma.productView.createMany({
-        data: [
-          {
-            id: resolvedEventId,
-            productId,
-            userId: effectiveUserId ?? null,
-            visitorId: effectiveVisitorId ?? null,
-            sessionId: resolvedSessionId,
-            createdAt: timestamp,
-          },
-        ],
-        skipDuplicates: true,
-      });
+      await this.recorder.record(
+        {
+          action: 'product_viewed',
+          id: resolvedEventId,
+          productId,
+          userId: effectiveUserId ?? null,
+          visitorId: effectiveVisitorId ?? null,
+          sessionId: resolvedSessionId,
+        },
+        { occurredAt: timestamp },
+      );
       return;
     }
 
@@ -129,19 +127,17 @@ export class ProductViewsService {
       this.logger.warn(
         `Failed to buffer product view: ${err instanceof Error ? err.message : String(err)}`,
       );
-      await this.prisma.productView.createMany({
-        data: [
-          {
-            id: resolvedEventId,
-            productId,
-            userId: effectiveUserId ?? null,
-            visitorId: effectiveVisitorId ?? null,
-            sessionId: resolvedSessionId,
-            createdAt: timestamp,
-          },
-        ],
-        skipDuplicates: true,
-      });
+      await this.recorder.record(
+        {
+          action: 'product_viewed',
+          id: resolvedEventId,
+          productId,
+          userId: effectiveUserId ?? null,
+          visitorId: effectiveVisitorId ?? null,
+          sessionId: resolvedSessionId,
+        },
+        { occurredAt: timestamp },
+      );
     }
   }
 
@@ -255,62 +251,43 @@ export class ProductViewsService {
         )) as string[];
         if (raw.length === 0) break;
 
-        const directPersistViews: Array<{ raw: string; view: BufferedView }> =
-          [];
+        const buffered: Array<{ raw: string; view: BufferedView }> = [];
         for (const item of raw) {
-          let view: BufferedView;
           try {
-            view = JSON.parse(item) as BufferedView;
+            const view = JSON.parse(item) as BufferedView;
+            view.id ??= productViewEventId(view);
+            buffered.push({ raw: item, view });
           } catch {
+            // Not a view we can read: drop it instead of retrying it forever.
             await this.redis.lrem(this.viewProcessingKey, 1, item);
-            continue;
           }
-          view.id ??= productViewEventId(view);
+        }
 
-          const published = await this.tracking.record(
-            {
-              action: 'product_viewed',
-              id: view.id,
+        // Each view is queued, or stored directly when the broker is down; it leaves the processing
+        // list only once it is one or the other. If this throws, the whole batch stays listed and is
+        // retried by the next flush (a repeat is harmless: each view has its own id).
+        await this.recorder.recordMany(
+          buffered.map(({ view }) => ({
+            activity: {
+              action: 'product_viewed' as const,
+              id: view.id as string,
               productId: view.productId,
               userId: view.userId,
               visitorId: view.visitorId,
               sessionId: view.sessionId,
             },
             // When the page was viewed, not when the buffer was flushed.
-            { occurredAt: new Date(view.timestamp) },
-          );
-          if (published) {
-            await this.redis.lrem(this.viewProcessingKey, 1, item);
-            processed++;
-          } else {
-            directPersistViews.push({ raw: item, view });
-          }
+            occurredAt: new Date(view.timestamp),
+          })),
+        );
+        for (const { raw: item } of buffered) {
+          await this.redis.lrem(this.viewProcessingKey, 1, item);
         }
-
-        if (directPersistViews.length > 0) {
-          await this.prisma.productView.createMany({
-            data: directPersistViews.map(({ view }) => ({
-              id: view.id ?? productViewEventId(view),
-              productId: view.productId,
-              userId: view.userId ?? null,
-              visitorId: view.visitorId ?? null,
-              sessionId: view.sessionId ?? null,
-              createdAt: new Date(view.timestamp),
-            })),
-            skipDuplicates: true,
-          });
-          for (const { raw: item } of directPersistViews) {
-            await this.redis.lrem(this.viewProcessingKey, 1, item);
-          }
-          processed += directPersistViews.length;
-        }
+        processed += buffered.length;
       }
 
       if (processed > 0) {
-        this.logger.debug(
-          { count: processed },
-          'Flushed product views to queue',
-        );
+        this.logger.debug({ count: processed }, 'Flushed product views');
       }
     } catch (err) {
       this.logger.warn(

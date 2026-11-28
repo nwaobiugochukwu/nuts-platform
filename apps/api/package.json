@@ -221,11 +221,29 @@
         "functions": 70,
         "lines": 50
       },
-      "./src/modules/analytics/consumers/": {
+      "./src/modules/shopper-activity/consumers/": {
         "statements": 90,
         "branches": 85,
         "functions": 90,
         "lines": 90
+      },
+      "./src/modules/shopper-activity/services/shopper-activity-store.service.ts": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/modules/shopper-activity/services/shopper-activity-recorder.service.ts": {
+        "statements": 90,
+        "branches": 85,
+        "functions": 90,
+        "lines": 90
+      },
+      "./src/modules/shopper-activity/jobs/activity-retention.job.ts": {
+        "statements": 85,
+        "branches": 75,
+        "functions": 85,
+        "lines": 85
       },
       "./src/modules/products/consumers/": {
         "statements": 90,

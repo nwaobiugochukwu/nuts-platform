@@ -14,7 +14,7 @@ import { VendorAnalyticsQueryDto } from '../dto/vendor-analytics-query.dto';
 import { VendorAnalyticsSummaryDto } from '../dto/vendor-analytics-summary.dto';
 import { VendorAnalyticsService } from '../services/vendor-analytics.service';
 import { VendorProductAnalyticsQueryDto } from '../dto/vendor-product-analytics-query.dto';
-import { VendorProductPerformancePageDto } from '../dto/marketplace-analytics.dto';
+import { VendorProductPerformancePageDto } from '../dto/shopper-engagement.dto';
 
 @ApiTags('VENDOR - ANALYTICS')
 @Controller('vendors/analytics')

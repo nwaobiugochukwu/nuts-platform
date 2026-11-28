@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import {
-  MarketplaceAnalyticsSummaryDto,
+  ShopperEngagementSummaryDto,
   VendorProductPerformancePageDto,
-} from '../dto/marketplace-analytics.dto';
+} from '../dto/shopper-engagement.dto';
 
 type AggregateValue = bigint | number | string | null;
 type SummaryRow = Record<string, AggregateValue>;
@@ -19,14 +19,14 @@ function rate(numerator: number, denominator: number): number {
 }
 
 @Injectable()
-export class MarketplaceAnalyticsService {
+export class ShopperEngagementService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getSummary(
     start: Date,
     end: Date,
     vendorId?: string,
-  ): Promise<MarketplaceAnalyticsSummaryDto> {
+  ): Promise<ShopperEngagementSummaryDto> {
     const vendorFilter = vendorId ?? null;
     const [
       events,
@@ -55,7 +55,7 @@ export class MarketplaceAnalyticsService {
           COUNT(*) FILTER (WHERE "event_type" = 'WISHLIST_REMOVE') AS wishlist_removals,
           COUNT(DISTINCT ("cart_id", "product_id", "variant_id"))
             FILTER (WHERE "event_type" = 'CART_ADD' AND "cart_id" IS NOT NULL) AS cart_lines_added
-        FROM "marketplace_events"
+        FROM "shopper_activity"
         WHERE "created_at" >= ${start} AND "created_at" <= ${end}
           AND (${vendorFilter}::text IS NULL OR "vendor_id" = ${vendorFilter})
       `,
@@ -111,7 +111,7 @@ export class MarketplaceAnalyticsService {
       this.prisma.$queryRaw<SummaryRow[]>`
         WITH additions AS (
           SELECT e."cart_id", e."product_id", e."variant_id", MAX(e."created_at") AS added_at
-          FROM "marketplace_events" e
+          FROM "shopper_activity" e
           WHERE e."event_type" = 'CART_ADD'
             AND e."created_at" >= ${start} AND e."created_at" <= ${end}
             AND e."cart_id" IS NOT NULL
@@ -148,7 +148,7 @@ export class MarketplaceAnalyticsService {
         SELECT
           COUNT(*) AS identified_viewers,
           COUNT(*) FILTER (WHERE EXISTS (
-            SELECT 1 FROM "marketplace_events" e
+            SELECT 1 FROM "shopper_activity" e
             WHERE e."event_type" = 'CART_ADD'
               AND e."product_id" = identified_viewers.product_id
               AND e."user_id" = identified_viewers.user_id
@@ -291,7 +291,7 @@ export class MarketplaceAnalyticsService {
           SELECT "product_id",
                  COUNT(*) FILTER (WHERE "event_type" = 'CART_ADD') AS cart_adds,
                  COUNT(*) FILTER (WHERE "event_type" = 'WISHLIST_ADD') AS wishlist_adds
-          FROM "marketplace_events"
+          FROM "shopper_activity"
           WHERE "vendor_id" = ${vendorId}
             AND "created_at" >= ${start} AND "created_at" <= ${end}
           GROUP BY "product_id"
@@ -307,7 +307,7 @@ export class MarketplaceAnalyticsService {
           SELECT iv.product_id,
                  COUNT(*) AS identified_viewers,
                  COUNT(*) FILTER (WHERE EXISTS (
-                   SELECT 1 FROM "marketplace_events" e
+                   SELECT 1 FROM "shopper_activity" e
                    WHERE e."event_type" = 'CART_ADD'
                      AND e."product_id" = iv.product_id
                      AND e."user_id" = iv.user_id
@@ -345,7 +345,7 @@ export class MarketplaceAnalyticsService {
           GROUP BY iv.product_id
         ), cart_lines AS (
           SELECT e."cart_id", e."product_id", e."variant_id", MAX(e."created_at") AS added_at
-          FROM "marketplace_events" e
+          FROM "shopper_activity" e
           WHERE e."vendor_id" = ${vendorId}
             AND e."event_type" = 'CART_ADD'
             AND e."created_at" >= ${start} AND e."created_at" <= ${end}

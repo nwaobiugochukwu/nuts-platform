@@ -1108,7 +1108,9 @@ model RecommendationEvent {
 
 /// Operational storefront actions used to build product and store conversion funnels.
 /// Shopper identity is pseudonymous; this table intentionally does not retain names or email addresses.
-model MarketplaceEvent {
+/// What a shopper does in the storefront that is not a product view, a search or a shelf click:
+/// opening a store, adding or removing a cart item, adding or removing a wishlist item.
+model ShopperActivity {
   id        String   @id @default(uuid())
   eventType String   @map("event_type")
   vendorId  String?  @map("vendor_id")
@@ -1131,7 +1133,7 @@ model MarketplaceEvent {
   @@index([visitorId, eventType, createdAt])
   @@index([sessionId, eventType, createdAt])
   @@index([createdAt])
-  @@map("marketplace_events")
+  @@map("shopper_activity")
 }
 
 model VendorFollow {

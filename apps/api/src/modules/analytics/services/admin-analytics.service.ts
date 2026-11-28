@@ -10,7 +10,7 @@ import { AdminAnalyticsRevenueService } from './admin-analytics-revenue.service'
 import { AdminAnalyticsUsersService } from './admin-analytics-users.service';
 import { AdminAnalyticsQueryDto } from '../dto/admin-analytics-query.dto';
 import { AdminAnalyticsSummaryDto } from '../dto/admin-analytics-summary.dto';
-import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
+import { ShopperEngagementService } from './shopper-engagement.service';
 
 const ANALYTICS_CACHE_PREFIX = 'admin:analytics:summary:';
 const ANALYTICS_CACHE_TTL = 20;
@@ -26,7 +26,7 @@ export class AdminAnalyticsService {
     private readonly users: AdminAnalyticsUsersService,
     private readonly promotions: AdminAnalyticsPromotionsService,
     private readonly audit: AdminAnalyticsAuditService,
-    private readonly marketplaceAnalytics: MarketplaceAnalyticsService,
+    private readonly engagement: ShopperEngagementService,
   ) {}
 
   async getSummary(
@@ -274,15 +274,15 @@ export class AdminAnalyticsService {
     );
   }
 
-  async getMarketplacePerformance(query: AdminAnalyticsQueryDto) {
+  async getShopperEngagement(query: AdminAnalyticsQueryDto) {
     const { start, end } = parseDateRange(
       query.startDate,
       query.endDate,
       query.range ? RANGE_DAYS[query.range] : 30,
     );
-    const cacheKey = `${ANALYTICS_DETAIL_CACHE_PREFIX}marketplace:${start.toISOString()}:${end.toISOString()}`;
+    const cacheKey = `${ANALYTICS_DETAIL_CACHE_PREFIX}engagement:${start.toISOString()}:${end.toISOString()}`;
     return this.cacheService.wrapWithLock(cacheKey, ANALYTICS_CACHE_TTL, () =>
-      this.marketplaceAnalytics.getSummary(start, end),
+      this.engagement.getSummary(start, end),
     );
   }
 }

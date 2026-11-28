@@ -1,13 +1,12 @@
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { Injectable, Logger, Optional } from '@nestjs/common';
-import { Prisma, ROLE } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
+import { ROLE } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type {
   ShopperAction,
   ShopperActivity,
 } from '../types/shopper-activity.types';
-import { toActivityRow } from '../utils/shopper-activity.mapper';
-import { ShopperActivityPublisherService } from './shopper-activity-publisher.service';
+import { ShopperActivityRecorderService } from './shopper-activity-recorder.service';
 
 /** What the caller knows about a cart or wishlist change; the service adds the id and the action. */
 export type ShopperItemChange = Omit<ShopperActivity, 'id' | 'action'> & {
@@ -34,7 +33,7 @@ export class ShopperActivityService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly queue?: ShopperActivityPublisherService,
+    private readonly recorder: ShopperActivityRecorderService,
   ) {}
 
   /** A shopper opened a vendor's store page. Not counted: staff, and a vendor viewing their own store. */
@@ -92,20 +91,9 @@ export class ShopperActivityService {
       action,
     };
     try {
-      const queued = await this.queue?.record(activity);
-      if (queued) return { accepted: true };
-
-      await this.prisma.marketplaceEvent.create({
-        data: toActivityRow(activity, new Date()),
-      });
+      await this.recorder.record(activity);
       return { accepted: true };
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        return { accepted: true };
-      }
       this.logger.warn(
         `Could not record ${action}: ${error instanceof Error ? error.message : String(error)}`,
       );

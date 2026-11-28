@@ -6,7 +6,7 @@ import {
   fillAnalyticsDateGaps,
   parseDateRange,
 } from '@api/common/utils/date-range.util';
-import { MarketplaceAnalyticsService } from './marketplace-analytics.service';
+import { ShopperEngagementService } from './shopper-engagement.service';
 import { VendorProductAnalyticsQueryDto } from '../dto/vendor-product-analytics-query.dto';
 import {
   RANGE_DAYS,
@@ -24,7 +24,7 @@ const PAID_PAYMENT_STATUSES = [
 export class VendorAnalyticsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly marketplaceAnalytics: MarketplaceAnalyticsService,
+    private readonly engagement: ShopperEngagementService,
     @Optional() private readonly cache?: CacheService,
   ) {}
 
@@ -156,7 +156,7 @@ export class VendorAnalyticsService {
             },
           },
         }),
-        this.marketplaceAnalytics.getSummary(start, end, vendorId),
+        this.engagement.getSummary(start, end, vendorId),
       ]);
 
       const totalRevenue = Number(totalRevenueAgg._sum.totalPrice ?? 0);
@@ -316,13 +316,7 @@ export class VendorAnalyticsService {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const loadProducts = () =>
-      this.marketplaceAnalytics.getVendorProducts(
-        vendorId,
-        start,
-        end,
-        page,
-        limit,
-      );
+      this.engagement.getVendorProducts(vendorId, start, end, page, limit);
 
     if (!this.cache) return loadProducts();
 

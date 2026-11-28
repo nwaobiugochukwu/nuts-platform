@@ -18,7 +18,7 @@ import {
  * (ADR 0007), about the shopper who did it.
  *
  * Shopper activity is behaviour data, not money: if the broker is unreachable `record` returns
- * false and the caller writes the rows itself, so nothing is lost and a request never depends on
+ * false and the recorder stores the activity itself, so nothing is lost and a request never depends on
  * RabbitMQ being up. (Money and state changes use the transactional outbox instead, which cannot
  * lose an event; this path trades that guarantee for not needing a database write per click.)
  */
@@ -49,16 +49,5 @@ export class ShopperActivityPublisherService {
     return this.rabbitmq.publish(eventNameFor(action), envelope, {
       messageId: eventId,
     });
-  }
-
-  /**
-   * Records several; true only when the broker confirmed every one. When it is false the caller
-   * writes the whole batch itself, which is safe: each activity's id makes a repeat a no-op.
-   */
-  async recordAll(activities: ShopperActivity[]): Promise<boolean> {
-    const results = await Promise.all(
-      activities.map((activity) => this.record(activity)),
-    );
-    return results.every(Boolean);
   }
 }

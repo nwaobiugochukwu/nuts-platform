@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
-import { MarketplaceAnalyticsSummaryDto } from './marketplace-analytics.dto';
+import { ShopperEngagementSummaryDto } from './shopper-engagement.dto';
 
 export class VendorAnalyticsOrderStatusCountDto {
   @ApiProperty({
@@ -246,6 +246,6 @@ export class VendorAnalyticsSummaryDto {
   })
   conversionRate!: number;
 
-  @ApiProperty({ type: MarketplaceAnalyticsSummaryDto })
-  engagement!: MarketplaceAnalyticsSummaryDto;
+  @ApiProperty({ type: ShopperEngagementSummaryDto })
+  engagement!: ShopperEngagementSummaryDto;
 }

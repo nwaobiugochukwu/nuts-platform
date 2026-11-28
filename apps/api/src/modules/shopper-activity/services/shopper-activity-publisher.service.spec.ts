@@ -74,19 +74,4 @@ describe('ShopperActivityPublisherService', () => {
       publisher.record({ action: 'store_viewed', id: 'x', vendorId: 'v' }),
     ).resolves.toBe(false);
   });
-
-  it('recordAll is true only when every activity was confirmed', async () => {
-    const two = [
-      {
-        action: 'shelf_item_clicked' as const,
-        id: 'a',
-        surface: 'HOME_FOR_YOU',
-      },
-      { action: 'shelf_item_seen' as const, id: 'b', surface: 'HOME_FOR_YOU' },
-    ];
-    await expect(publisher.recordAll(two)).resolves.toBe(true);
-
-    rabbit.publish.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    await expect(publisher.recordAll(two)).resolves.toBe(false);
-  });
 });
