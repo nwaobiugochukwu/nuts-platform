@@ -11,6 +11,8 @@ import { PaymentsService } from '@api/modules/payments/services/payments.service
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
+import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersService', () => {
@@ -133,6 +135,10 @@ describe('OrdersService', () => {
       mockPaymentsService,
       mockWalletService,
       mockOutbox,
+      new OrderStatusService(
+        new TransactionRunnerService(mockPrisma, mockOutbox),
+        mockWalletService,
+      ),
       mockConfigService,
     );
   });
@@ -310,89 +316,6 @@ describe('OrdersService', () => {
       await expect(
         service.updateStatusForVendor('v-9', 'o-1', OrderStatus.SHIPPED),
       ).rejects.toBeInstanceOf(NotFoundException);
-    });
-  });
-
-  describe('status-change events', () => {
-    const tx = { marker: 'tx', order: { findUnique: jest.fn() } };
-    const orderRow = {
-      id: 'ord-1',
-      orderNumber: 'ORD-1',
-      userId: 'u-1',
-      user: { id: 'u-1', email: 'buyer@example.com', firstName: 'Ada' },
-      orderItems: [
-        {
-          quantity: 2,
-          unitPrice: 50,
-          totalPrice: 100,
-          product: { name: 'Red Shoe' },
-          variant: null,
-          vendor: { id: 'v-1', email: 'v@shop.com', storeName: 'Shop' },
-        },
-      ],
-    };
-    const publish = (status: OrderStatus, userId: string | undefined = 'u-1') =>
-      (service as any).publishStatusChangeEvent(tx, 'ord-1', status, userId);
-
-    beforeEach(() => {
-      tx.order.findUnique.mockReset().mockResolvedValue(orderRow);
-    });
-
-    it.each([
-      [OrderStatus.SHIPPED, 'order.shipped'],
-      [OrderStatus.DELIVERED, 'order.delivered'],
-      [OrderStatus.CANCELLED, 'order.cancelled'],
-    ])(
-      'writes the %s event to the outbox in the transaction, without waking the relay',
-      async (status, type) => {
-        await publish(status);
-
-        expect(tx.order.findUnique).toHaveBeenCalledTimes(1); // read through the transaction
-        expect(mockOutbox.appendEnvelope).toHaveBeenCalledTimes(1);
-        expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
-          tx,
-          expect.objectContaining({
-            type,
-            aggregate: { type: 'order', id: 'ord-1' },
-            payload: expect.objectContaining({
-              orderId: 'ord-1',
-              userEmail: 'buyer@example.com',
-              items: [
-                expect.objectContaining({
-                  productName: 'Red Shoe',
-                  quantity: 2,
-                }),
-              ],
-            }),
-          }),
-          { wakeRelay: false },
-        );
-      },
-    );
-
-    it('publishes nothing for a status that has no event (PROCESSING comes from payment)', async () => {
-      await publish(OrderStatus.PROCESSING);
-
-      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
-    });
-
-    it('publishes nothing when the order has no customer', async () => {
-      await (service as any).publishStatusChangeEvent(
-        tx,
-        'ord-1',
-        OrderStatus.SHIPPED,
-        undefined,
-      );
-      tx.order.findUnique.mockResolvedValue({ ...orderRow, user: null });
-      await publish(OrderStatus.SHIPPED);
-
-      expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
-    });
-
-    it('lets a failure propagate, so the status change rolls back with it', async () => {
-      mockOutbox.appendEnvelope.mockRejectedValue(new Error('outbox down'));
-
-      await expect(publish(OrderStatus.SHIPPED)).rejects.toThrow('outbox down');
     });
   });
 });

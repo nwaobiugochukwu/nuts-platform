@@ -8,21 +8,13 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  NotificationPriority,
-  NotificationType,
-  OrderStatus,
-  PaymentStatus,
-  Prisma,
-  ROLE,
-} from '@prisma/client';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { customAlphabet } from 'nanoid';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { CART_CACHE_PREFIX } from '@api/modules/cart/services/cart.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 import { PaymentsService } from '@api/modules/payments/services/payments.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
 import { UsersService } from '@api/modules/users/services/users.service';
@@ -46,29 +38,14 @@ import {
 } from '@api/common/errors/insufficient-stock.exception';
 
 import {
-  assertValidOrderTransition,
-  generateStatusNote,
   MULTI_VENDOR_STATUS_MESSAGE,
-  shouldRestoreStock,
   vendorMayChangeOrderStatus,
 } from '../constants/order-status.constants';
 
-import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
-import {
-  computeVendorEarnings,
-  loadCreditedVendorEarnings,
-  loadVendorFundedDiscounts,
-  releaseDiscountUsage,
-} from '@api/modules/discounts/utils/discount-funding.util';
+import {} from '@api/modules/discounts/utils/discount-funding.util';
 
-import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
-
-import type {
-  OrderCancelledPayload,
-  OrderDeliveredPayload,
-  OrderShippedPayload,
-} from '@api/infrastructure/messaging/events/event-payloads.types';
-import { restoreOrderStock } from '@api/common/utils/restore-order-stock.util';
+import type {} from '@api/infrastructure/messaging/events/event-payloads.types';
+import { OrderStatusService } from './order-status.service';
 import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
 import {
   adminOrderInclude,
@@ -113,6 +90,7 @@ export class OrdersService {
     private readonly paymentsService: PaymentsService,
     private readonly walletService: WalletService,
     private readonly outbox: OutboxService,
+    private readonly orderStatus: OrderStatusService,
     config: ConfigService,
     @Optional() private readonly cacheService?: CacheService,
   ) {
@@ -334,7 +312,7 @@ export class OrdersService {
       );
     }
 
-    await this.transitionOrderStatus({
+    await this.orderStatus.transition({
       orderId,
       nextStatus: OrderStatus.CANCELLED,
       changedByUserId: userId,
@@ -353,7 +331,7 @@ export class OrdersService {
     reason = 'Payment window expired (auto-cancelled by system)',
   ): Promise<boolean> {
     try {
-      await this.transitionOrderStatus({
+      await this.orderStatus.transition({
         orderId,
         nextStatus: OrderStatus.CANCELLED,
         note: reason,
@@ -796,7 +774,7 @@ export class OrdersService {
       return this.findOneAdmin(orderId);
     }
 
-    await this.transitionOrderStatus({
+    await this.orderStatus.transition({
       orderId,
       nextStatus,
       changedByAdminId: adminId,
@@ -857,7 +835,7 @@ export class OrdersService {
       throw new ForbiddenException(MULTI_VENDOR_STATUS_MESSAGE);
     }
 
-    await this.transitionOrderStatus({
+    await this.orderStatus.transition({
       orderId,
       nextStatus,
       changedByVendorId: vendorId,
@@ -927,299 +905,6 @@ export class OrdersService {
     }
 
     return this.findOne(userId, orderId);
-  }
-
-  // ---------------------------------------------------------------------------
-  // ORDER STATE MACHINE
-  // ---------------------------------------------------------------------------
-
-  private async transitionOrderStatus(params: {
-    orderId: string;
-    nextStatus: OrderStatus;
-    changedByUserId?: string;
-    changedByVendorId?: string;
-    changedByAdminId?: string;
-    note?: string;
-  }): Promise<string> {
-    const {
-      orderId,
-      nextStatus,
-      changedByUserId,
-      changedByVendorId,
-      changedByAdminId,
-      note,
-    } = params;
-
-    let originalStatus: OrderStatus | undefined;
-
-    try {
-      await this.prisma.$transaction(
-        async (tx) => {
-          const current = await tx.order.findUnique({
-            where: {
-              id: orderId,
-            },
-            include: {
-              orderItems: true,
-              payment: true,
-            },
-          });
-
-          if (!current) {
-            throw new NotFoundException('Order not found');
-          }
-
-          originalStatus = current.status;
-
-          if (originalStatus === nextStatus) {
-            return;
-          }
-
-          /**
-           * Keep the state machine in one central place.
-           *
-           * Never allow controllers to directly update order.status.
-           */
-          assertValidOrderTransition(originalStatus, nextStatus);
-
-          /**
-           * Never silently convert a successful Paystack payment into a
-           * "refunded" payment just because somebody cancelled an order.
-           */
-          if (
-            nextStatus === OrderStatus.CANCELLED &&
-            current.payment?.status === PaymentStatus.SUCCESS
-          ) {
-            throw new BadRequestException(
-              'A paid order must be refunded through the payment refund workflow.',
-            );
-          }
-
-          /**
-           * Conditional update makes the transition concurrency-safe.
-           *
-           * If another request changed the status after our read, count=0.
-           */
-          const updated = await tx.order.updateMany({
-            where: {
-              id: orderId,
-              status: originalStatus,
-            },
-            data: {
-              status: nextStatus,
-            },
-          });
-
-          if (updated.count !== 1) {
-            throw new ConflictException(
-              'Order status was updated by another request. Refresh and retry.',
-            );
-          }
-
-          const restoreStock =
-            shouldRestoreStock(originalStatus, nextStatus) &&
-            !current.stockRestored;
-
-          if (restoreStock) {
-            await restoreOrderStock(
-              tx,
-              current.orderItems,
-              'Stock restored after order cancellation',
-            );
-
-            /**
-             * This flag is the idempotency guard for stock restoration.
-             */
-            await tx.order.update({
-              where: {
-                id: orderId,
-              },
-              data: {
-                stockRestored: true,
-              },
-            });
-          }
-
-          // A cancelled (necessarily unpaid) order will never redeem its
-          // discount: hand the redemption back.
-          if (nextStatus === OrderStatus.CANCELLED) {
-            await releaseDiscountUsage(tx, orderId);
-          }
-
-          /**
-           * Only transition an unpaid payment to FAILED when the order is
-           * cancelled.
-           *
-           * SUCCESS is deliberately not changed here because a real payment
-           * must be refunded through Paystack.
-           */
-          if (
-            current.payment &&
-            nextStatus === OrderStatus.CANCELLED &&
-            current.payment.status === PaymentStatus.PENDING
-          ) {
-            await tx.payment.update({
-              where: {
-                id: current.payment.id,
-              },
-              data: {
-                status: PaymentStatus.FAILED,
-              },
-            });
-          }
-
-          await tx.orderStatusHistory.create({
-            data: {
-              orderId,
-              fromStatus: originalStatus,
-              toStatus: nextStatus,
-              changedByUserId,
-              changedByVendorId,
-              changedByAdminId,
-              note: generateStatusNote({
-                fromStatus: originalStatus,
-                toStatus: nextStatus,
-                changedByUserId,
-                changedByVendorId,
-                changedByAdminId,
-                manualNote: note?.trim() || undefined,
-              }),
-            },
-          });
-
-          const orderNotification = this.orderStatusNotification(
-            current.userId,
-            current.id,
-            current.orderNumber,
-            nextStatus,
-          );
-          if (orderNotification) {
-            await this.outbox.appendEvent(
-              tx,
-              'order',
-              current.id,
-              RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-              orderNotification,
-            );
-          }
-
-          // The fact the email and notification consumers react to, committed with the change.
-          await this.publishStatusChangeEvent(
-            tx,
-            current.id,
-            nextStatus,
-            current.userId,
-          );
-
-          /**
-           * Vendor earnings are credited when payment succeeds.
-           * They are therefore only settled after delivery.
-           */
-          if (nextStatus === OrderStatus.DELIVERED) {
-            // Settle exactly what was credited at payment time; fall back to
-            // the computed figure only for vendors with no ledger entry.
-            const credited = await loadCreditedVendorEarnings(tx, orderId);
-            const vendorEarnings = this.calculateVendorEarnings(
-              current.orderItems,
-              await loadVendorFundedDiscounts(tx, orderId),
-            );
-            for (const [vendorId, computed] of vendorEarnings) {
-              const amount = credited.get(vendorId) ?? computed;
-              if (amount.lessThanOrEqualTo(0)) continue;
-              await this.walletService.settleVendorEarning(
-                vendorId,
-                amount,
-                orderId,
-                tx,
-              );
-            }
-          }
-
-          /**
-           * If a paid order is cancelled, this path should normally not run
-           * because paid orders must go through the refund workflow.
-           *
-           * For an unpaid order there are no vendor pending earnings, so
-           * there is nothing to debit.
-           */
-        },
-        {
-          timeout: 15_000,
-        },
-      );
-    } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.startsWith('Invalid order transition:')
-      ) {
-        throw new BadRequestException(error.message);
-      }
-
-      throw error;
-    }
-
-    // Referral rewards are not granted here: they are a consumer of the order.delivered event
-    // written in the transaction above (ReferralRewardConsumer), so a crash cannot skip them.
-
-    // The status-change event was written to the outbox in the transaction; wake the relay now.
-    this.outbox.wakeRelay();
-
-    return orderId;
-  }
-
-  private orderStatusNotification(
-    userId: string,
-    orderId: string,
-    orderNumber: string,
-    status: OrderStatus,
-  ):
-    | {
-        userId: string;
-        role: ROLE;
-        type: NotificationType;
-        title: string;
-        message: string;
-        priority: NotificationPriority;
-        link: string;
-        metadata: { orderId: string };
-        dedupeKey: string;
-      }
-    | undefined {
-    const notifications: Partial<
-      Record<
-        OrderStatus,
-        { type: NotificationType; title: string; message: string }
-      >
-    > = {
-      [OrderStatus.SHIPPED]: {
-        type: NotificationType.ORDER_SHIPPED,
-        title: 'Order Shipped',
-        message: `Your order #${orderNumber} has shipped.`,
-      },
-      [OrderStatus.DELIVERED]: {
-        type: NotificationType.ORDER_DELIVERED,
-        title: 'Order Delivered',
-        message: `Your order #${orderNumber} has been delivered.`,
-      },
-      [OrderStatus.CANCELLED]: {
-        type: NotificationType.ORDER_CANCELLED,
-        title: 'Order Cancelled',
-        message: `Your order #${orderNumber} has been cancelled.`,
-      },
-    };
-    const notification = notifications[status];
-    if (!notification) return undefined;
-    return {
-      userId,
-      role: ROLE.USER,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message,
-      priority: NotificationPriority.HIGH,
-      link: `/order/${orderId}`,
-      metadata: { orderId },
-      dedupeKey: `${notification.type}:${orderId}:USER:${userId}`,
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -1995,27 +1680,6 @@ export class OrdersService {
     return `${parts.join(', ')} (Tel: ${address.phone})`;
   }
 
-  private calculateVendorEarnings(
-    items: Array<{
-      vendorId: string;
-      quantity: number;
-      unitPrice: Prisma.Decimal;
-    }>,
-    vendorFundedDiscounts: Map<string, Prisma.Decimal> = new Map(),
-  ): Map<string, Prisma.Decimal> {
-    // Decimal-only arithmetic; vendor-funded discounts reduce the vendor's
-    // gross sales before commission (platform-funded ones do not).
-    return computeVendorEarnings(
-      items,
-      VENDOR_COMMISSION_RATE,
-      vendorFundedDiscounts,
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // HELPERS
-  // ---------------------------------------------------------------------------
-
   private generateUniqueOrderNumber(): string {
     const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
@@ -2049,163 +1713,5 @@ export class OrdersService {
     }
 
     return Math.max(0, row.stock);
-  }
-
-  private async publishStatusChangeEvent(
-    tx: Prisma.TransactionClient,
-    orderId: string,
-    nextStatus: OrderStatus,
-    orderUserId: string | undefined,
-  ): Promise<void> {
-    if (!orderUserId) {
-      return;
-    }
-
-    {
-      const order = await tx.order.findUnique({
-        where: {
-          id: orderId,
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-            },
-          },
-
-          orderItems: {
-            include: {
-              product: {
-                select: {
-                  name: true,
-                },
-              },
-
-              variant: {
-                select: {
-                  options: true,
-                },
-              },
-
-              vendor: {
-                select: {
-                  id: true,
-                  email: true,
-                  storeName: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (!order?.user) {
-        return;
-      }
-
-      const items = order.orderItems.map((item) => ({
-        productName: item.product.name,
-
-        quantity: item.quantity,
-
-        unitPrice: Number(item.unitPrice),
-
-        totalPrice: Number(item.totalPrice),
-
-        variantOptions: item.variant
-          ? (item.variant.options as {
-              name: string;
-              value: string;
-            }[])
-          : undefined,
-      }));
-
-      switch (nextStatus) {
-        case OrderStatus.SHIPPED: {
-          const payload: OrderShippedPayload = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            userId: order.userId,
-            userEmail: order.user.email,
-            userFirstName: order.user.firstName,
-
-            vendorEmails: order.orderItems.map((item) => ({
-              vendorId: item.vendor.id,
-              email: item.vendor.email,
-              storeName: item.vendor.storeName,
-            })),
-
-            trackingNumber: undefined,
-
-            items,
-          };
-
-          await this.outbox.appendEnvelope(
-            tx,
-            {
-              type: DomainEvents.ORDER_SHIPPED,
-              aggregate: { type: 'order', id: order.id },
-              payload,
-            },
-            { wakeRelay: false },
-          );
-
-          break;
-        }
-
-        case OrderStatus.DELIVERED: {
-          const payload: OrderDeliveredPayload = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            userId: order.userId,
-            userEmail: order.user.email,
-            userFirstName: order.user.firstName,
-            items,
-          };
-
-          await this.outbox.appendEnvelope(
-            tx,
-            {
-              type: DomainEvents.ORDER_DELIVERED,
-              aggregate: { type: 'order', id: order.id },
-              payload,
-            },
-            { wakeRelay: false },
-          );
-
-          break;
-        }
-
-        case OrderStatus.CANCELLED: {
-          const payload: OrderCancelledPayload = {
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            userId: order.userId,
-            userEmail: order.user.email,
-            userFirstName: order.user.firstName,
-
-            reason: undefined,
-
-            refundProcessed: false,
-
-            items,
-          };
-
-          await this.outbox.appendEnvelope(
-            tx,
-            {
-              type: DomainEvents.ORDER_CANCELLED,
-              aggregate: { type: 'order', id: order.id },
-              payload,
-            },
-            { wakeRelay: false },
-          );
-
-          break;
-        }
-      }
-    }
   }
 }
