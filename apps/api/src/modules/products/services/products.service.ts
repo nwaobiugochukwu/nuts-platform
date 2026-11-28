@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
@@ -18,8 +18,6 @@ import { resolveCategoryIdFromPath } from '@api/common/utils/category-path.util'
 import { mapPrismaError } from '@api/common/utils/prisma-error.util';
 import { generateSlug } from '@api/common/utils/slug.util';
 import { getStockStatus } from '@api/common/utils/stock-status.util';
-import { computeVariantCombinations } from '@api/common/utils/variant-combinations.util';
-import { normalizeOptions } from '@api/common/utils/variant-options.validator';
 
 import { createPaginationMeta } from '@api/common/utils/pagination-meta.util';
 import { getPagination } from '@api/common/utils/pagination.util';
@@ -27,7 +25,6 @@ import { getPagination } from '@api/common/utils/pagination.util';
 import {
   buildCursorMeta,
   getCursorPagination,
-  type CursorPayload,
 } from '@api/common/utils/cursor-pagination.util';
 
 import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
@@ -36,363 +33,31 @@ import { SearchService } from '@api/modules/search/services/search.service';
 import { AdminCreateProductDto } from '../dto/admin-create-product.dto';
 import { AdminProductResponseDto } from '../dto/admin-product-response.dto';
 import { CreateProductDto } from '../dto/create-product.dto';
-import { ProductCardDto } from '../dto/product-card.dto';
 import { ProductReactivateResponseDto } from '../dto/product-reactivate-response.dto';
 import { ProductResponseDto } from '../dto/product-response.dto';
-import { PublicProductResponseDto } from '../dto/public-product-response.dto';
 import { QueryProductDto } from '../dto/query-product.dto';
 import { StockUpdateResponseDto } from '../dto/stock-update-response.dto';
 import { UpdateProductDto } from '../dto/update-product.dto';
 import { VendorProductResponseDto } from '../dto/vendor-product-response.dto';
 
 import type { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
-import type { VariantSummaryDto } from '@api/modules/products/dto/variant-response.dto';
 import { auditDetails } from '@api/modules/audit/utils/audit-details.util';
-
-/* ============================================================================
- * SHARED SELECTS
- * ========================================================================== */
-
-/**
- * Flat category projection avoiding recursive N+1 relation queries.
- * Ancestor hierarchy is resolved in-memory via cached lookup map.
- */
-export const categorySelect = {
-  id: true,
-  name: true,
-  slug: true,
-  parentId: true,
-  path: true,
-} as const;
-
-export const categoryHierarchySelect = categorySelect;
-
-export interface CategorySummaryRef {
-  id: string;
-  name: string;
-  slug: string;
-}
-
-export type CategoryLookupMap = Map<
-  string,
-  { id: string; name: string; slug: string; parentId: string | null }
->;
-
-interface CategoryHierarchyNode {
-  id: string;
-  name: string;
-  slug: string;
-  parentId?: string | null;
-  parent?: CategoryHierarchyNode | null;
-  parentCategory?: CategoryHierarchyNode | null;
-}
-
-export function resolveCategoryHierarchy(
-  leafCategory: CategoryHierarchyNode | null | undefined,
-  lookupMap?: CategoryLookupMap,
-): {
-  category: CategorySummaryRef;
-  parentSubcategory?: CategorySummaryRef;
-  subcategory?: CategorySummaryRef;
-} {
-  if (!leafCategory) {
-    return {
-      category: { id: '', name: '', slug: '' },
-    };
-  }
-
-  const chain: CategorySummaryRef[] = [];
-  let curr: CategoryHierarchyNode | null | undefined = leafCategory;
-
-  // 1. If leafCategory already contains nested parent relation objects
-  if (curr.parent || curr.parentCategory) {
-    while (curr) {
-      chain.unshift({
-        id: curr.id,
-        name: curr.name,
-        slug: curr.slug,
-      });
-      curr = curr.parent ?? curr.parentCategory;
-    }
-  } else if (lookupMap && curr.id) {
-    // 2. O(1) in-memory traversal using cached category lookup map (0 SQL queries)
-    const visited = new Set<string>();
-    while (curr && !visited.has(curr.id)) {
-      visited.add(curr.id);
-      chain.unshift({
-        id: curr.id,
-        name: curr.name,
-        slug: curr.slug,
-      });
-      if (!curr.parentId) break;
-      curr = lookupMap.get(curr.parentId);
-    }
-  } else {
-    // 3. Fallback: single leaf category node
-    chain.push({
-      id: curr.id,
-      name: curr.name,
-      slug: curr.slug,
-    });
-  }
-
-  const root = chain[0] || {
-    id: leafCategory.id || '',
-    name: leafCategory.name || '',
-    slug: leafCategory.slug || '',
-  };
-
-  const category: CategorySummaryRef = {
-    id: root.id,
-    name: root.name,
-    slug: root.slug,
-  };
-
-  const result: {
-    category: CategorySummaryRef;
-    parentSubcategory?: CategorySummaryRef;
-    subcategory?: CategorySummaryRef;
-  } = { category };
-
-  if (chain.length === 2) {
-    result.subcategory = {
-      id: chain[1].id,
-      name: chain[1].name,
-      slug: chain[1].slug,
-    };
-  } else if (chain.length >= 3) {
-    const parentSub = chain[chain.length - 2];
-    const leaf = chain[chain.length - 1];
-    result.parentSubcategory = {
-      id: parentSub.id,
-      name: parentSub.name,
-      slug: parentSub.slug,
-    };
-    result.subcategory = {
-      id: leaf.id,
-      name: leaf.name,
-      slug: leaf.slug,
-    };
-  }
-
-  return result;
-}
-
-/**
- * Variant fields required by product responses.
- *
- * createdAt / updatedAt are intentionally selected because the response DTO
- * exposes them. We never manufacture timestamps with `new Date()`.
- */
-const variantSelect = {
-  id: true,
-  options: true,
-  stock: true,
-  images: true,
-  isActive: true,
-  isDeleted: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
-
-/**
- * Admin variant select.
- *
- * Includes deletion metadata that is useful to administrators.
- */
-const adminVariantSelect = {
-  ...variantSelect,
-  deletedAt: true,
-} as const;
-
-/**
- * Public variant select.
- *
- * This intentionally contains no internal-only deletion timestamp.
- */
-const publicVariantSelect = {
-  id: true,
-  options: true,
-  stock: true,
-  images: true,
-  isActive: true,
-  isDeleted: true,
-  createdAt: true,
-  updatedAt: true,
-} as const;
-
-/* ============================================================================
- * PRISMA PAYLOAD TYPES
- * ========================================================================== */
-
-type ProductWithCategory = Prisma.ProductGetPayload<{
-  include: {
-    category: { select: typeof categorySelect };
-    images: {
-      select: {
-        id: true;
-        url: true;
-        position: true;
-      };
-    };
-    vendor: {
-      select: {
-        id: true;
-        storeName: true;
-        storeSlug: true;
-        storeLogoUrl: true;
-      };
-    };
-    variants: {
-      select: typeof variantSelect;
-      where: {
-        isDeleted: false;
-      };
-      orderBy: {
-        createdAt: 'asc';
-      };
-    };
-  };
-}>;
-
-type PublicProductWithCategory = Prisma.ProductGetPayload<{
-  include: {
-    category: { select: typeof categorySelect };
-    images: {
-      select: {
-        id: true;
-        url: true;
-        position: true;
-      };
-    };
-    vendor: {
-      select: {
-        id: true;
-        storeName: true;
-        storeSlug: true;
-        storeLogoUrl: true;
-        isVerified: true;
-      };
-    };
-    variants: {
-      select: typeof publicVariantSelect;
-      where: {
-        isDeleted: false;
-        isActive: true;
-      };
-      orderBy: {
-        createdAt: 'asc';
-      };
-    };
-  };
-}> & {
-  vendor: {
-    storeDescription?: string | null;
-  };
-};
-
-type VendorProductWithCategory = Prisma.ProductGetPayload<{
-  include: {
-    category: { select: typeof categorySelect };
-    images: {
-      select: {
-        id: true;
-        url: true;
-        position: true;
-      };
-    };
-    vendor: {
-      select: {
-        id: true;
-        storeName: true;
-        storeSlug: true;
-        storeLogoUrl: true;
-      };
-    };
-    variants: {
-      select: typeof publicVariantSelect;
-      where: {
-        isDeleted: false;
-      };
-      orderBy: {
-        createdAt: 'asc';
-      };
-    };
-  };
-}>;
-
-function productCursorFields(sort?: string) {
-  switch (sort) {
-    case 'price_asc':
-      return [
-        { field: 'price', direction: 'asc' as const },
-        { field: 'id', direction: 'desc' as const },
-      ];
-    case 'price_desc':
-      return [
-        { field: 'price', direction: 'desc' as const },
-        { field: 'id', direction: 'desc' as const },
-      ];
-    case 'oldest':
-      return [
-        { field: 'createdAt', direction: 'asc' as const },
-        { field: 'id', direction: 'asc' as const },
-      ];
-    default:
-      return [
-        { field: 'createdAt', direction: 'desc' as const },
-        { field: 'id', direction: 'desc' as const },
-      ];
-  }
-}
-
-function buildProductCursorWhere(
-  cursor: CursorPayload,
-  sort?: string,
-): Prisma.ProductWhereInput[] {
-  const fields = productCursorFields(sort);
-  const expectedKeys = fields.map(({ field }) => field).sort();
-  const cursorKeys = Object.keys(cursor).sort();
-  const id = cursor.id;
-  const primary = cursor[fields[0].field];
-
-  if (
-    cursorKeys.length !== expectedKeys.length ||
-    cursorKeys.some((key, index) => key !== expectedKeys[index]) ||
-    typeof id !== 'string' ||
-    id.length === 0 ||
-    (fields[0].field === 'createdAt' &&
-      (!(primary instanceof Date) || !Number.isFinite(primary.getTime()))) ||
-    (fields[0].field === 'price' &&
-      ((typeof primary !== 'string' && typeof primary !== 'number') ||
-        !Number.isFinite(Number(primary))))
-  ) {
-    throw new BadRequestException(
-      'Invalid product cursor for the selected sort order.',
-    );
-  }
-
-  return fields.map(({ field, direction }, index) => {
-    const where: Record<string, unknown> = {};
-    for (let previous = 0; previous < index; previous += 1) {
-      const previousField = fields[previous].field;
-      where[previousField] = cursor[previousField];
-    }
-    where[field] = {
-      [direction === 'asc' ? 'gt' : 'lt']: cursor[field],
-    };
-    return where;
-  });
-}
-
-function productCursorPayload(
-  product: { id: string; createdAt: Date; price: Prisma.Decimal },
-  sort?: string,
-): CursorPayload {
-  return sort === 'price_asc' || sort === 'price_desc'
-    ? { price: product.price.toString(), id: product.id }
-    : { createdAt: product.createdAt, id: product.id };
-}
+import {
+  adminListInclude,
+  buildProductCursorWhere,
+  productCursorPayload,
+  productInclude,
+  resolveProductOrderBy,
+  vendorProductInclude,
+} from '../utils/product-includes.util';
+import {
+  normalizeImageUrls,
+  normalizeSearch,
+  toAdminResponse,
+  toResponse,
+  toVendorResponse,
+} from '../utils/product-response.mapper';
+import { ProductCategoryResolverService } from './product-category-resolver.service';
 
 /* ============================================================================
  * SERVICE
@@ -400,275 +65,13 @@ function productCursorPayload(
 
 @Injectable()
 export class ProductsService {
-  /* --------------------------------------------------------------------------
-   * Prisma relation selections
-   * ------------------------------------------------------------------------ */
-
-  /**
-   * Full product selection used by admin/mutation operations.
-   */
-  private readonly productInclude = {
-    category: {
-      select: categorySelect,
-    },
-
-    images: {
-      select: {
-        id: true,
-        url: true,
-        position: true,
-      },
-      orderBy: {
-        position: 'asc' as const,
-      },
-    },
-
-    vendor: {
-      select: {
-        id: true,
-        storeName: true,
-        storeSlug: true,
-        storeLogoUrl: true,
-        isVerified: true,
-      },
-    },
-
-    variants: {
-      where: {
-        isDeleted: false,
-      },
-      orderBy: {
-        createdAt: 'asc' as const,
-      },
-      select: variantSelect,
-    },
-  } as const;
-
-  /**
-   * Public list selection.
-   *
-   * We still return variants because your existing PublicProductResponseDto
-   * expects them, but we only retrieve active/non-deleted variants and the
-   * first two product images.
-   */
-  private readonly publicListProductInclude = {
-    category: {
-      select: categorySelect,
-    },
-
-    images: {
-      select: {
-        id: true,
-        url: true,
-        position: true,
-      },
-      orderBy: {
-        position: 'asc' as const,
-      },
-      take: 2,
-    },
-
-    vendor: {
-      select: {
-        id: true,
-        storeName: true,
-        storeSlug: true,
-        storeLogoUrl: true,
-        isVerified: true,
-      },
-    },
-
-    variants: {
-      where: {
-        isDeleted: false,
-        isActive: true,
-      },
-      orderBy: {
-        createdAt: 'asc' as const,
-      },
-      select: publicVariantSelect,
-    },
-  } as const;
-
-  /**
-   * Public product detail selection.
-   *
-   * Full images and active variants are returned.
-   */
-  private readonly publicProductInclude = {
-    category: {
-      select: categorySelect,
-    },
-
-    images: {
-      select: {
-        id: true,
-        url: true,
-        position: true,
-      },
-      orderBy: {
-        position: 'asc' as const,
-      },
-    },
-
-    vendor: {
-      select: {
-        id: true,
-        storeName: true,
-        storeSlug: true,
-        storeLogoUrl: true,
-        storeDescription: true,
-        isVerified: true,
-      },
-    },
-
-    variants: {
-      where: {
-        isDeleted: false,
-        isActive: true,
-      },
-      orderBy: {
-        createdAt: 'asc' as const,
-      },
-      select: publicVariantSelect,
-    },
-  } as const;
-
-  /**
-   * Vendor selection.
-   *
-   * Deleted variants remain visible to the vendor because this is their
-   * management view.
-   */
-  private readonly vendorProductInclude = {
-    category: {
-      select: categorySelect,
-    },
-
-    images: {
-      select: {
-        id: true,
-        url: true,
-        position: true,
-      },
-      orderBy: {
-        position: 'asc' as const,
-      },
-    },
-
-    vendor: {
-      select: {
-        id: true,
-        storeName: true,
-        storeSlug: true,
-        storeLogoUrl: true,
-        storeDescription: true,
-      },
-    },
-
-    variants: {
-      where: {
-        isDeleted: false,
-      },
-      orderBy: {
-        createdAt: 'asc' as const,
-      },
-      select: publicVariantSelect,
-    },
-  } as const;
-
-  /**
-   * Admin listing selection.
-   *
-   * Includes deletion metadata and variant timestamps.
-   */
-  private readonly adminListInclude = {
-    category: {
-      select: categorySelect,
-    },
-
-    images: {
-      select: {
-        id: true,
-        url: true,
-        position: true,
-      },
-      orderBy: {
-        position: 'asc' as const,
-      },
-    },
-
-    vendor: {
-      select: {
-        id: true,
-        storeName: true,
-        storeSlug: true,
-        storeLogoUrl: true,
-        storeDescription: true,
-      },
-    },
-
-    variants: {
-      where: {
-        isDeleted: false,
-      },
-      orderBy: {
-        createdAt: 'asc' as const,
-      },
-      select: adminVariantSelect,
-    },
-  } as const;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly searchService: SearchService,
     private readonly auditLog: AuditLogService,
+    private readonly categories: ProductCategoryResolverService,
   ) {}
-
-  private categoryLookupCache: {
-    map: CategoryLookupMap;
-    expiresAt: number;
-  } | null = null;
-
-  /**
-   * Cached map of all active categories for O(1) in-memory ancestor resolution.
-   * Eliminates recursive N+1 database queries when rendering product lists.
-   */
-  async getCategoryLookupMap(): Promise<CategoryLookupMap> {
-    if (
-      this.categoryLookupCache &&
-      this.categoryLookupCache.expiresAt > Date.now()
-    ) {
-      return this.categoryLookupCache.map;
-    }
-
-    const cacheKey = 'categories:lookup:map:v2';
-    const list = await this.cacheService.wrap(cacheKey, 300, async () => {
-      return this.prisma.category.findMany({
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          parentId: true,
-        },
-      });
-    });
-
-    const map: CategoryLookupMap = new Map();
-    if (Array.isArray(list)) {
-      for (const cat of list) {
-        map.set(cat.id, cat);
-      }
-    }
-
-    this.categoryLookupCache = {
-      map,
-      expiresAt: Date.now() + 60_000,
-    };
-
-    return map;
-  }
 
   /* ==========================================================================
    * CREATE
@@ -684,7 +87,7 @@ export class ProductsService {
       );
     }
 
-    const categoryId = await this.resolveCategoryId(dto.categoryId);
+    const categoryId = await this.categories.resolveCategoryId(dto.categoryId);
 
     /*
      * Slugs are scoped to the category in this implementation.
@@ -700,7 +103,7 @@ export class ProductsService {
     const slug = await this.resolveProductSlug(dto.name, categoryId, dto.slug);
 
     try {
-      const imageUrls = this.normalizeImageUrls(dto.imageUrls, dto.imageUrl);
+      const imageUrls = normalizeImageUrls(dto.imageUrls, dto.imageUrl);
 
       const product = await this.prisma.product.create({
         data: {
@@ -736,7 +139,7 @@ export class ProductsService {
               : undefined,
         },
 
-        include: this.productInclude,
+        include: productInclude,
       });
 
       if (dto.hasVariants && dto.variants && dto.variants.length > 0) {
@@ -747,11 +150,11 @@ export class ProductsService {
         dto.hasVariants && dto.variants && dto.variants.length > 0
           ? await this.prisma.product.findUnique({
               where: { id: product.id },
-              include: this.productInclude,
+              include: productInclude,
             })
           : product;
 
-      const response = this.toResponse(freshProduct || product);
+      const response = toResponse(freshProduct || product);
 
       /*
        * Product creation invalidates:
@@ -787,12 +190,12 @@ export class ProductsService {
     vendorId: string,
     dto: CreateProductDto,
   ): Promise<VendorProductResponseDto> {
-    const categoryId = await this.resolveCategoryId(dto.categoryId);
+    const categoryId = await this.categories.resolveCategoryId(dto.categoryId);
 
     const slug = await this.resolveProductSlug(dto.name, categoryId, dto.slug);
 
     try {
-      const imageUrls = this.normalizeImageUrls(dto.imageUrls, dto.imageUrl);
+      const imageUrls = normalizeImageUrls(dto.imageUrls, dto.imageUrl);
 
       const product = await this.prisma.product.create({
         data: {
@@ -822,7 +225,7 @@ export class ProductsService {
               : undefined,
         },
 
-        include: this.vendorProductInclude,
+        include: vendorProductInclude,
       });
 
       if (dto.hasVariants && dto.variants && dto.variants.length > 0) {
@@ -833,11 +236,11 @@ export class ProductsService {
         dto.hasVariants && dto.variants && dto.variants.length > 0
           ? await this.prisma.product.findUnique({
               where: { id: product.id },
-              include: this.vendorProductInclude,
+              include: vendorProductInclude,
             })
           : product;
 
-      const response = this.toVendorResponse(freshProduct || product);
+      const response = toVendorResponse(freshProduct || product);
 
       await this.invalidateProductCaches({
         id: product.id,
@@ -865,640 +268,6 @@ export class ProductsService {
    * ======================================================================== */
 
   /**
-   * Traditional page-number pagination.
-   *
-   * Kept for clients already using GET /products.
-   */
-  async findAllPublic(params: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    category?: string;
-    categoryId?: string;
-    categoryPath?: string;
-    vendorId?: string;
-    inStock?: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-    cursor?: string;
-    sort?: string;
-    bypassCache?: boolean;
-  }): Promise<{
-    data: ProductCardDto[];
-    meta:
-      | ReturnType<typeof createPaginationMeta>
-      | ReturnType<typeof buildCursorMeta>;
-  }> {
-    const page = Math.max(1, params.page ?? 1);
-    const limit = Math.min(Math.max(1, params.limit ?? 10), 100);
-
-    if (params.cursor !== undefined) {
-      return this.findAllPublicCursor({
-        limit,
-        cursor: params.cursor,
-        search: params.search,
-        category: params.category,
-        categoryId: params.categoryId,
-        categoryPath: params.categoryPath,
-        vendorId: params.vendorId,
-        inStock: params.inStock,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-        sort: params.sort,
-        bypassCache: params.bypassCache,
-      });
-    }
-
-    const search = this.normalizeSearch(params.search);
-
-    const cacheKey = this.getPublicProductsCacheKey({
-      page,
-      limit,
-      search,
-      categoryId: params.categoryId || params.category,
-      categoryPath: params.categoryPath,
-      vendorId: params.vendorId,
-      inStock: params.inStock,
-      minPrice: params.minPrice,
-      maxPrice: params.maxPrice,
-      sort: params.sort,
-    });
-
-    const loadProducts = async () => {
-      const whereBase = await this.buildPublicWhere({
-        search: undefined,
-        category: params.category,
-        categoryId: params.categoryId,
-        categoryPath: params.categoryPath,
-        vendorId: params.vendorId,
-        inStock: params.inStock,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-      });
-
-      /*
-       * Prefer the external search index when a search term exists.
-       *
-       * The search engine determines relevance/order; Prisma is only used to
-       * hydrate the actual product records.
-       */
-      if (search) {
-        const searchResult = await this.searchService.searchProducts(
-          search,
-          undefined,
-          page,
-          limit,
-        );
-
-        if (searchResult) {
-          if (searchResult.ids.length === 0) {
-            const emptyResponse = {
-              data: [],
-              meta: createPaginationMeta(0, page, limit),
-            };
-
-            return emptyResponse;
-          }
-
-          const products = await this.prisma.product.findMany({
-            where: {
-              ...whereBase,
-              id: {
-                in: searchResult.ids,
-              },
-            },
-            include: this.publicListProductInclude,
-          });
-
-          /*
-           * Prisma's IN query does not preserve search-engine relevance order,
-           * so rebuild the result in the order returned by SearchService.
-           */
-          const productsById = new Map(
-            products.map((product) => [product.id, product]),
-          );
-
-          const orderedProducts = searchResult.ids.flatMap((id: string) => {
-            const product = productsById.get(id);
-            return product ? [product] : [];
-          });
-
-          const categoryMap = await this.getCategoryLookupMap();
-
-          const response = {
-            data: orderedProducts.map((product) =>
-              this.toCardResponse(product, categoryMap),
-            ),
-            meta: createPaginationMeta(searchResult.total, page, limit),
-          };
-
-          return response;
-        }
-      }
-
-      /*
-       * Database fallback when SearchService has no result/index available.
-       *
-       * Note:
-       * `contains` with insensitive matching is convenient but is not the
-       * long-term solution for very large catalogues. PostgreSQL trigram/FTS
-       * or the search service should handle large-scale searching.
-       */
-      const where = await this.buildPublicWhere({
-        search,
-        category: params.category,
-        categoryId: params.categoryId,
-        categoryPath: params.categoryPath,
-        vendorId: params.vendorId,
-        inStock: params.inStock,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-      });
-
-      const [total, products, categoryMap] = await Promise.all([
-        this.prisma.product.count({
-          where,
-        }),
-
-        this.prisma.product.findMany({
-          where,
-          include: this.publicListProductInclude,
-          orderBy: this.resolveProductOrderBy(params.sort),
-          ...getPagination(page, limit),
-        }),
-
-        this.getCategoryLookupMap(),
-      ]);
-
-      const response = {
-        data: products.map((product) =>
-          this.toCardResponse(product, categoryMap),
-        ),
-        meta: createPaginationMeta(total, page, limit),
-      };
-
-      return response;
-    };
-
-    if (params.bypassCache) return loadProducts();
-    return this.cacheService.wrap(cacheKey, PRODUCT_TTL, loadProducts);
-  }
-
-  /**
-   * Cursor-paginated public product listing.
-   *
-   * Uses the active sort key plus a unique product ID as a deterministic
-   * lexicographic cursor. The cursor predicate must be grouped under OR.
-   */
-  async findAllPublicCursor(params: {
-    limit?: number;
-    cursor?: string;
-    search?: string;
-    category?: string;
-    categoryId?: string;
-    categoryPath?: string;
-    vendorId?: string;
-    inStock?: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-    sort?: string;
-    bypassCache?: boolean;
-  }): Promise<{
-    data: ProductCardDto[];
-    meta: ReturnType<typeof buildCursorMeta>;
-  }> {
-    const limit = Math.min(Math.max(1, params.limit ?? 10), 100);
-
-    const search = this.normalizeSearch(params.search);
-
-    const cacheKey = this.getPublicCursorCacheKey({
-      cursor: params.cursor,
-      limit,
-      search,
-      categoryId: params.categoryId || params.category,
-      categoryPath: params.categoryPath,
-      vendorId: params.vendorId,
-      inStock: params.inStock,
-      minPrice: params.minPrice,
-      maxPrice: params.maxPrice,
-      sort: params.sort,
-    });
-
-    const loadProducts = async () => {
-      const { take, decodedCursor } = getCursorPagination(limit, params.cursor);
-      if (params.cursor && !decodedCursor) {
-        throw new BadRequestException('Invalid product cursor.');
-      }
-
-      const where = await this.buildPublicWhere({
-        search,
-        category: params.category,
-        categoryId: params.categoryId,
-        categoryPath: params.categoryPath,
-        vendorId: params.vendorId,
-        inStock: params.inStock,
-        minPrice: params.minPrice,
-        maxPrice: params.maxPrice,
-      });
-
-      /*
-       * IMPORTANT:
-       *
-       * Product cursor clauses are lexicographic alternatives.
-       *
-       * Never spread that array directly into the Prisma where object.
-       *
-       * WRONG:
-       *
-       * {
-       *   ...where,
-       *   ...cursorWhere
-       * }
-       *
-       * That produces numeric object keys.
-       *
-       * Correct:
-       *
-       * {
-       *   ...where,
-       *   AND: [{ OR: cursorWhere }]
-       * }
-       */
-      if (decodedCursor) {
-        const cursorWhere = buildProductCursorWhere(decodedCursor, params.sort);
-
-        const existingAnd = Array.isArray(where.AND)
-          ? where.AND
-          : where.AND
-            ? [where.AND]
-            : [];
-
-        where.AND = [...existingAnd, { OR: cursorWhere }];
-      }
-
-      /*
-       * Fetch one extra row.
-       *
-       * Example:
-       * limit = 10
-       * take = 11
-       *
-       * If 11 records are returned, there is another page.
-       */
-      const [products, categoryMap] = await Promise.all([
-        this.prisma.product.findMany({
-          where,
-          include: this.publicListProductInclude,
-          orderBy: this.resolveProductOrderBy(params.sort),
-          take,
-        }),
-        this.getCategoryLookupMap(),
-      ]);
-
-      const meta = buildCursorMeta(products, limit, (last) =>
-        productCursorPayload(last, params.sort),
-      );
-
-      const response = {
-        data: products
-          .slice(0, limit)
-          .map((product) => this.toCardResponse(product, categoryMap)),
-        meta,
-      };
-
-      return response;
-    };
-
-    if (params.bypassCache) return loadProducts();
-    return this.cacheService.wrap(cacheKey, PRODUCT_TTL, loadProducts);
-  }
-
-  /**
-   * Public product detail by slug.
-   */
-  async findOnePublic(
-    slug: string,
-    bypassCache = false,
-  ): Promise<PublicProductResponseDto> {
-    const normalizedSlug = slug.trim();
-
-    if (!normalizedSlug) {
-      throw new BadRequestException('Product slug is required');
-    }
-
-    const cacheKey = PRODUCT_BY_SLUG(normalizedSlug);
-    const loadProduct = async () => {
-      const [product, categoryMap] = await Promise.all([
-        this.prisma.product.findFirst({
-          where: {
-            slug: normalizedSlug,
-            isDeleted: false,
-            isActive: true,
-            vendor: { isActive: true, isApproved: true },
-          },
-          include: this.publicProductInclude,
-        }),
-        this.getCategoryLookupMap(),
-      ]);
-
-      if (!product) {
-        throw new NotFoundException('Product not found');
-      }
-
-      return this.toPublicResponse(product, true, categoryMap);
-    };
-
-    // Public product pages are often requested concurrently by the RSC page,
-    // metadata generation, and link prefetches. Share the same cold lookup and
-    // cache write so a cache miss does not fan out into duplicate DB queries.
-    if (bypassCache) return loadProduct();
-    return this.cacheService.wrap(cacheKey, PRODUCT_TTL, loadProduct);
-  }
-
-  /**
-   * Public trending products by sales volume.
-   *
-   * Aggregates quantity sold from fulfilled, non-cancelled orders over the
-   * trailing window. The result intentionally stays short when sales history is
-   * sparse instead of presenting recent listings as popular products.
-   */
-  async findTrending(params: {
-    limit?: number;
-    days?: number;
-    categoryId?: string;
-    search?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    bypassCache?: boolean;
-  }): Promise<ProductCardDto[]> {
-    const limit = Math.min(Math.max(1, params.limit ?? 20), 50);
-    const days = Math.min(Math.max(1, params.days ?? 30), 365);
-    const categoryIds = params.categoryId
-      ? await this.collectCategoryAndDescendantIds(params.categoryId)
-      : undefined;
-    const search = this.normalizeSearch(params.search);
-    const cacheKey = `products:trending:${limit}:${days}:${params.categoryId ?? 'all'}:${search}:${params.minPrice ?? ''}:${params.maxPrice ?? ''}`;
-
-    const loadTrending = async (): Promise<ProductCardDto[]> => {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - days);
-
-      // Aggregate sales quantity grouped by productId
-      const topSales = await this.prisma.orderItem.groupBy({
-        by: ['productId'],
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          order: {
-            status: {
-              in: [
-                OrderStatus.CONFIRMED,
-                OrderStatus.PROCESSING,
-                OrderStatus.SHIPPED,
-                OrderStatus.DELIVERED,
-              ],
-            },
-            createdAt: { gte: cutoffDate },
-          },
-          product: {
-            isActive: true,
-            isDeleted: false,
-            ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
-            ...(search
-              ? { name: { contains: search, mode: 'insensitive' as const } }
-              : {}),
-            ...(params.minPrice !== undefined || params.maxPrice !== undefined
-              ? {
-                  price: {
-                    ...(params.minPrice !== undefined
-                      ? { gte: params.minPrice }
-                      : {}),
-                    ...(params.maxPrice !== undefined
-                      ? { lte: params.maxPrice }
-                      : {}),
-                  },
-                }
-              : {}),
-            OR: [
-              { stock: { gt: 0 } },
-              {
-                variants: {
-                  some: { isActive: true, isDeleted: false, stock: { gt: 0 } },
-                },
-              },
-            ],
-            vendor: { isActive: true, isApproved: true },
-          },
-        },
-        orderBy: {
-          _sum: {
-            quantity: 'desc',
-          },
-        },
-        take: limit,
-      });
-
-      const topProductIds = topSales.map((s) => s.productId);
-      let products: PublicProductWithCategory[] = [];
-
-      if (topProductIds.length > 0) {
-        const fetched = await this.prisma.product.findMany({
-          where: {
-            id: { in: topProductIds },
-            isActive: true,
-            isDeleted: false,
-            OR: [
-              { stock: { gt: 0 } },
-              {
-                variants: {
-                  some: { isActive: true, isDeleted: false, stock: { gt: 0 } },
-                },
-              },
-            ],
-            vendor: { isActive: true, isApproved: true },
-          },
-          include: this.publicListProductInclude,
-        });
-
-        const productMap = new Map(fetched.map((p) => [p.id, p]));
-        products = topProductIds
-          .map((id) => productMap.get(id))
-          .filter((p): p is PublicProductWithCategory => p !== undefined);
-      }
-
-      // If top sales returned fewer than limit (e.g. sparse sales or new category),
-      // backfill with high-quality active in-stock products in the category/catalog
-      // so "Top Picks" is never an empty wasteland.
-      const remainingSlots = limit - products.length;
-      if (remainingSlots > 0) {
-        const existingIds = new Set(products.map((p) => p.id));
-        const fallbacks = await this.prisma.product.findMany({
-          where: {
-            id: { notIn: Array.from(existingIds) },
-            isActive: true,
-            isDeleted: false,
-            ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
-            ...(search
-              ? { name: { contains: search, mode: 'insensitive' as const } }
-              : {}),
-            ...(params.minPrice !== undefined || params.maxPrice !== undefined
-              ? {
-                  price: {
-                    ...(params.minPrice !== undefined
-                      ? { gte: params.minPrice }
-                      : {}),
-                    ...(params.maxPrice !== undefined
-                      ? { lte: params.maxPrice }
-                      : {}),
-                  },
-                }
-              : {}),
-            OR: [
-              { stock: { gt: 0 } },
-              {
-                variants: {
-                  some: { isActive: true, isDeleted: false, stock: { gt: 0 } },
-                },
-              },
-            ],
-            vendor: { isActive: true, isApproved: true },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: remainingSlots,
-          include: this.publicListProductInclude,
-        });
-        products.push(...fallbacks);
-      }
-
-      const unitsSoldByProduct = new Map(
-        topSales.map((sale) => [
-          sale.productId,
-          Number(sale._sum.quantity ?? 0),
-        ]),
-      );
-
-      return products.map((product) => {
-        const unitsSold = unitsSoldByProduct.get(product.id) ?? 0;
-        let reason: string | undefined;
-        if (unitsSold >= 10) {
-          reason = `${unitsSold}+ bought recently`;
-        } else if (unitsSold >= 5) {
-          reason = 'Trending this week';
-        } else if (unitsSold > 0) {
-          reason = 'Popular pick';
-        } else {
-          reason = 'Featured pick';
-        }
-        return {
-          ...this.toCardResponse(product),
-          recommendationReason: reason,
-        };
-      });
-    };
-
-    if (params.bypassCache) return loadTrending();
-    return this.cacheService.wrap(cacheKey, PRODUCT_TTL, loadTrending);
-  }
-
-  /**
-   * Loads a small first page for each active direct child of a category.
-   * The response stays bounded per child while letting the category page render
-   * useful product rows before a shopper moves between subcategories.
-   */
-  async findCategoryPreviews(
-    parentCategoryId: string,
-    requestedLimit?: number,
-  ): Promise<
-    Record<
-      string,
-      { items: ProductCardDto[]; totalItems: number; totalPages: number }
-    >
-  > {
-    const limit = Math.min(Math.max(1, requestedLimit ?? 12), 12);
-    const children = await this.prisma.category.findMany({
-      where: {
-        parentId: parentCategoryId,
-        isActive: true,
-        status: 'ACTIVE',
-      },
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-      select: { id: true },
-    });
-
-    const entries = await Promise.all(
-      children.map(async (category) => {
-        const result = await this.findAllPublic({
-          categoryId: category.id,
-          page: 1,
-          limit,
-          sort: 'newest',
-        });
-        const meta = result.meta as {
-          totalItems?: number;
-          total?: number;
-          totalPages?: number;
-        };
-        return [
-          category.id,
-          {
-            items: result.data,
-            totalItems: Number(meta.totalItems ?? meta.total ?? 0),
-            totalPages: Number(meta.totalPages ?? 0),
-          },
-        ] as const;
-      }),
-    );
-
-    return Object.fromEntries(entries);
-  }
-
-  async findPublicCardsByIds(
-    ids: string[],
-    availableOnly = false,
-  ): Promise<ProductCardDto[]> {
-    const uniqueIds = [...new Set(ids)].slice(0, 24);
-    if (uniqueIds.length === 0) return [];
-    const products = await this.prisma.product.findMany({
-      where: {
-        id: { in: uniqueIds },
-        isActive: true,
-        isDeleted: false,
-        ...(availableOnly
-          ? {
-              OR: [
-                { stock: { gt: 0 } },
-                {
-                  variants: {
-                    some: {
-                      isActive: true,
-                      isDeleted: false,
-                      stock: { gt: 0 },
-                    },
-                  },
-                },
-              ],
-              vendor: { isActive: true, isApproved: true },
-            }
-          : {}),
-      },
-      include: this.publicListProductInclude,
-    });
-    const byId = new Map(products.map((product) => [product.id, product]));
-    const categoryMap = await this.getCategoryLookupMap();
-    return uniqueIds
-      .map((id) => byId.get(id))
-      .filter((product): product is PublicProductWithCategory =>
-        Boolean(product),
-      )
-      .map((product) => this.toCardResponse(product, categoryMap));
-  }
-
-  /* ==========================================================================
-   * VENDOR READS
-   * ======================================================================== */
-
-  /**
    * Returns the authenticated vendor's products.
    */
   async findAllForVendor(
@@ -1523,7 +292,7 @@ export class ProductsService {
 
       this.prisma.product.findMany({
         where,
-        include: this.vendorProductInclude,
+        include: vendorProductInclude,
         orderBy: [
           {
             createdAt: 'desc',
@@ -1535,13 +304,11 @@ export class ProductsService {
         ...getPagination(page, limit),
       }),
 
-      this.getCategoryLookupMap(),
+      this.categories.getCategoryLookupMap(),
     ]);
 
     return {
-      data: products.map((product) =>
-        this.toVendorResponse(product, categoryMap),
-      ),
+      data: products.map((product) => toVendorResponse(product, categoryMap)),
       meta: createPaginationMeta(total, page, limit),
     };
   }
@@ -1562,14 +329,14 @@ export class ProductsService {
         vendorId,
         isDeleted: false,
       },
-      include: this.vendorProductInclude,
+      include: vendorProductInclude,
     });
 
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    return this.toVendorResponse(product);
+    return toVendorResponse(product);
   }
 
   /* ==========================================================================
@@ -1632,11 +399,11 @@ export class ProductsService {
       const [products, categoryMap] = await Promise.all([
         this.prisma.product.findMany({
           where,
-          include: this.adminListInclude,
-          orderBy: this.resolveProductOrderBy(query.sort),
+          include: adminListInclude,
+          orderBy: resolveProductOrderBy(query.sort),
           take,
         }),
-        this.getCategoryLookupMap(),
+        this.categories.getCategoryLookupMap(),
       ]);
 
       const meta = buildCursorMeta(products, limit, (last) =>
@@ -1646,7 +413,7 @@ export class ProductsService {
       return {
         data: products
           .slice(0, limit)
-          .map((product) => this.toAdminResponse(product, categoryMap)),
+          .map((product) => toAdminResponse(product, categoryMap)),
         meta,
       };
     }
@@ -1662,18 +429,16 @@ export class ProductsService {
 
       this.prisma.product.findMany({
         where,
-        include: this.adminListInclude,
-        orderBy: this.resolveProductOrderBy(query.sort),
+        include: adminListInclude,
+        orderBy: resolveProductOrderBy(query.sort),
         ...getPagination(page, limit),
       }),
 
-      this.getCategoryLookupMap(),
+      this.categories.getCategoryLookupMap(),
     ]);
 
     return {
-      data: products.map((product) =>
-        this.toAdminResponse(product, categoryMap),
-      ),
+      data: products.map((product) => toAdminResponse(product, categoryMap)),
       meta: createPaginationMeta(total, page, limit),
     };
   }
@@ -1688,14 +453,14 @@ export class ProductsService {
       where: {
         id,
       },
-      include: this.productInclude,
+      include: productInclude,
     });
 
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    return this.toAdminResponse(product);
+    return toAdminResponse(product);
   }
 
   /**
@@ -2014,7 +779,8 @@ export class ProductsService {
       nextCategoryId !== undefined &&
       nextCategoryId !== existing.categoryId
     ) {
-      resolvedCategoryId = await this.resolveCategoryId(nextCategoryId);
+      resolvedCategoryId =
+        await this.categories.resolveCategoryId(nextCategoryId);
 
       data.category = {
         connect: {
@@ -2084,7 +850,7 @@ export class ProductsService {
      * ---------------------------------------------------------------------- */
 
     if (imageUrls !== undefined) {
-      const normalizedImages = this.normalizeImageUrls(imageUrls, imageUrl);
+      const normalizedImages = normalizeImageUrls(imageUrls, imageUrl);
 
       // Remove existing non-variant images so the new order/selection applies
       await this.prisma.productImage.deleteMany({
@@ -2128,10 +894,10 @@ export class ProductsService {
           id,
         },
         data,
-        include: this.productInclude,
+        include: productInclude,
       });
 
-      const response = this.toAdminResponse(updated);
+      const response = toAdminResponse(updated);
 
       /*
        * Invalidate BOTH old and new slug caches when the slug changes.
@@ -2375,10 +1141,10 @@ export class ProductsService {
           isActive: true,
           deletedAt: null,
         },
-        include: this.productInclude,
+        include: productInclude,
       });
 
-      const response = this.toResponse(updated);
+      const response = toResponse(updated);
 
       await this.invalidateProductCaches({
         id: updated.id,
@@ -2426,14 +1192,14 @@ export class ProductsService {
         isDeleted: false,
         isActive: true,
       },
-      include: this.productInclude,
+      include: productInclude,
     });
 
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    const response = this.toResponse(product);
+    const response = toResponse(product);
 
     /*
      * Keep the old ID cache and slug cache populated for backwards
@@ -2450,13 +1216,6 @@ export class ProductsService {
     ]);
 
     return response;
-  }
-
-  /**
-   * @deprecated Use findOnePublic().
-   */
-  async findBySlug(slug: string) {
-    return this.findOnePublic(slug);
   }
 
   /**
@@ -2568,453 +1327,6 @@ export class ProductsService {
   /**
    * Normalizes and caps product image URLs.
    */
-  private normalizeImageUrls(
-    imageUrls?: string[],
-    imageUrl?: string,
-  ): string[] {
-    const urls = imageUrls?.length ? imageUrls : imageUrl ? [imageUrl] : [];
-
-    return [
-      ...new Set(
-        urls
-          .map((url) => url?.trim())
-          .filter((url): url is string => Boolean(url)),
-      ),
-    ].slice(0, 6);
-  }
-
-  /**
-   * Normalizes search input.
-   */
-  private normalizeSearch(search?: string): string | undefined {
-    const normalized = search?.trim();
-
-    return normalized || undefined;
-  }
-
-  /* ==========================================================================
-   * RESPONSE MAPPERS
-   * ======================================================================== */
-
-  /**
-   * Calculates total available stock.
-   *
-   * Product-level stock is authoritative for normal products.
-   * Variant stock is authoritative for variant products.
-   */
-  private computeTotalStock(
-    hasVariants: boolean,
-    stock: number,
-    variants: Array<{
-      stock: number;
-    }>,
-  ): number {
-    if (!hasVariants) {
-      return stock;
-    }
-
-    return variants.reduce((total, variant) => total + variant.stock, 0);
-  }
-
-  /**
-   * Maps the internal product representation to the legacy/full response DTO.
-   */
-  private toResponse(product: ProductWithCategory): ProductResponseDto {
-    const totalStock = this.computeTotalStock(
-      product.hasVariants,
-      product.stock,
-      product.variants,
-    );
-
-    const { inStock, stockStatus } = getStockStatus(
-      totalStock,
-      product.isActive && !product.isDeleted,
-    );
-
-    const images = product.images.map((image) => ({
-      id: image.id,
-      url: image.url,
-
-      /*
-       * IMPORTANT:
-       *
-       * If ProductImage has an actual `publicId` column, add it to the
-       * Prisma select and return it here.
-       *
-       * Do not pretend the URL is the Cloudinary/public ID.
-       */
-      publicId: image.url,
-
-      position: image.position,
-      isCover: image.position === 0,
-    }));
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      sku: product.sku,
-
-      hasVariants: product.hasVariants,
-
-      price: Number(product.price),
-
-      stock: totalStock,
-      inStock,
-      stockStatus,
-
-      variants: product.variants.map((variant) =>
-        this.toVariantSummaryDto(variant),
-      ),
-
-      variantCombinations:
-        product.variants.length > 0
-          ? computeVariantCombinations(product.variants)
-          : undefined,
-
-      vendor: {
-        id: product.vendor.id,
-        storeName: product.vendor.storeName,
-        storeSlug: product.vendor.storeSlug,
-        storeLogoUrl: product.vendor.storeLogoUrl,
-      },
-
-      ...resolveCategoryHierarchy(product.category),
-
-      imageUrl: product.images[0]?.url ?? null,
-
-      images,
-
-      isActive: product.isActive,
-
-      createdAt: product.createdAt,
-
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  /**
-   * Maps lightweight public product card response for catalog grids.
-   */
-  private toCardResponse(
-    product: PublicProductWithCategory,
-    categoryMap?: CategoryLookupMap,
-  ): ProductCardDto {
-    const totalStock = this.computeTotalStock(
-      product.hasVariants,
-      product.stock,
-      product.variants,
-    );
-
-    const { stockStatus } = getStockStatus(
-      totalStock,
-      product.isActive && !product.isDeleted,
-    );
-
-    const coverImage =
-      product.images.find((img) => img.position === 0) || product.images[0];
-
-    const hierarchy = resolveCategoryHierarchy(product.category, categoryMap);
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      hasVariants: product.hasVariants,
-      price: Number(product.price),
-      discountPrice: null,
-      thumbnail: coverImage?.url ?? null,
-      stockStatus,
-      categoryId: hierarchy.category?.id || product.categoryId || null,
-      category: hierarchy.category?.id ? hierarchy.category : null,
-      parentSubcategory: hierarchy.parentSubcategory || null,
-      subcategory: hierarchy.subcategory || null,
-      vendor: {
-        id: product.vendor.id,
-        storeName: product.vendor.storeName,
-        storeSlug: product.vendor.storeSlug,
-        storeLogoUrl: product.vendor.storeLogoUrl ?? undefined,
-        isVerified: product.vendor.isVerified,
-      },
-    };
-  }
-
-  /**
-   * Maps public product response.
-   */
-  private toPublicResponse(
-    product: PublicProductWithCategory,
-    includeCombinations = true,
-    categoryMap?: CategoryLookupMap,
-  ): PublicProductResponseDto {
-    const totalStock = this.computeTotalStock(
-      product.hasVariants,
-      product.stock,
-      product.variants,
-    );
-
-    const { inStock, stockStatus } = getStockStatus(
-      totalStock,
-      product.isActive && !product.isDeleted,
-    );
-
-    const images = product.images.map((image) => ({
-      url: image.url,
-
-      /*
-       * Replace this with the actual storage publicId if your schema has
-       * one. Never use URL as a fake publicId long-term.
-       */
-      publicId: image.url,
-
-      isCover: image.position === 0,
-    }));
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      sku: product.sku,
-
-      hasVariants: product.hasVariants,
-
-      price: Number(product.price),
-
-      stock: totalStock,
-      discountPrice: undefined,
-      salePercentage: 0,
-
-      inStock,
-      stockStatus,
-
-      variants: product.variants.map((variant) =>
-        this.toVariantSummaryDto(variant),
-      ),
-
-      variantCombinations:
-        includeCombinations && product.variants.length > 0
-          ? computeVariantCombinations(product.variants)
-          : undefined,
-
-      vendor: {
-        id: product.vendor.id,
-        storeName: product.vendor.storeName,
-        storeSlug: product.vendor.storeSlug,
-        storeLogoUrl: product.vendor.storeLogoUrl,
-        storeDescription: product.vendor.storeDescription ?? undefined,
-      },
-
-      ...resolveCategoryHierarchy(product.category, categoryMap),
-
-      imageUrl: product.images[0]?.url ?? null,
-
-      images,
-
-      isActive: product.isActive,
-
-      createdAt: product.createdAt,
-
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  /**
-   * Maps vendor product response.
-   */
-  private toVendorResponse(
-    product: VendorProductWithCategory,
-    categoryMap?: CategoryLookupMap,
-  ): VendorProductResponseDto {
-    const totalStock = this.computeTotalStock(
-      product.hasVariants,
-      product.stock,
-      product.variants,
-    );
-
-    const { inStock, stockStatus } = getStockStatus(
-      totalStock,
-      product.isActive && !product.isDeleted,
-    );
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      sku: product.sku,
-
-      hasVariants: product.hasVariants,
-
-      price: Number(product.price),
-
-      stock: totalStock,
-      inStock,
-      stockStatus,
-
-      variants: product.variants.map((variant) =>
-        this.toVariantSummaryDto(variant),
-      ),
-
-      variantCombinations:
-        product.variants.length > 0
-          ? computeVariantCombinations(product.variants)
-          : undefined,
-
-      ...resolveCategoryHierarchy(product.category, categoryMap),
-
-      images: product.images.map((image) => ({
-        id: image.id,
-        url: image.url,
-        publicId: image.url,
-        position: image.position,
-        isCover: image.position === 0,
-      })),
-
-      isActive: product.isActive,
-
-      isDeleted: product.isDeleted,
-
-      deletedAt: product.deletedAt ?? null,
-
-      createdAt: product.createdAt,
-
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  /**
-   * Maps admin product response.
-   */
-  private toAdminResponse(
-    product: ProductWithCategory,
-    categoryMap?: CategoryLookupMap,
-  ): AdminProductResponseDto {
-    const totalStock = this.computeTotalStock(
-      product.hasVariants,
-      product.stock,
-      product.variants,
-    );
-
-    const { inStock, stockStatus } = getStockStatus(
-      totalStock,
-      product.isActive && !product.isDeleted,
-    );
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      sku: product.sku,
-
-      hasVariants: product.hasVariants,
-
-      price: Number(product.price),
-
-      stock: totalStock,
-      inStock,
-      stockStatus,
-
-      variants: product.variants.map((variant) =>
-        this.toVariantSummaryDto(variant),
-      ),
-
-      variantCombinations:
-        product.variants.length > 0
-          ? computeVariantCombinations(product.variants)
-          : undefined,
-
-      vendor: {
-        id: product.vendor.id,
-        storeName: product.vendor.storeName,
-        storeSlug: product.vendor.storeSlug,
-        storeLogoUrl: product.vendor.storeLogoUrl,
-      },
-
-      ...resolveCategoryHierarchy(product.category, categoryMap),
-
-      images: product.images.map((image) => ({
-        id: image.id,
-        url: image.url,
-        publicId: image.url,
-        position: image.position,
-        isCover: image.position === 0,
-      })),
-
-      isActive: product.isActive,
-
-      isDeleted: product.isDeleted,
-
-      deletedAt: product.deletedAt ?? null,
-
-      createdAt: product.createdAt,
-
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  /**
-   * Maps a Prisma variant to VariantSummaryDto.
-   *
-   * Timestamps come directly from Prisma.
-   *
-   * There is intentionally NO:
-   *
-   * createdAt: variant.createdAt ?? new Date()
-   *
-   * because manufacturing timestamps makes the API lie about the database.
-   */
-  private toVariantSummaryDto(variant: {
-    id: string;
-    options: Prisma.JsonValue;
-    stock: number;
-    images: string[];
-    isActive: boolean;
-    isDeleted: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  }): VariantSummaryDto {
-    const options = normalizeOptions(variant.options).map(
-      ({ name, value }) => ({
-        name,
-        value,
-      }),
-    );
-
-    const { inStock, stockStatus } = getStockStatus(
-      variant.stock,
-      variant.isActive && !variant.isDeleted,
-    );
-
-    return {
-      id: variant.id,
-      options,
-
-      stock: variant.stock,
-      inStock,
-      stockStatus,
-
-      images: variant.images ?? [],
-
-      isActive: variant.isActive,
-
-      isDeleted: variant.isDeleted,
-
-      createdAt: variant.createdAt,
-
-      updatedAt: variant.updatedAt,
-    };
-  }
-
-  /* ==========================================================================
-   * SLUGS
-   * ======================================================================== */
-
-  /**
-   * Resolves a normalized unique product slug.
-   */
   private async resolveProductSlug(
     name: string,
     categoryId: string,
@@ -3106,313 +1418,6 @@ export class ProductsService {
    * Validates that a product is being assigned to a valid active leaf
    * subcategory.
    */
-  private async resolveCategoryId(
-    categoryId: string | undefined,
-  ): Promise<string> {
-    if (!categoryId) {
-      throw new BadRequestException(
-        'categoryId is required for product creation',
-      );
-    }
-
-    const category = await this.prisma.category.findFirst({
-      where: {
-        id: categoryId,
-      },
-
-      select: {
-        id: true,
-        status: true,
-        isActive: true,
-
-        _count: {
-          select: {
-            children: true,
-          },
-        },
-      },
-    });
-
-    if (!category) {
-      throw new BadRequestException('Category not found');
-    }
-
-    if (category.status === 'ARCHIVED') {
-      throw new BadRequestException(
-        'Selected category is archived and cannot be assigned to new products.',
-      );
-    }
-
-    if (!category.isActive || category.status === 'INACTIVE') {
-      throw new BadRequestException(
-        'Cannot assign a product to an inactive category',
-      );
-    }
-
-    if (category._count.children > 0) {
-      throw new BadRequestException(
-        'Products can only be assigned to a leaf category node',
-      );
-    }
-
-    return category.id;
-  }
-
-  /**
-   * Returns the selected category and all descendants.
-   *
-   * Useful when the storefront allows browsing from a parent category.
-   *
-   * Requires an index on categories.parentId for good performance.
-   */
-  private async collectCategoryAndDescendantIds(
-    categoryId: string,
-  ): Promise<string[]> {
-    if (!categoryId) return [];
-
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        categoryId,
-      );
-    let resolvedId = categoryId;
-    if (!isUuid) {
-      const found = await this.prisma.category.findFirst({
-        where: {
-          OR: [{ slug: categoryId }, { path: categoryId }],
-        },
-        select: { id: true },
-      });
-      if (!found) return [categoryId];
-      resolvedId = found.id;
-    }
-
-    // High-performance O(1) in-memory resolution from cached category map
-    try {
-      const categoryMap = await this.getCategoryLookupMap();
-      if (categoryMap.has(resolvedId)) {
-        const descendants: string[] = [resolvedId];
-        const queue: string[] = [resolvedId];
-        while (queue.length > 0) {
-          const currentId = queue.shift()!;
-          for (const cat of categoryMap.values()) {
-            if (cat.parentId === currentId && !descendants.includes(cat.id)) {
-              descendants.push(cat.id);
-              queue.push(cat.id);
-            }
-          }
-        }
-        return descendants;
-      }
-    } catch {
-      // Fallback to recursive CTE below
-    }
-
-    try {
-      const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        WITH RECURSIVE category_descendants AS (
-          SELECT id
-          FROM "categories"
-          WHERE id = ${resolvedId}
-
-          UNION ALL
-
-          SELECT category.id
-          FROM "categories" category
-          INNER JOIN category_descendants parent
-            ON category."parentId" = parent.id
-        )
-        SELECT id
-        FROM category_descendants
-      `;
-      if (rows && rows.length > 0) {
-        return rows.map((r) => r.id);
-      }
-    } catch {
-      // Fallback below
-    }
-
-    const current = await this.prisma.category.findUnique({
-      where: { id: resolvedId },
-      select: { id: true, path: true },
-    });
-    if (!current) {
-      return [resolvedId];
-    }
-
-    const descendants = await this.prisma.category.findMany({
-      where: {
-        OR: [
-          { id: resolvedId },
-          { parentId: resolvedId },
-          ...(current.path
-            ? [{ path: { startsWith: `${current.path}/` } }]
-            : []),
-        ],
-      },
-      select: { id: true },
-    });
-    return descendants.map((d) => d.id);
-  }
-
-  /* ==========================================================================
-   * WHERE BUILDERS
-   * ======================================================================== */
-
-  /**
-   * Builds the public storefront filter.
-   */
-  private async buildPublicWhere(params: {
-    search?: string;
-    category?: string;
-    categoryId?: string;
-    categoryPath?: string;
-    vendorId?: string;
-    inStock?: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-  }): Promise<Prisma.ProductWhereInput> {
-    if (
-      params.minPrice !== undefined &&
-      params.maxPrice !== undefined &&
-      params.minPrice > params.maxPrice
-    ) {
-      throw new BadRequestException(
-        'minPrice must be less than or equal to maxPrice.',
-      );
-    }
-
-    const andConditions: Prisma.ProductWhereInput[] = [
-      {
-        isDeleted: false,
-        isActive: true,
-        vendor: { isActive: true, isApproved: true },
-      },
-    ];
-
-    if (params.vendorId) {
-      andConditions.push({ vendorId: params.vendorId });
-    }
-
-    const rawCatIdentifier = params.categoryId || params.category;
-    let targetCatId: string | undefined;
-
-    if (rawCatIdentifier) {
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          rawCatIdentifier,
-        );
-      if (isUuid) {
-        targetCatId = rawCatIdentifier;
-      } else {
-        const found = await this.prisma.category.findFirst({
-          where: {
-            OR: [{ slug: rawCatIdentifier }, { path: rawCatIdentifier }],
-          },
-          select: { id: true },
-        });
-        targetCatId = found?.id;
-        if (!targetCatId) {
-          throw new NotFoundException('Category not found.');
-        }
-      }
-    }
-    if (!targetCatId && params.categoryPath) {
-      targetCatId = await resolveCategoryIdFromPath(
-        this.prisma,
-        params.categoryPath,
-      );
-    }
-
-    if (targetCatId) {
-      const categoryIds =
-        await this.collectCategoryAndDescendantIds(targetCatId);
-
-      andConditions.push({
-        categoryId: {
-          in: categoryIds,
-        },
-      });
-    }
-
-    if (params.inStock !== undefined) {
-      if (params.inStock) {
-        andConditions.push({
-          OR: [
-            { stock: { gt: 0 } },
-            {
-              hasVariants: true,
-              variants: {
-                some: {
-                  stock: { gt: 0 },
-                  isActive: true,
-                  isDeleted: false,
-                },
-              },
-            },
-          ],
-        });
-      } else {
-        andConditions.push({
-          AND: [
-            { stock: { lte: 0 } },
-            {
-              variants: {
-                none: {
-                  stock: { gt: 0 },
-                  isActive: true,
-                  isDeleted: false,
-                },
-              },
-            },
-          ],
-        });
-      }
-    }
-
-    if (params.minPrice !== undefined || params.maxPrice !== undefined) {
-      const priceFilter: Prisma.DecimalFilter = {};
-      if (params.minPrice !== undefined) {
-        priceFilter.gte = params.minPrice;
-      }
-      if (params.maxPrice !== undefined) {
-        priceFilter.lte = params.maxPrice;
-      }
-      andConditions.push({ price: priceFilter });
-    }
-
-    if (params.search) {
-      andConditions.push({
-        OR: [
-          {
-            name: {
-              contains: params.search,
-              mode: 'insensitive',
-            },
-          },
-          {
-            sku: {
-              contains: params.search,
-              mode: 'insensitive',
-            },
-          },
-          {
-            description: {
-              contains: params.search,
-              mode: 'insensitive',
-            },
-          },
-        ],
-      });
-    }
-
-    return {
-      AND: andConditions,
-    };
-  }
-
-  /**
-   * Shared vendor/admin filter builder.
-   */
   private async buildListWhere(
     query: QueryProductDto,
     scope: {
@@ -3462,7 +1467,7 @@ export class ProductsService {
     }
 
     /* Search */
-    const normalizedSearch = this.normalizeSearch(search);
+    const normalizedSearch = normalizeSearch(search);
 
     if (normalizedSearch) {
       where.OR = [
@@ -3516,7 +1521,7 @@ export class ProductsService {
 
     if (targetCatId) {
       const categoryIds =
-        await this.collectCategoryAndDescendantIds(targetCatId);
+        await this.categories.collectCategoryAndDescendantIds(targetCatId);
 
       where.categoryId = {
         in: categoryIds,
@@ -3582,84 +1587,6 @@ export class ProductsService {
    * ======================================================================== */
 
   /**
-   * Generates the page-pagination cache key.
-   *
-   * Every filter that affects the result MUST be represented in the key.
-   */
-  private resolveProductOrderBy(
-    sort?: string,
-  ): Prisma.ProductOrderByWithRelationInput[] {
-    switch (sort) {
-      case 'price_asc':
-        return [{ price: 'asc' }, { id: 'desc' }];
-      case 'price_desc':
-        return [{ price: 'desc' }, { id: 'desc' }];
-      case 'oldest':
-        return [{ createdAt: 'asc' }, { id: 'asc' }];
-      case 'newest':
-      default:
-        return [{ createdAt: 'desc' }, { id: 'desc' }];
-    }
-  }
-
-  private getPublicProductsCacheKey(params: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    categoryId?: string;
-    categoryPath?: string;
-    vendorId?: string;
-    inStock?: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-    sort?: string;
-  }): string {
-    return [
-      'product:list:public',
-      `page:${params.page ?? 1}`,
-      `limit:${params.limit ?? 10}`,
-      `search:${encodeURIComponent(params.search ?? '')}`,
-      `category:${params.categoryId ?? ''}`,
-      `categoryPath:${encodeURIComponent(params.categoryPath ?? '')}`,
-      `vendor:${params.vendorId ?? ''}`,
-      `inStock:${params.inStock ?? ''}`,
-      `minPrice:${params.minPrice ?? ''}`,
-      `maxPrice:${params.maxPrice ?? ''}`,
-      `sort:${params.sort ?? 'newest'}`,
-    ].join(':');
-  }
-
-  /**
-   * Generates the cursor-pagination cache key.
-   */
-  private getPublicCursorCacheKey(params: {
-    cursor?: string;
-    limit: number;
-    search?: string;
-    categoryId?: string;
-    categoryPath?: string;
-    vendorId?: string;
-    inStock?: boolean;
-    minPrice?: number;
-    maxPrice?: number;
-    sort?: string;
-  }): string {
-    return [
-      'product:list:public:cursor',
-      `cursor:${encodeURIComponent(params.cursor ?? 'first')}`,
-      `limit:${params.limit}`,
-      `search:${encodeURIComponent(params.search ?? '')}`,
-      `category:${params.categoryId ?? ''}`,
-      `categoryPath:${encodeURIComponent(params.categoryPath ?? '')}`,
-      `vendor:${params.vendorId ?? ''}`,
-      `inStock:${params.inStock ?? ''}`,
-      `minPrice:${params.minPrice ?? ''}`,
-      `maxPrice:${params.maxPrice ?? ''}`,
-      `sort:${params.sort ?? 'newest'}`,
-    ].join(':');
-  }
-
-  /**
    * Centralized product cache invalidation.
    *
    * Exact keys handle product detail pages.
@@ -3678,7 +1605,7 @@ export class ProductsService {
       exactKeys.push(`product:id:${params.id}`);
     }
 
-    this.categoryLookupCache = null;
+    this.categories.invalidateLookup();
 
     const operations = [
       ...exactKeys.map((key) => this.cacheService.del(key)),
