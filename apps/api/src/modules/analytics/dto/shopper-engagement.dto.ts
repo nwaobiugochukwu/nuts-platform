@@ -6,7 +6,7 @@ export class TopFollowerStoreDto {
   @ApiProperty() followerCount!: number;
 }
 
-export class MarketplaceAnalyticsSummaryDto {
+export class ShopperEngagementSummaryDto {
   @ApiProperty({
     description: 'Recorded store-page view events in the selected period.',
   })

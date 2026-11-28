@@ -19,7 +19,7 @@ describe('ProductViewsService flush to the analytics queue', () => {
     eval: jest.Mock;
     lrem: jest.Mock;
   };
-  let tracking: { record: jest.Mock };
+  let recorder: { recordMany: jest.Mock; record: jest.Mock };
   let prisma: { productView: { createMany: jest.Mock } };
   let service: ProductViewsService;
   let buffered: string[];
@@ -38,13 +38,16 @@ describe('ProductViewsService flush to the analytics queue', () => {
         return Promise.resolve(0);
       }),
     };
-    tracking = { record: jest.fn().mockResolvedValue(true) };
+    recorder = {
+      recordMany: jest.fn().mockResolvedValue(undefined),
+      record: jest.fn().mockResolvedValue(undefined),
+    };
     prisma = {
       productView: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
     };
     service = new ProductViewsService(
       redis as never,
-      tracking as never,
+      recorder as never,
       prisma as never,
       { invalidateRecommendations: jest.fn() } as never,
     );
@@ -56,24 +59,32 @@ describe('ProductViewsService flush to the analytics queue', () => {
     if (timer) clearInterval(timer);
   });
 
+  const recorded = () =>
+    recorder.recordMany.mock.calls.flatMap(([items]) => items) as Array<{
+      activity: Record<string, unknown>;
+      occurredAt: Date;
+    }>;
+
   it('records each buffered view as a product_viewed activity, at the time it was viewed', async () => {
     await service.flushViews();
 
-    expect(tracking.record).toHaveBeenCalledTimes(1);
-    expect(tracking.record).toHaveBeenCalledWith(
+    expect(recorder.recordMany).toHaveBeenCalledTimes(1);
+    expect(recorded()).toEqual([
       {
-        action: 'product_viewed',
-        id: 'view-1',
-        productId: 'p1',
-        userId: 'u1',
-        visitorId: 'vis-1',
-        sessionId: 's1',
+        activity: {
+          action: 'product_viewed',
+          id: 'view-1',
+          productId: 'p1',
+          userId: 'u1',
+          visitorId: 'vis-1',
+          sessionId: 's1',
+        },
+        occurredAt: new Date(stamp),
       },
-      { occurredAt: new Date(stamp) },
-    );
+    ]);
   });
 
-  it('takes a view off the processing list only once the broker has it', async () => {
+  it('takes a view off the processing list only once it has been queued or stored', async () => {
     await service.flushViews();
 
     expect(redis.lrem).toHaveBeenCalledWith(
@@ -81,40 +92,39 @@ describe('ProductViewsService flush to the analytics queue', () => {
       1,
       view(),
     );
-    expect(prisma.productView.createMany).not.toHaveBeenCalled();
   });
 
-  it('stores the view itself, under the same id, when the broker is down, so no view is lost', async () => {
-    tracking.record.mockResolvedValue(false);
+  it('leaves the views listed, to be retried by the next flush, when they could be neither queued nor stored', async () => {
+    recorder.recordMany.mockRejectedValue(new Error('db down'));
 
     await service.flushViews();
 
-    expect(prisma.productView.createMany).toHaveBeenCalledWith({
-      data: [
-        {
-          id: 'view-1',
-          productId: 'p1',
-          userId: 'u1',
-          visitorId: 'vis-1',
-          sessionId: 's1',
-          createdAt: new Date(stamp),
-        },
-      ],
-      skipDuplicates: true,
-    });
-    expect(redis.lrem).toHaveBeenCalledTimes(1);
+    expect(redis.lrem).not.toHaveBeenCalled();
+  });
+
+  it('drops a buffered entry it cannot read instead of retrying it forever', async () => {
+    buffered = ['{not json', view()];
+
+    await service.flushViews();
+
+    expect(redis.lrem).toHaveBeenCalledWith(
+      'tracking:product_views:processing',
+      1,
+      '{not json',
+    );
+    expect(recorded()).toHaveLength(1);
   });
 
   it('gives a view with no id the same stable id every time, so a retry is a duplicate', async () => {
     buffered = [view({ id: undefined })];
     await service.flushViews();
-    const first = tracking.record.mock.calls[0][0].id;
+    const first = recorded()[0].activity.id;
 
     buffered = [view({ id: undefined })];
     await service.flushViews();
 
     expect(typeof first).toBe('string');
-    expect(tracking.record.mock.calls[1][0].id).toBe(first);
+    expect(recorded()[1].activity.id).toBe(first);
   });
 
   it('does nothing without Redis', async () => {
@@ -122,6 +132,6 @@ describe('ProductViewsService flush to the analytics queue', () => {
 
     await service.flushViews();
 
-    expect(tracking.record).not.toHaveBeenCalled();
+    expect(recorder.recordMany).not.toHaveBeenCalled();
   });
 });

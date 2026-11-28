@@ -36,8 +36,8 @@ interface StoreViewEventPayload {
 
 @ApiTags('ANALYTICS EVENTS')
 @Controller('analytics/events')
-export class AnalyticsEventsController {
-  private readonly logger = new Logger(AnalyticsEventsController.name);
+export class ActivityEventsController {
+  private readonly logger = new Logger(ActivityEventsController.name);
 
   constructor(
     private readonly productViews: ProductViewsService,
@@ -71,7 +71,7 @@ export class AnalyticsEventsController {
         return { accepted: false };
       }
 
-      // Administrators viewing their own store or marketplace should never pollute analytics
+      // Administrators viewing their own store or the platform should never pollute analytics
       if (userRole === ROLE.ADMIN) {
         return { accepted: true };
       }
@@ -151,7 +151,6 @@ export class AnalyticsEventsController {
           userRole === ROLE.VENDOR ? undefined : userId,
           trackEvent.sessionId,
           trackEvent.visitorId,
-          userId,
         );
         return { accepted: true };
       }

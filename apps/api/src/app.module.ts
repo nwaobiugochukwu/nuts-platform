@@ -51,6 +51,7 @@ import { WishlistsModule } from './modules/wishlists/wishlists.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { ShopperActivityModule } from './modules/shopper-activity/shopper-activity.module';
 import { SearchModule } from './modules/search/search.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { SecurityModule } from './modules/security/security.module';
@@ -123,6 +124,7 @@ import { RecommendationsModule } from './modules/recommendations/recommendations
     ReferralsModule,
     NotificationsModule,
     AnalyticsModule,
+    ShopperActivityModule,
     SearchModule,
     VendorsModule,
     UploadModule,

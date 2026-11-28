@@ -240,7 +240,7 @@ Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cooki
 
 | From | To |
 |---|---|
-| `infrastructure/messaging/rabbitmq/analytics.consumer.ts` | `modules/analytics/consumers/` |
+| `infrastructure/messaging/rabbitmq/analytics.consumer.ts` | `modules/shopper-activity/consumers/shopper-activity.consumer.ts` |
 | `infrastructure/messaging/rabbitmq/inventory.consumer.ts` | `modules/products/consumers/` |
 | `infrastructure/messaging/rabbitmq/email.consumer.ts` | `modules/notifications/consumers/` |
 | `common/audit-log/*` and `modules/security/audit/*` | `modules/audit/` (service, consumer, interceptor, decorator in their folders) |

@@ -25,7 +25,7 @@ import {
   TopVendorDto,
   UserAnalyticsDto,
 } from '../dto/admin-analytics-summary.dto';
-import { MarketplaceAnalyticsSummaryDto } from '../dto/marketplace-analytics.dto';
+import { ShopperEngagementSummaryDto } from '../dto/shopper-engagement.dto';
 
 @Roles(ROLE.ADMIN)
 @ApiTags('ADMIN - ANALYTICS')
@@ -291,20 +291,21 @@ export class AdminAnalyticsController {
     return this.analyticsService.getActivityAnalytics(body);
   }
 
-  @Get('marketplace-performance')
-  @Message('Marketplace performance retrieved')
+  // `marketplace-performance` is the old name, kept until the admin app uses the new one.
+  @Get(['shopper-engagement', 'marketplace-performance'])
+  @Message('Shopper engagement retrieved')
   @ApiOperation({
     summary:
       'Storefront views, product engagement, cart conversion, and paid sales',
   })
   @ApiResponse({
     status: 200,
-    type: ApiResponseDto<MarketplaceAnalyticsSummaryDto>,
+    type: ApiResponseDto<ShopperEngagementSummaryDto>,
   })
-  async getMarketplacePerformance(
+  async getShopperEngagement(
     @Query() query: AdminAnalyticsQueryDto,
-  ): Promise<MarketplaceAnalyticsSummaryDto> {
-    return this.analyticsService.getMarketplacePerformance(query);
+  ): Promise<ShopperEngagementSummaryDto> {
+    return this.analyticsService.getShopperEngagement(query);
   }
 
   /**

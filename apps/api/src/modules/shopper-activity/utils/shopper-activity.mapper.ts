@@ -192,7 +192,7 @@ export function toShelfRow(
 export function toActivityRow(
   activity: ShopperActivity,
   createdAt: Date,
-): Prisma.MarketplaceEventCreateManyInput {
+): Prisma.ShopperActivityCreateManyInput {
   const isWishlist =
     activity.action === 'wishlist_item_added' ||
     activity.action === 'wishlist_item_removed';

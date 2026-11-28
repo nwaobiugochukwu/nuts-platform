@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AnalyticsModule } from '@api/modules/analytics/analytics.module';
+import { ShopperActivityModule } from '@api/modules/shopper-activity/shopper-activity.module';
 import { WishlistController } from './controllers/wishlist.controller';
 import { WishlistService } from './services/wishlist.service';
 
 @Module({
-  imports: [AnalyticsModule],
+  imports: [ShopperActivityModule],
   controllers: [WishlistController],
   providers: [WishlistService],
   exports: [WishlistService],

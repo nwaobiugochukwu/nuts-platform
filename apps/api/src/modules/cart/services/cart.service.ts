@@ -19,7 +19,7 @@ import { InsufficientStockException } from '@api/common/errors/insufficient-stoc
 import {
   ShopperActivityService,
   type CartItemChange,
-} from '@api/modules/analytics/services/shopper-activity.service';
+} from '@api/modules/shopper-activity/services/shopper-activity.service';
 
 import { UpdateCartItemDto } from '../dto/update-cart-item.dto';
 
