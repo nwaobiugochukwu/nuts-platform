@@ -20,7 +20,6 @@ import {
 import { RecommendationEventsService } from '../services/recommendation-events.service';
 import { TrackingService } from '../services/tracking.service';
 import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
-import { StoreViewDto } from '../dto/store-view.dto';
 import { randomUUID } from 'node:crypto';
 
 interface StoreViewEventPayload {
@@ -63,7 +62,6 @@ export class ActivityEventsController {
       | TrackEventDto
       | RecommendationEventDto
       | RecommendationEventsBatchDto
-      | StoreViewDto
       | Record<string, unknown>,
   ): Promise<{ accepted: boolean }> {
     try {
@@ -107,10 +105,7 @@ export class ActivityEventsController {
         (typeof raw.vendorId === 'string' && !raw.productId && !raw.query)
       ) {
         if (raw.vendorId) {
-          // Vendor viewing their own store: drop self-view telemetry
-          if (userRole === ROLE.VENDOR && raw.vendorId === userId) {
-            return { accepted: true };
-          }
+          // Staff and a vendor viewing their own store are not counted; the service decides.
           return await this.tracking.storeViewed(
             raw.vendorId,
             {
