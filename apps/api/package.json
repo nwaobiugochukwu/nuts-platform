@@ -5,6 +5,10 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "prettier": {
+    "singleQuote": true,
+    "trailingComma": "all"
+  },
   "scripts": {
     "clean": "node -e \"const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});for(const f of fs.readdirSync('.'))if(f.endsWith('.tsbuildinfo'))fs.rmSync(f,{force:true})\"",
     "prebuild": "npm run clean",
@@ -102,8 +106,6 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
-    "@nestjs/cli": "^12.0.13",
-    "@nestjs/schematics": "^10.0.2",
     "@nestjs/testing": "^11.0.1",
     "@swc/core": "^1.13.0",
     "@swc/jest": "^0.2.39",

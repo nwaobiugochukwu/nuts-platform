@@ -41,7 +41,6 @@ This index separates product behavior, code navigation, shared engineering conce
 
 ## Review snapshots
 
-- [Codebase audit](audits/CODEBASE_AUDIT.md) — a review snapshot; verify findings against current code before acting on them.
 
 ## Maintenance
 

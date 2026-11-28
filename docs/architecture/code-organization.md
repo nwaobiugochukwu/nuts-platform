@@ -9,8 +9,6 @@ NUTS is a **modular monolith in an npm-workspaces monorepo**: one deployable API
 | `apps/api` | NestJS API (one process). Domain modules over shared infrastructure. |
 | `apps/web` | Next.js App Router app: customer storefront, vendor portal, admin portal. |
 | `packages/database` | Prisma schema, ordered migrations, seed scripts. The only owner of the data model. |
-| `packages/types` | Contracts shared by API and web (envelopes, capabilities). |
-| `packages/config` | Shared ESLint and Prettier presets. |
 | `nginx`, `docker-compose*.yml`, `apps/*/Dockerfile` | Runtime and deployment. |
 | `scripts` | Repository tooling (doc link check, architecture check, postinstall). |
 | `docs` | Documentation; see the [index](../README.md). |

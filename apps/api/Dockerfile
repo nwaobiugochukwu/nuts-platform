@@ -14,8 +14,6 @@ RUN apk add --no-cache python3 make g++ openssl
 COPY package*.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/database/package.json ./packages/database/
-COPY packages/types/package.json ./packages/types/
-COPY packages/config/package.json ./packages/config/
 COPY tsconfig.base.json tsconfig.node.json ./
 COPY scripts/postinstall.js ./scripts/postinstall.js
 
@@ -43,8 +41,6 @@ RUN apk add --no-cache python3 make g++ openssl curl
 COPY package*.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/database/package.json ./packages/database/
-COPY packages/types/package.json ./packages/types/
-COPY packages/config/package.json ./packages/config/
 COPY tsconfig.base.json tsconfig.node.json ./
 COPY scripts/postinstall.js ./scripts/postinstall.js
 
@@ -79,8 +75,6 @@ RUN apt-get update \
 COPY package*.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/database/package.json ./packages/database/
-COPY packages/types/package.json ./packages/types/
-COPY packages/config/package.json ./packages/config/
 COPY tsconfig.base.json tsconfig.node.json ./
 COPY scripts/postinstall.js ./scripts/postinstall.js
 RUN npm ci
