@@ -32,7 +32,7 @@ Workflow tests use Temporal's time-skipping test server (downloaded on first run
 
 ## The image
 
-The Temporal native core has **no musl build**, so the worker cannot run on the Alpine API image. The Dockerfile has a Debian target, `runner-workflow`, built from `builder-glibc`; compose service `workflow-worker-prod` (profile `temporal`, opt-in, not in `prod` or `staging`) uses it. A plain `docker build` still produces the Alpine `runner`, because that stage stays last.
+The Temporal native core has **no musl build**, so the worker cannot run on the Alpine API image. The Dockerfile has a Debian target, `runner-workflow`, built from `builder-glibc`; compose service `workflow-worker-prod` (profile `workflow`, opt-in, not in `prod` or `staging`) uses it. A plain `docker build` still produces the Alpine `runner`, because that stage stays last.
 
 ## Production
 

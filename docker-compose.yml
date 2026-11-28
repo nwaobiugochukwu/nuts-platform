@@ -10,6 +10,10 @@
 #   - Root .env only provides safe defaults for compose-level config
 # ==============================================================================
 
+# One fixed project name, so networks and containers are always owned by the same project
+# no matter which folder the repository is cloned into.
+name: nuts
+
 # ── Shared environment anchors ───────────────────────────────────────────────
 x-api-env: &api-env
   NODE_ENV: ${NODE_ENV:-development}
@@ -53,6 +57,7 @@ services:
   # Production/staging use Temporal Cloud or a separate self-hosted cluster.
   temporal:
     image: temporalio/temporal:1.10.1
+    container_name: nuts_temporal
     restart: unless-stopped
     profiles: ["dev"]
     # The image runs as a non-root user that cannot write to a fresh named volume.
@@ -295,7 +300,7 @@ services:
       retries: 5
       start_period: 40s
 
-  # ── Temporal worker (opt-in: `--profile temporal`) ─────────────────────────
+  # ── Workflow worker (opt-in: `--profile workflow`) ─────────────────────────
   # Not part of the prod/staging profiles, so enabling Temporal is an explicit
   # step. Needs TEMPORAL_ENABLED=true plus an address and namespace in the env file.
   workflow-worker-prod:
@@ -303,10 +308,10 @@ services:
       context: .
       dockerfile: ./apps/api/Dockerfile
       target: runner-workflow
-    image: nuts-api-temporal:latest
+    image: nuts-api-workflow:latest
     container_name: nuts_workflow_worker
     restart: unless-stopped
-    profiles: ["temporal"]
+    profiles: ["workflow"]
     env_file:
       - ./apps/api/.env.${APP_ENV:-production}
     environment:
@@ -333,14 +338,14 @@ services:
       retries: 5
       start_period: 60s
 
-  # ── Local monitoring (opt-in: `npm run obs:up`, profile "observability") ───
+  # ── Local monitoring (started by `npm run dev`; `npm run obs:up` starts only these two) ──
   # Prometheus scrapes the programs started by `npm run dev` on the host; Grafana
   # opens with the NUTS dashboard and the Prometheus data source already set up.
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: nuts_prometheus
     restart: unless-stopped
-    profiles: ["observability"]
+    profiles: ["dev", "observability"]
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     extra_hosts:
@@ -355,7 +360,7 @@ services:
     image: grafana/grafana:11.3.0
     container_name: nuts_grafana
     restart: unless-stopped
-    profiles: ["observability"]
+    profiles: ["dev", "observability"]
     ports:
       - "${GRAFANA_PORT:-3030}:3000"
     environment:

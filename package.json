@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run db:up && docker compose --profile dev up -d --build --wait && npm run dev:status",
-    "dev:status": "docker compose --profile dev ps",
+    "dev": "npm run db:up && COMPOSE_IGNORE_ORPHANS=true docker compose --profile dev up -d --build --wait && npm run dev:status",
+    "dev:status": "COMPOSE_IGNORE_ORPHANS=true docker compose --profile dev ps",
     "dev:down": "docker compose --profile dev down",
     "dev:logs": "docker compose --profile dev logs -f",
     "dev:logs:api": "docker compose --profile dev logs -f api",
