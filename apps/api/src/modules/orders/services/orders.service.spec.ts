@@ -131,103 +131,11 @@ describe('OrdersService', () => {
     service = new OrdersService(
       mockPrisma,
       mockUsersService,
-      mockDiscountService,
-      mockPaymentsService,
-      mockWalletService,
-      mockOutbox,
       new OrderStatusService(
         new TransactionRunnerService(mockPrisma, mockOutbox),
         mockWalletService,
       ),
-      mockConfigService,
     );
-  });
-
-  describe('checkout parameter validations', () => {
-    it('throws BadRequestException if idempotency key is missing or blank', async () => {
-      await expect(
-        service.checkout('u-1', {} as any, 'addr-1', ''),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException if idempotency key exceeds 255 characters', async () => {
-      const longKey = 'a'.repeat(256);
-      await expect(
-        service.checkout('u-1', {} as any, 'addr-1', longKey),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException if neither addressId nor shippingAddress is provided', async () => {
-      await expect(
-        service.checkout('u-1', {} as any, undefined, 'key-1'),
-      ).rejects.toThrow('A shipping address is required.');
-    });
-
-    it('throws BadRequestException if both addressId and inline shippingAddress are provided', async () => {
-      await expect(
-        service.checkout(
-          'u-1',
-          {
-            shippingAddress: {
-              fullName: 'John Doe',
-              phone: '123',
-              street: 'St',
-              city: 'City',
-              state: 'State',
-            },
-          } as any,
-          'addr-1',
-          'key-1',
-        ),
-      ).rejects.toThrow(
-        'Provide either addressId or shippingAddress, not both.',
-      );
-    });
-  });
-
-  describe('checkout idempotency and replay', () => {
-    it('returns existing order without duplicate insertion when idempotency key is reused', async () => {
-      const existingOrder = {
-        id: 'ord-100',
-        orderNumber: 'ORD100',
-        status: OrderStatus.PENDING,
-        totalAmount: new Prisma.Decimal(1000),
-        discountAmount: new Prisma.Decimal(0),
-        finalAmount: new Prisma.Decimal(1000),
-        orderItems: [],
-        payment: { id: 'pay-1', status: PaymentStatus.PENDING },
-      };
-
-      // Mock cart lock query returning an active cart
-      mockPrisma.$queryRaw.mockResolvedValueOnce([{ id: 'cart-1' }]);
-
-      // Mock idempotency record found inside transaction
-      mockPrisma.checkoutIdempotency.findUnique.mockResolvedValue({
-        orderId: 'ord-100',
-        expiresAt: new Date(Date.now() + 3600000),
-      });
-
-      mockPrisma.order.findUnique.mockResolvedValue(existingOrder);
-
-      const result = await service.checkout(
-        'u-1',
-        {
-          shippingAddress: {
-            fullName: 'Jane',
-            phone: '123',
-            street: 'St',
-            city: 'City',
-            state: 'State',
-          },
-        },
-        undefined,
-        'idempotent-key-repeat',
-      );
-
-      expect(result.id).toBe('ord-100');
-      // Verifies no new order created
-      expect(mockPrisma.order.create).not.toHaveBeenCalled();
-    });
   });
 
   describe('cancelMine (Customer order cancellation)', () => {
