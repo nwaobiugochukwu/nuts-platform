@@ -20,7 +20,6 @@ import { OptionalAuth } from '@api/common/decorators/optional-auth.decorator';
 import { ClaimRecentHistoryDto } from '../dto/claim-recent-history.dto';
 import { NotInterestedDto } from '../dto/not-interested.dto';
 import { GoodPlaceToStartResponseDto } from '../dto/good-place-to-start-response.dto';
-import { StarterSamplerResponseDto } from '../dto/starter-sampler-response.dto';
 
 @ApiTags('RECOMMENDATIONS')
 @Controller('recommendations')
@@ -87,35 +86,6 @@ export class RecommendationsController {
     visitorId?: string,
   ) {
     return this.recommendations.goodPlaceToStart(userId, sessionId, visitorId);
-  }
-
-  /**
-   * The old name of the store spread, kept until web clients on the previous release have gone.
-   * Use `good-place-to-start`.
-   */
-  @Get('marketplace-mix')
-  @Header('Cache-Control', 'private, no-store')
-  @Header('Deprecation', 'true')
-  @OptionalAuth()
-  @ApiBearerAuth('JWT-auth')
-  @Message('Store spread retrieved successfully')
-  @ApiOperation({
-    deprecated: true,
-    summary: 'Deprecated: use good-place-to-start',
-    description:
-      'Returns up to 12 active vendors, with one in-stock product with an image from each. Replaced by `good-place-to-start`, which also adds the shopper’s own picks.',
-  })
-  @ApiEnvelopeResponse(StarterSamplerResponseDto, {
-    description: 'Up to twelve distinct active vendors, each with one product.',
-  })
-  starterSampler(
-    @GetUser('id') userId?: string,
-    @Query('sessionId', new ParseUUIDPipe({ optional: true }))
-    sessionId?: string,
-    @Query('visitorId', new ParseUUIDPipe({ optional: true }))
-    visitorId?: string,
-  ) {
-    return this.recommendations.starterSampler(userId, sessionId, visitorId);
   }
 
   @Get('recently-viewed')

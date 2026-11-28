@@ -23,8 +23,6 @@ export const RECOMMENDATION_EVENT_TYPES = [
 export const RECOMMENDATION_SURFACES = [
   'HOME_FOR_YOU',
   'HOME_GOOD_PLACE_TO_START',
-  // The old name of the same shelf, accepted until web clients on the previous release have gone.
-  'HOME_MARKETPLACE_MIX',
   'HOME_RECENTLY_VIEWED',
   'HOME_NEW_IN_INTERESTS',
   'HOME_MEET_VENDORS',

@@ -62,10 +62,6 @@ export class RecommendationsService {
     return this.goodPlaceToStartShelf.picks(...args);
   }
 
-  starterSampler(...args: Parameters<StoreDiscoveryService['starterSampler']>) {
-    return this.stores.starterSampler(...args);
-  }
-
   discoverStores(...args: Parameters<StoreDiscoveryService['discoverStores']>) {
     return this.stores.discoverStores(...args);
   }

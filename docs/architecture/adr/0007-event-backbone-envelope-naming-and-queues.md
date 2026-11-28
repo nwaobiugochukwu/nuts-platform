@@ -28,7 +28,7 @@ Which recommendations to refresh is not carried in the message: the consumer wor
 
 Tracking is published straight to the broker, not through the transactional outbox, on purpose: it is behaviour data, a database write per click is what the queue was added to avoid, and if the broker is down the producer writes the row itself. Money and state changes keep using the outbox.
 
-`adaptLegacyTrackingMessage` reads the old shape so messages published by the previous release during a rolling deploy are still stored. Remove it, and the `analytics.event` binding, one release after the rename has fully rolled out.
+The temporary reader for the old shape (and the `analytics.event` binding in the code) has been removed now that the rename has rolled out.
 
 ## Consequences
 

@@ -291,8 +291,7 @@ export class AdminAnalyticsController {
     return this.analyticsService.getActivityAnalytics(body);
   }
 
-  // `marketplace-performance` is the old name, kept until the admin app uses the new one.
-  @Get(['shopper-engagement', 'marketplace-performance'])
+  @Get('shopper-engagement')
   @Message('Shopper engagement retrieved')
   @ApiOperation({
     summary:
