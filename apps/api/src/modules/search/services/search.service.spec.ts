@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CatalogIndexSearchService } from './catalog-index-search.service';
 import { SearchCacheService } from './search-cache.service';
+import { SearchRunnerService } from './search-runner.service';
 import { SearchService } from './search.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
@@ -34,6 +36,8 @@ describe('SearchService', () => {
       providers: [
         SearchService,
         SearchCacheService,
+        SearchRunnerService,
+        CatalogIndexSearchService,
         {
           provide: REDIS_CLIENT,
           useValue: mockRedis,

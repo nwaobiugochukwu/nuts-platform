@@ -1,8 +1,6 @@
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  MAX_LIMIT,
-  MIN_SEARCH_LENGTH,
   SIMILARITY_THRESHOLD,
   VENDOR_INDEXES,
 } from '../constants/search.constants';
@@ -14,14 +12,8 @@ import type {
   SearchResponsePayload,
   SearchResultItem,
 } from '../types/search.types';
-import {
-  buildCacheKey,
-  filterIndexes,
-  normalizeLimit,
-  normalizePage,
-  normalizeSearch,
-} from '../utils/search-input.util';
-import { SearchCacheService } from './search-cache.service';
+import { filterIndexes } from '../utils/search-input.util';
+import { SearchRunnerService } from './search-runner.service';
 
 /**
  * Search inside a vendor's own store: their products, orders and discount codes. Everything it
@@ -33,7 +25,7 @@ export class VendorSearchService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly cache: SearchCacheService,
+    private readonly runner: SearchRunnerService,
   ) {}
 
   async searchVendorGlobal(
@@ -43,13 +35,15 @@ export class VendorSearchService {
     page = 1,
     limit = 10,
   ): Promise<SearchResponsePayload | null> {
-    return this.executeVendorSearch(
-      vendorId,
-      filterIndexes(types, VENDOR_INDEXES),
+    return this.runner.run({
+      namespace: `vendor:${vendorId}`,
+      indexes: filterIndexes(types, VENDOR_INDEXES),
       search,
       page,
       limit,
-    );
+      searchIndex: (index, term, perIndex) =>
+        this.searchVendorIndex(vendorId, index, term, perIndex),
+    });
   }
 
   async autocompleteVendor(
@@ -58,119 +52,16 @@ export class VendorSearchService {
     types?: SearchIndex[],
     limit = 10,
   ): Promise<SearchResultItem[] | null> {
-    const normalizedSearch = normalizeSearch(search);
-
-    if (!normalizedSearch) {
-      return null;
-    }
-
-    const indexes = filterIndexes(types, VENDOR_INDEXES);
-
-    const safeLimit = normalizeLimit(limit);
-
-    const cacheKey = buildCacheKey(
-      `vendor:${vendorId}:autocomplete`,
-      normalizedSearch,
-      indexes.join(','),
-      safeLimit,
-    );
-
-    const cached = await this.cache.get<SearchResultItem[]>(cacheKey);
-
-    if (cached) {
-      return cached;
-    }
-
-    const result = await this.executeVendorSearch(
-      vendorId,
-      indexes,
-      normalizedSearch,
-      1,
-      safeLimit,
-    );
-
-    if (!result) {
-      return null;
-    }
-
-    await this.cache.set(cacheKey, result.results);
-
-    return result.results;
+    return this.runner.autocomplete({
+      cacheNamespace: `vendor:${vendorId}:autocomplete`,
+      runNamespace: `vendor:${vendorId}`,
+      indexes: filterIndexes(types, VENDOR_INDEXES),
+      search,
+      limit,
+      searchIndex: (index, term, perIndex) =>
+        this.searchVendorIndex(vendorId, index, term, perIndex),
+    });
   }
-
-  // ---------------------------------------------------------------------------
-  // GENERIC SEARCH
-  // ---------------------------------------------------------------------------
-
-  private async executeVendorSearch(
-    vendorId: string,
-    indexes: SearchIndex[],
-    search: string,
-    page: number,
-    limit: number,
-  ): Promise<SearchResponsePayload | null> {
-    const normalizedSearch = normalizeSearch(search);
-
-    if (normalizedSearch.length < MIN_SEARCH_LENGTH) {
-      return null;
-    }
-
-    const safePage = normalizePage(page);
-
-    const safeLimit = normalizeLimit(limit);
-
-    const sortedIndexes = [...indexes].sort();
-
-    const cacheKey = buildCacheKey(
-      `vendor:${vendorId}`,
-      normalizedSearch,
-      sortedIndexes.join(','),
-      safePage,
-      safeLimit,
-    );
-
-    const cached = await this.cache.get<SearchResponsePayload>(cacheKey);
-
-    if (cached) {
-      return cached;
-    }
-
-    const searchLimit = Math.min(safePage * safeLimit, MAX_LIMIT);
-
-    const results = await Promise.all(
-      sortedIndexes.map((index) =>
-        this.searchVendorIndex(vendorId, index, normalizedSearch, searchLimit),
-      ),
-    );
-
-    const allItems = results
-      .flatMap((entry) => entry.items)
-      .sort((a, b) => b.score - a.score);
-
-    const total = results.reduce((sum, entry) => sum + entry.total, 0);
-
-    const start = (safePage - 1) * safeLimit;
-
-    const items = allItems.slice(start, start + safeLimit);
-
-    const response = {
-      results: items,
-      pagination: {
-        total,
-        page: safePage,
-        limit: safeLimit,
-        totalPages: Math.ceil(total / safeLimit),
-      },
-    };
-
-    await this.cache.set(cacheKey, response);
-
-    return response;
-  }
-
-  // ---------------------------------------------------------------------------
-  // INDEX DISPATCH
-  // ---------------------------------------------------------------------------
 
   private async searchVendorIndex(
     vendorId: string,

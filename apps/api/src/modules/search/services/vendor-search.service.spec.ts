@@ -1,3 +1,4 @@
+import { SearchRunnerService } from './search-runner.service';
 import { VendorSearchService } from './vendor-search.service';
 
 describe('VendorSearchService', () => {
@@ -11,7 +12,10 @@ describe('VendorSearchService', () => {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
     };
-    service = new VendorSearchService(prisma, cache as never);
+    service = new VendorSearchService(
+      prisma,
+      new SearchRunnerService(cache as never),
+    );
   });
 
   // $queryRaw is called as a tagged template: (strings, ...values).
