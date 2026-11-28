@@ -34,31 +34,14 @@ import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 
 @ApiTags('ADMIN - PRODUCT VARIANTS')
 @ApiBearerAuth('JWT-auth')
-@Controller('admin/products/variants')
+@Controller('admin/products')
 @Roles(ROLE.ADMIN)
 export class AdminProductVariantsController {
   constructor(
     private readonly productVariantsService: ProductVariantsService,
   ) {}
 
-  @Post(':productId')
-  @Message('Product variant created successfully')
-  @ApiOperation({ summary: 'Create a variant for a product (Admin)' })
-  @ApiResponse({ status: 201, type: ApiResponseDto<AdminVariantResponseDto> })
-  @ApiUnauthorizedResponse({
-    description: 'Unauthorized â€” no valid JWT session.',
-  })
-  @ApiForbiddenResponse({
-    description: 'Forbidden â€” user does not have ADMIN role.',
-  })
-  async create(
-    @Param('productId', ParseUUIDPipe) productId: string,
-    @Body() dto: CreateVariantDto,
-  ): Promise<AdminVariantResponseDto> {
-    return this.productVariantsService.create(productId, dto);
-  }
-
-  @Patch(':id')
+  @Patch('variants/:id')
   @Message('Product variant updated successfully')
   @ApiOperation({ summary: 'Update a product variant (Admin)' })
   @ApiResponse({ status: 200, type: ApiResponseDto<AdminVariantResponseDto> })
@@ -75,7 +58,7 @@ export class AdminProductVariantsController {
     return this.productVariantsService.update(id, dto);
   }
 
-  @Patch(':id/deactivate')
+  @Patch('variants/:id/deactivate')
   @Message('Product variant deactivated successfully')
   @ApiOperation({ summary: 'Deactivate a product variant (Admin)' })
   @ApiParam({ name: 'id', description: 'Variant ID' })
@@ -92,7 +75,7 @@ export class AdminProductVariantsController {
     return this.productVariantsService.deactivate(id);
   }
 
-  @Patch(':id/reactivate')
+  @Patch('variants/:id/reactivate')
   @Message('Product variant reactivated successfully')
   @ApiOperation({ summary: 'Reactivate a product variant (Admin)' })
   @ApiParam({ name: 'id', description: 'Variant ID' })
@@ -109,7 +92,7 @@ export class AdminProductVariantsController {
     return this.productVariantsService.reactivate(id);
   }
 
-  @Patch(':id/stock')
+  @Patch('variants/:id/stock')
   @Message('Product variant stock updated successfully')
   @ApiOperation({
     summary: 'Adjust stock for a product variant',
@@ -143,7 +126,7 @@ export class AdminProductVariantsController {
     return this.productVariantsService.updateStock(id, dto);
   }
 
-  @Delete(':id/permanent')
+  @Delete('variants/:id/permanent')
   @HttpCode(HttpStatus.OK)
   @Message('Product variant permanently deleted successfully')
   @ApiOperation({ summary: 'Permanently delete a product variant (Admin)' })
@@ -161,21 +144,11 @@ export class AdminProductVariantsController {
     await this.productVariantsService.permanentRemove(id);
     return null;
   }
-}
 
-@ApiTags('ADMIN - PRODUCT VARIANTS')
-@ApiBearerAuth('JWT-auth')
-@Controller('admin/products/:productId/variants')
-@Roles(ROLE.ADMIN)
-export class AdminProductVariantsCanonicalController {
-  constructor(
-    private readonly productVariantsService: ProductVariantsService,
-  ) {}
-
-  @Get()
+  @Get(':productId/variants')
   @Message('Product variants retrieved successfully')
   @ApiOperation({
-    summary: 'List all variants for a product (Admin Canonical)',
+    summary: 'List all variants for a product (Admin)',
   })
   @ApiUnauthorizedResponse({
     description: 'Unauthorized — no valid JWT session.',
@@ -187,9 +160,9 @@ export class AdminProductVariantsCanonicalController {
     return this.productVariantsService.findAll(productId);
   }
 
-  @Post()
+  @Post(':productId/variants')
   @Message('Product variant created successfully')
-  @ApiOperation({ summary: 'Create a variant for a product (Admin Canonical)' })
+  @ApiOperation({ summary: 'Create a variant for a product (Admin)' })
   @ApiResponse({ status: 201, type: ApiResponseDto<AdminVariantResponseDto> })
   @ApiUnauthorizedResponse({
     description: 'Unauthorized — no valid JWT session.',

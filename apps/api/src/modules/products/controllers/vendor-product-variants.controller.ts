@@ -1,7 +1,6 @@
 // vendor-product-variants.controller.ts
 
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -12,7 +11,6 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -29,7 +27,6 @@ import {
 } from '@nestjs/swagger';
 
 import { CreateVariantDto } from '@api/modules/products/dto/create-variant.dto';
-import { QueryVariantDto } from '@api/modules/products/dto/query-variant.dto';
 import { UpdateVariantStockDto } from '@api/modules/products/dto/update-variant-stock.dto';
 import { UpdateVariantDto } from '@api/modules/products/dto/update-variant.dto';
 import { ProductVariantListResponseDto } from '@api/modules/products/dto/variant-response.dto';
@@ -43,7 +40,7 @@ import { Message } from '@api/common/decorators/message.decorator';
 import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 
 @ApiTags('VENDOR - PRODUCT VARIANTS')
-@Controller('vendors/products/variants')
+@Controller('vendors/products')
 @Roles(ROLE.VENDOR)
 @ApiBearerAuth('JWT-auth')
 export class VendorProductVariantsController {
@@ -51,81 +48,7 @@ export class VendorProductVariantsController {
     private readonly productVariantsService: ProductVariantsService,
   ) {}
 
-  @Get()
-  @Message('Product variant(s) retrieved successfully')
-  @ApiOperation({
-    summary: 'Get variant(s) for your product',
-    description:
-      'Provide either productId to list variants for a product, or variantId to retrieve a single variant.',
-  })
-  @ApiResponse({
-    status: 200,
-    type: ApiResponseDto<
-      VendorVariantResponseDto | ProductVariantListResponseDto
-    >,
-  })
-  @ApiBadRequestResponse({
-    description: 'Bad request - validation error',
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Unauthorized',
-  })
-  async find(
-    @GetVendor('id') vendorId: string,
-    @Query() query: QueryVariantDto,
-  ): Promise<VendorVariantResponseDto | ProductVariantListResponseDto> {
-    const { productId, variantId } = query;
-
-    // These are mutually exclusive lookup modes. Rejecting the ambiguous
-    // request early avoids unnecessary service/database calls.
-    if (productId && variantId) {
-      throw new BadRequestException(
-        'Provide either productId or variantId, not both',
-      );
-    }
-
-    if (variantId) {
-      return this.productVariantsService.findOneForVendor(vendorId, variantId);
-    }
-
-    if (productId) {
-      return this.productVariantsService.findAllForVendor(vendorId, productId);
-    }
-
-    throw new BadRequestException(
-      'productId or variantId query parameter is required',
-    );
-  }
-
-  @Post(':productId')
-  @Message('Product variant created successfully')
-  @ApiOperation({
-    summary: 'Create a variant for your product',
-    description: 'Add a new variant to one of your own products.',
-  })
-  @ApiResponse({
-    status: 201,
-    type: ApiResponseDto<VendorVariantResponseDto>,
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Unauthorized',
-  })
-  @ApiNotFoundResponse({
-    description: 'Product not found',
-  })
-  async create(
-    @GetVendor('id') vendorId: string,
-    @Param('productId', ParseUUIDPipe) productId: string,
-    @Body() dto: CreateVariantDto,
-  ): Promise<VendorVariantResponseDto> {
-    return this.productVariantsService.createForVendor(
-      vendorId,
-      productId,
-      dto,
-    );
-  }
-
-  @Patch(':id')
+  @Patch('variants/:id')
   @Message('Product variant updated successfully')
   @ApiOperation({
     summary: 'Update a product variant for your product',
@@ -157,7 +80,7 @@ export class VendorProductVariantsController {
     return this.productVariantsService.updateForVendor(vendorId, id, dto);
   }
 
-  @Patch(':id/deactivate')
+  @Patch('variants/:id/deactivate')
   @Message('Product variant deactivated successfully')
   @ApiOperation({
     summary: 'Deactivate a product variant for your product',
@@ -184,7 +107,7 @@ export class VendorProductVariantsController {
     return this.productVariantsService.deactivateForVendor(vendorId, id);
   }
 
-  @Patch(':id/reactivate')
+  @Patch('variants/:id/reactivate')
   @Message('Product variant reactivated successfully')
   @ApiOperation({
     summary: 'Reactivate a product variant for your product',
@@ -211,7 +134,7 @@ export class VendorProductVariantsController {
     return this.productVariantsService.reactivateForVendor(vendorId, id);
   }
 
-  @Delete(':id')
+  @Delete('variants/:id')
   @HttpCode(HttpStatus.OK)
   @Message('Product variant permanently deleted successfully')
   @ApiOperation({
@@ -242,7 +165,7 @@ export class VendorProductVariantsController {
     return null;
   }
 
-  @Patch(':id/stock')
+  @Patch('variants/:id/stock')
   @Message('Product variant stock updated successfully')
   @ApiOperation({
     summary: 'Adjust stock for your product variant',
@@ -282,21 +205,11 @@ export class VendorProductVariantsController {
   ): Promise<VariantStockUpdateResponseDto> {
     return this.productVariantsService.updateStockForVendor(vendorId, id, dto);
   }
-}
 
-@ApiTags('VENDOR - PRODUCT VARIANTS')
-@Controller('vendors/products/:productId/variants')
-@Roles(ROLE.VENDOR)
-@ApiBearerAuth('JWT-auth')
-export class VendorProductVariantsCanonicalController {
-  constructor(
-    private readonly productVariantsService: ProductVariantsService,
-  ) {}
-
-  @Get()
+  @Get(':productId/variants')
   @Message('Product variants retrieved successfully')
   @ApiOperation({
-    summary: 'List all variants for your product (Canonical)',
+    summary: 'List all variants for your product',
     description:
       'Retrieve all variants belonging to a specific product owned by the vendor.',
   })
@@ -311,10 +224,10 @@ export class VendorProductVariantsCanonicalController {
     return this.productVariantsService.findAllForVendor(vendorId, productId);
   }
 
-  @Post()
+  @Post(':productId/variants')
   @Message('Product variant created successfully')
   @ApiOperation({
-    summary: 'Create a variant for your product (Canonical)',
+    summary: 'Create a variant for your product',
     description:
       'Add a new variant to one of your own products using the canonical hierarchy.',
   })
