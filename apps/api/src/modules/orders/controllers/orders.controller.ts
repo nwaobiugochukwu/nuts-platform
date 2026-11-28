@@ -25,6 +25,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import { OrderCheckoutService } from '../services/order-checkout.service';
 import { OrdersService } from '../services/orders.service';
 
 import { CheckoutResponseDto } from '../dto/checkout-response.dto';
@@ -43,7 +44,10 @@ import type { RequestWithUser } from '@api/common/types/request-with-user.types'
 @Controller('orders')
 @Roles(ROLE.USER)
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly checkoutService: OrderCheckoutService,
+  ) {}
 
   @Post('checkout')
   @HttpCode(HttpStatus.CREATED)
@@ -80,7 +84,12 @@ export class OrdersController {
      */
     const userId = req.user.id;
 
-    return this.ordersService.checkout(userId, dto!, addressId, idempotencyKey);
+    return this.checkoutService.checkout(
+      userId,
+      dto!,
+      addressId,
+      idempotencyKey,
+    );
   }
 
   @Post(':id/cancel')
