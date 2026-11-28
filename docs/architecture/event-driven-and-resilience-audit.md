@@ -232,6 +232,7 @@ apps/api/src/
       jobs/          scheduled jobs
       listeners/     only if a module reacts to another module's in-process event
       guards/ constants/ types/ mappers/   only when needed
+      tests/         the module's unit tests, mirroring the folders of what they test (tests/services/x.service.spec.ts); the architecture check fails a module spec anywhere else
 ```
 
 Domains: `auth` (customer, vendor and admin authentication, sessions, OTP, cookies, tokens), `users`, `vendors`, `products` (including stock), `categories`, `cart`, `orders`, `payments`, `wallets`, `discounts`, `referrals`, `reviews`, `wishlists`, `search`, `recommendations`, `analytics`, `notifications` (in-app, push and the email channel), `audit`, `security` (guards, throttling, middleware only), `announcements`, `platform` (configuration), `staff`, `health`, `upload`.

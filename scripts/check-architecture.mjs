@@ -40,7 +40,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  checkAlias, checkClassName, checkConsumerLocation, checkFileName, checkModuleEntry,
+  checkAlias, checkClassName, checkConsumerLocation, checkFileName, checkModuleEntry, checkSpecLocation,
 } from "./architecture-layout-rules.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -113,6 +113,7 @@ for (const file of walk(API_SRC)) {
       ...checkFileName(fromSrc),
       ...(isSpec ? [] : checkClassName(fromSrc, fs.readFileSync(file, "utf8"))),
       ...checkConsumerLocation(fromSrc),
+      ...checkSpecLocation(fromSrc),
       ...(layer === "modules" ? checkModuleEntry(fromSrc.split("/").slice(2).join("/")) : []),
     ];
     if (!API_LAYOUT_LEGACY.has(r)) for (const problem of problems) violations.push(`[api:6] ${r}: ${problem}`);

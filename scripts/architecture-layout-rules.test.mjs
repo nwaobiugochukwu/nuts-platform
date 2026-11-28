@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  checkFileName, checkClassName, checkModuleEntry, checkConsumerLocation, checkAlias, expectedClassName, parseFileName, pascal,
+  checkFileName, checkClassName, checkModuleEntry, checkConsumerLocation, checkSpecLocation, checkAlias, expectedClassName, parseFileName, pascal,
 } from "./architecture-layout-rules.mjs";
 
 test("accepts <kebab-name>.<allowed-kind>.ts and rejects the rest", () => {
@@ -62,4 +62,14 @@ test("only the @api alias exists", () => {
   assert.deepEqual(checkAlias("@nestjs/common"), []);
   assert.match(checkAlias("@common/utils")[0], /removed alias/);
   assert.match(checkAlias("@infra/cache")[0], /removed alias/);
+});
+
+test("a module's specs live in its tests folder", () => {
+  assert.deepEqual(checkSpecLocation("modules/orders/tests/services/order-status.service.spec.ts"), []);
+  assert.deepEqual(checkSpecLocation("modules/orders/tests/orders.module.spec.ts"), []);
+  assert.match(checkSpecLocation("modules/orders/services/order-status.service.spec.ts")[0], /belong in modules\/orders\/tests/);
+  assert.match(checkSpecLocation("modules/orders/orders.module.spec.ts")[0], /belong in modules\/orders\/tests/);
+  // outside the modules the rule does not apply, and end-to-end specs are not unit specs
+  assert.deepEqual(checkSpecLocation("common/utils/x.util.spec.ts"), []);
+  assert.deepEqual(checkSpecLocation("modules/payments/tests/payment-flow.e2e-spec.ts"), []);
 });
