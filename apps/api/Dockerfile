@@ -1,5 +1,7 @@
+# ==============================================================================
 # Multi-stage Dockerfile — NestJS API (Monorepo)
 # Stages: builder → dev | runner (prod, Alpine) ; builder-glibc → runner-workflow (Temporal worker, Debian)
+# ==============================================================================
 
 # ─── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
@@ -29,7 +31,8 @@ COPY apps/api ./apps/api
 # 5. Build NestJS API
 RUN npm run build:api
 
-# Stage 2: Dev 
+# ─── Stage 2: Dev ─────────────────────────────────────────────────────────────
+FROM node:22-alpine AS dev
 
 WORKDIR /app
 
