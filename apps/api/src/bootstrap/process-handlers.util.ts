@@ -10,7 +10,7 @@ export interface ProcessLike {
 }
 
 export interface ProcessHandlerOptions {
-  /** Which program this is (api, worker, jobs, temporal-worker); goes on every report. */
+  /** Which program this is (api, worker, jobs, workflow-worker); goes on every report. */
   program: string;
   target?: ProcessLike;
   exit?: (code: number) => void;

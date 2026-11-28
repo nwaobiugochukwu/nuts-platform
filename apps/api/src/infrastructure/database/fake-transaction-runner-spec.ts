@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import type { PublishEventInput } from '../messaging/events/event-envelope.types';
-import type { StartWorkflowInput } from '../workflows/temporal-client.service';
+import type { StartWorkflowInput } from '../workflows/workflow-client.service';
 import type {
   TransactionContext,
   TransactionOptions,

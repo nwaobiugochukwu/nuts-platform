@@ -7,7 +7,7 @@
  *   TEMPORAL_API_KEY    Temporal Cloud API key (enables TLS)
  *   TEMPORAL_TLS        "true" to force TLS without an API key
  */
-export interface TemporalConfig {
+export interface WorkflowConfig {
   enabled: boolean;
   address: string;
   namespace: string;
@@ -15,9 +15,9 @@ export interface TemporalConfig {
   tls: boolean;
 }
 
-export function readTemporalConfig(
+export function readWorkflowConfig(
   env: NodeJS.ProcessEnv = process.env,
-): TemporalConfig {
+): WorkflowConfig {
   const apiKey = env.TEMPORAL_API_KEY?.trim() || undefined;
   return {
     enabled: env.TEMPORAL_ENABLED?.trim().toLowerCase() === 'true',

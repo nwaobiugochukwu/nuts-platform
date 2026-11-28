@@ -49,14 +49,14 @@ export function roleCan(
 }
 
 /** The programs that can listen on a health or metrics port. */
-export type PortProgram = ProcessRole | 'temporal-worker';
+export type PortProgram = ProcessRole | 'workflow-worker';
 export type PortKind = 'health' | 'metrics';
 
 /** Health ports for programs that have no HTTP API of their own. */
 const DEFAULT_HEALTH_PORTS: Partial<Record<PortProgram, number>> = {
   worker: 3002,
   jobs: 3003,
-  'temporal-worker': 3004,
+  'workflow-worker': 3004,
 };
 
 /** Metrics ports used in local development only; staging turns metrics on explicitly. */
@@ -65,7 +65,7 @@ const DEV_METRICS_PORTS: Record<PortProgram, number> = {
   api: 9464,
   worker: 9465,
   jobs: 9466,
-  'temporal-worker': 9467,
+  'workflow-worker': 9467,
 };
 
 function parsePort(name: string, raw: string | undefined): number | null {
@@ -86,7 +86,7 @@ function parsePort(name: string, raw: string | undefined): number | null {
  * Lookup order: `{PROGRAM}_{KIND}_PORT` (for example `WORKER_HEALTH_PORT`, which
  * lets one local env file serve every program), then `{KIND}_PORT` (the form a
  * single deployed service uses), then a default. Health has defaults for
- * worker, jobs and temporal-worker; metrics has a default only when
+ * worker, jobs and workflow-worker; metrics has a default only when
  * NODE_ENV=development, so staging exposes nothing until you set a port.
  * Returns null when there is nothing to listen on.
  */

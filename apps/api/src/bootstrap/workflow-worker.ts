@@ -15,18 +15,18 @@ import { buildActivities } from '../infrastructure/workflows/activities';
 import { SampleActivities } from '../infrastructure/workflows/activities/sample.activities';
 import {
   queuesToPoll,
-  readTemporalConfig,
-} from '../infrastructure/workflows/temporal.config';
-import { TemporalWorkerModule } from '../infrastructure/workflows/temporal-worker.module';
+  readWorkflowConfig,
+} from '../infrastructure/workflows/workflow.config';
+import { WorkflowWorkerModule } from '../infrastructure/workflows/workflow-worker.module';
 
 /**
- * Entry point for the `temporal-worker` role: runs Temporal workflows and
+ * Entry point for the `workflow-worker` role: runs Temporal workflows and
  * activities. It needs a glibc base image (the Temporal native core has no
  * musl build), so it ships as its own image target; see docs/operations.
  */
 async function bootstrap() {
-  process.env.LOG_PROGRAM = 'temporal-worker';
-  const config = readTemporalConfig();
+  process.env.LOG_PROGRAM = 'workflow-worker';
+  const config = readWorkflowConfig();
   if (!config.enabled) {
     throw new Error('Set TEMPORAL_ENABLED=true to run the Temporal worker.');
   }
@@ -35,7 +35,7 @@ async function bootstrap() {
   // keeps its established name and overrides the per-program default.
   const metricsPort =
     Number(process.env.TEMPORAL_METRICS_PORT) ||
-    portFor('metrics', 'temporal-worker');
+    portFor('metrics', 'workflow-worker');
   if (metricsPort && Number.isInteger(metricsPort) && metricsPort > 0) {
     Runtime.install({
       telemetryOptions: {
@@ -44,7 +44,7 @@ async function bootstrap() {
     });
   }
 
-  const app = await NestFactory.createApplicationContext(TemporalWorkerModule, {
+  const app = await NestFactory.createApplicationContext(WorkflowWorkerModule, {
     bufferLogs: true,
   });
   app.useLogger(app.get(Logger));
@@ -77,7 +77,7 @@ async function bootstrap() {
 
   const running = Promise.all(workers.map((worker) => worker.run()));
   const startedAt = new Date();
-  const healthPort = portFor('health', 'temporal-worker') ?? 3004;
+  const healthPort = portFor('health', 'workflow-worker') ?? 3004;
   const server = createServer((req, res) => {
     if (req.url !== '/health' && req.url !== '/') {
       res.writeHead(404).end();
@@ -87,7 +87,7 @@ async function bootstrap() {
     res.end(
       JSON.stringify({
         status: 'ok',
-        role: 'temporal-worker',
+        role: 'workflow-worker',
         namespace: config.namespace,
         taskQueues: queues,
         startedAt: startedAt.toISOString(),

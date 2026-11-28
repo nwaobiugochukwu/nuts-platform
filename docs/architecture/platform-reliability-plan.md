@@ -39,7 +39,7 @@ Not started: **P6** (W1-W8 workflows), **P7** (fulfillment on Temporal), moving 
 | `api` | HTTP, SSE, auth, all request/response modules | 1 now, 2+ later | PM2 cluster | No crons, no consumers. Stateless, so it can scale. |
 | `worker` | RabbitMQ consumers (emails, notifications, analytics, vendor-events, inventory), outbox relay | 1 (more for throughput) | PM2 fork | Competing consumers make extra instances safe. Outbox relay uses `FOR UPDATE SKIP LOCKED` claiming (already claim-based) so duplicates are safe. |
 | `jobs` | Remaining scheduled jobs | exactly 1 | PM2 fork | Singleton by design. Each job keeps its Redis lock as a second guard. Shrinks as jobs move to Temporal. |
-| `temporal-worker` | Temporal workflows and activities | 1+ | PM2 fork | Added in P5. Scales horizontally. |
+| `workflow-worker` | Temporal workflows and activities | 1+ | PM2 fork | Added in P5. Scales horizontally. |
 | `web` | Next.js standalone | 1+ containers | PM2 fork (one process) | Scale by adding containers, not PM2 cluster; same supervision as the other roles. |
 
 Isolation is two-layered: separate compose services (a container crash or OOM kill only restarts that role) and PM2 inside each (a crash restarts the process with backoff before the container is even considered unhealthy).
@@ -54,7 +54,7 @@ Isolation is two-layered: separate compose services (a container crash or OOM ki
 
 ### 3.2 Splitting the code
 
-- Add `src/worker.ts`, `src/jobs.ts` and later `src/temporal-worker.ts` entry points built with `NestFactory.createApplicationContext` (no HTTP listener), and keep `main.ts` for `api`.
+- Add `src/worker.ts`, `src/jobs.ts` and later `src/workflow-worker.ts` entry points built with `NestFactory.createApplicationContext` (no HTTP listener), and keep `main.ts` for `api`.
 - Compose modules by role: a `CoreModule` (config, Prisma, Redis, logging, outbox publisher) plus role modules. `AppModule` is split into `ApiModule`, `WorkerModule`, `JobsModule`. The architecture check gains a rule that `api` must not import consumer or cron providers.
 - Move every `@Cron` provider and consumer out of modules that `api` imports into role modules (feature modules keep their services; only the entry points move).
 - The notification consumer in `worker` publishes through the existing Redis broadcast, so SSE keeps working without the API process hosting the consumer.
@@ -162,8 +162,8 @@ The **outbox** stays as the reliable bridge: a relay consumer starts workflows f
 
 ### 6.2 Integration approach
 
-- TypeScript SDK (`@temporalio/client`, `worker`, `workflow`, `activity`, `testing`). A thin in-repo `TemporalModule` (client provider, worker bootstrap, interceptors for correlation id and logging) rather than a third-party Nest wrapper, so we control versioning and testing.
-- Layout: `apps/api/src/modules/<feature>/workflows/*.workflow.ts` (deterministic code, no I/O), `*.activities.ts` (all I/O, calls existing services, idempotent), registered in `temporal-worker`. Workflow code may only import pure helpers and activity types; the architecture check enforces it.
+- TypeScript SDK (`@temporalio/client`, `worker`, `workflow`, `activity`, `testing`). A thin in-repo `WorkflowModule` (client provider, worker bootstrap, interceptors for correlation id and logging) rather than a third-party Nest wrapper, so we control versioning and testing.
+- Layout: `apps/api/src/modules/<feature>/workflows/*.workflow.ts` (deterministic code, no I/O), `*.activities.ts` (all I/O, calls existing services, idempotent), registered in `workflow-worker`. Workflow code may only import pure helpers and activity types; the architecture check enforces it.
 - Conventions: activities have explicit timeouts and retry policies and are idempotent (keys on business ids); money activities check current state before acting; workflows use signals for external events (payment webhook, admin decision, customer choice), queries for status, timers for deadlines, child workflows for fan-out, and `patched()` for any change to a running workflow.
 - Namespaces `nuts-dev`, `nuts-staging`, `nuts-prod`; task queues per concern (`payments`, `fulfillment`, `comms`, `lifecycle`) so a noisy queue cannot starve payments. Search attributes: `orderId`, `vendorId`, `userId`, `workflowKind`.
 - Hosting: dev and staging self-hosted in Docker (Temporal server, its PostgreSQL, Web UI). Production decision (open item): Temporal Cloud versus self-hosted on a dedicated VM; do not run the server inside the same memory-limited host as the API.
@@ -223,7 +223,7 @@ The **outbox** stays as the reliable bridge: a relay consumer starts workflows f
 | **P2. Process isolation and PM2** | `PROCESS_ROLE` entry points (`api`, `worker`, `jobs`), module split, `ecosystem.config.cjs`, compose services per role, graceful shutdown, per-role health, architecture-check rules | M | Killing `worker` or `jobs` does not interrupt checkout; `api` can run two instances without duplicate jobs; every role restarts with backoff and drains cleanly |
 | **P3. Observability** | Prometheus metrics on every role, RabbitMQ and outbox metrics, correlation ids through HTTP/AMQP, log shipping, alerts, three dashboards | M | A stuck outbox, dead-lettered message or silent worker raises an alert within minutes |
 | **P4. Audit pipeline** | `@Audit` decorator and interceptor, merged `AuditService`, `audit_events` table (additive migration), outbox path for critical events, `audit` consumer with batching and idempotency, shim for old call sites, migration of critical call sites | M | No request waits on an audit write; killing the broker mid-request loses no critical audit event; viewer shows old and new events |
-| **P5. Temporal foundation** | Temporal in compose (dev, staging), `TemporalModule`, `temporal-worker` role, correlation interceptors, time-skipping test setup, outbox `workflow-start` consumer, RabbitMQ DLQ tooling | M | A sample workflow starts from an outbox event, survives a worker restart and is visible in the UI and metrics |
+| **P5. Temporal foundation** | Temporal in compose (dev, staging), `WorkflowModule`, `workflow-worker` role, correlation interceptors, time-skipping test setup, outbox `workflow-start` consumer, RabbitMQ DLQ tooling | M | A sample workflow starts from an outbox event, survives a worker restart and is visible in the UI and metrics |
 | **P6. First workflows** | W1 OrderPayment, W2 Refund, W6 AnnouncementPublish, W7 AbandonedCartRecovery, W8 AccountDeletion (each behind a flag, run alongside the cron for a week, then the cron is removed) | L | Matching outcomes versus the crons; the unpaid-order, refund and announcement crons are gone; per-order process state is queryable |
 | **P7. Fulfillment on Temporal** | W3 ParcelFulfillment and VendorHandover, W4 VendorSettlement, W5 Delivery, W9, W10, W11 as the delivery plan's Phases 1-3 reach them | XL | Delivery Phase 1 exit criteria met with timers, reminders, auto-cancel and settlement driven by workflows |
 

@@ -29,7 +29,7 @@ Related: [how the system works](how-it-works.md), [how production teams run serv
 | **api** | Answers requests: data for pages, checkout, login | its own service |
 | **worker** | Emails, notifications, analytics, stock updates, audit writing | its own service |
 | **jobs** | Scheduled jobs. Exactly one copy | its own service |
-| temporal-worker | Long-running workflows, when Temporal is on | its own service, own image |
+| workflow-worker | Long-running workflows, when Temporal is on | its own service, own image |
 
 Plus PostgreSQL, Redis, RabbitMQ (and Temporal). All environments run the same programs from the same code and differ only in configuration. The one-process setting (`PM2_APP=all`, the current default) exists only as an emergency rollback; staging services set `PM2_APP` explicitly.
 

@@ -5,10 +5,10 @@ describe('logProgram', () => {
   it('names the program, preferring LOG_PROGRAM, then PROCESS_ROLE, then all', () => {
     expect(
       logProgram({
-        LOG_PROGRAM: 'temporal-worker',
+        LOG_PROGRAM: 'workflow-worker',
         PROCESS_ROLE: 'all',
       }),
-    ).toBe('temporal-worker');
+    ).toBe('workflow-worker');
     expect(logProgram({ PROCESS_ROLE: 'Worker' })).toBe('worker');
     expect(logProgram({})).toBe('all');
   });

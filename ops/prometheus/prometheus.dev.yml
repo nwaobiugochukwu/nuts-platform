@@ -17,5 +17,5 @@ scrape_configs:
   - job_name: nuts-jobs
     static_configs: [{ targets: ["host.docker.internal:9466"] }]
   # Only present when the Temporal worker is running (release F); down otherwise.
-  - job_name: nuts-temporal-worker
+  - job_name: nuts-workflow-worker
     static_configs: [{ targets: ["host.docker.internal:9467"] }]
