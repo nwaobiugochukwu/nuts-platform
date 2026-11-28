@@ -156,6 +156,18 @@ for (const file of walk(WEB_SRC)) {
   }
 }
 
+// ── DEPLOY FILES ──────────────────────────────────────────────────────────────
+// Every Dockerfile that compose, the deploy workflow or the Render template builds must exist.
+const DEPLOY_FILES = ["docker-compose.yml", "docker-compose.db.yml", ".github/workflows/deploy.yml", "ops/render/render.staging.example.yaml"];
+for (const rel of DEPLOY_FILES) {
+  const full = path.join(root, rel);
+  if (!fs.existsSync(full)) continue;
+  const text = fs.readFileSync(full, "utf8");
+  for (const m of text.matchAll(/^\s*(?:-\s*)?(?:dockerfile|dockerfilePath|file):\s*["']?(\.{0,2}\/?[^\s"']*Dockerfile[^\s"']*)/gm)) {
+    if (!fs.existsSync(path.join(root, m[1]))) violations.push(`[deploy] ${rel} builds ${m[1]}, which does not exist`);
+  }
+}
+
 if (violations.length) {
   console.error(`Architecture check failed (${violations.length}):\n` + violations.map((v) => "  - " + v).join("\n"));
   process.exit(1);
