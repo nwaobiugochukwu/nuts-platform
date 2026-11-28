@@ -1,6 +1,6 @@
 /** Trending products used as the popularity baseline for every shelf. */
 import { Injectable, Optional } from '@nestjs/common';
-import { ProductsService } from '@api/modules/products/services/products.service';
+import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import { RECOMMENDATION_LIMIT } from '../utils/recommendation.util';
@@ -8,7 +8,7 @@ import { RECOMMENDATION_LIMIT } from '../utils/recommendation.util';
 @Injectable()
 export class PopularProductsService {
   constructor(
-    private readonly products: ProductsService,
+    private readonly products: ProductCatalogService,
     @Optional() private readonly cacheService?: CacheService,
   ) {}
 

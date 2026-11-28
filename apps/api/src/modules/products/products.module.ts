@@ -17,6 +17,8 @@ import {
   VendorProductVariantsCanonicalController,
   VendorProductVariantsController,
 } from './controllers/vendor-product-variants.controller';
+import { ProductCatalogService } from './services/product-catalog.service';
+import { ProductCategoryResolverService } from './services/product-category-resolver.service';
 import { ProductsService } from './services/products.service';
 import { ProductVariantsService } from './services/product-variants.service';
 import { LowStockJob } from './jobs/low-stock.job';
@@ -36,10 +38,17 @@ import { LowStockJob } from './jobs/low-stock.job';
   ],
   providers: [
     ProductsService,
+    ProductCatalogService,
+    ProductCategoryResolverService,
     ProductVariantsService,
     LowStockJob,
     InventoryConsumer,
   ],
-  exports: [ProductsService, ProductVariantsService],
+  exports: [
+    ProductsService,
+    ProductCatalogService,
+    ProductCategoryResolverService,
+    ProductVariantsService,
+  ],
 })
 export class ProductsModule {}

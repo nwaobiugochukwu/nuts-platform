@@ -16,14 +16,14 @@ import { CursorPaginationMetaDto } from '@api/common/utils/cursor-pagination.uti
 
 import { ProductCardDto } from '../dto/product-card.dto';
 import { QueryProductDto } from '../dto/query-product.dto';
-import { ProductsService } from '../services/products.service';
+import { ProductCatalogService } from '../services/product-catalog.service';
 
 @ApiTags('DISCOVER')
 @ApiExtraModels(ApiResponseDto, CursorPaginationMetaDto, ProductCardDto)
 @Public()
 @Controller('discover')
 export class DiscoverController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(private readonly catalog: ProductCatalogService) {}
 
   @RelaxedThrottle()
   @Get()
@@ -54,7 +54,7 @@ export class DiscoverController {
     @Query() query: QueryProductDto,
     @AdminCacheBypass() bypassCache: boolean,
   ) {
-    return this.productsService.findAllPublicCursor({
+    return this.catalog.findAllPublicCursor({
       ...query,
       bypassCache,
     });

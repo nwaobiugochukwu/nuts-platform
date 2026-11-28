@@ -1,7 +1,7 @@
 import { roleCan } from '@api/config/process-role.config';
 import { CategoriesService } from '@api/modules/categories/services/categories.service';
 import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
-import { ProductsService } from '@api/modules/products/services/products.service';
+import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { VendorsService } from '@api/modules/vendors/services/vendors.service';
 import {
   Injectable,
@@ -53,7 +53,9 @@ export class CacheWarmupService
     const discounts = this.moduleRef.get(DiscountCodeService, {
       strict: false,
     });
-    const products = this.moduleRef.get(ProductsService, { strict: false });
+    const products = this.moduleRef.get(ProductCatalogService, {
+      strict: false,
+    });
     const vendors = this.moduleRef.get(VendorsService, { strict: false });
 
     const steps: Array<[string, () => Promise<unknown>]> = [

@@ -2,7 +2,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { ProductsService } from '@api/modules/products/services/products.service';
+import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { getStockStatus } from '@api/common/utils/stock-status.util';
 
@@ -24,7 +24,7 @@ import {
 export class StoreDiscoveryService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly products: ProductsService,
+    private readonly products: ProductCatalogService,
     @Optional() private readonly cacheService?: CacheService,
   ) {}
 

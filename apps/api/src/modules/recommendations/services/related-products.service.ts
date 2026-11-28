@@ -1,7 +1,7 @@
 /** Products related by co-purchase and category. */
 import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { ProductsService } from '@api/modules/products/services/products.service';
+import { ProductCatalogService } from '@api/modules/products/services/product-catalog.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import {
@@ -14,7 +14,7 @@ import {
 export class RelatedProductsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly products: ProductsService,
+    private readonly products: ProductCatalogService,
     @Optional() private readonly cacheService?: CacheService,
   ) {}
 
