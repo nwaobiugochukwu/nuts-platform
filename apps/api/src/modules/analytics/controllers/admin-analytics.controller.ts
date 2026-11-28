@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -72,17 +72,6 @@ export class AdminAnalyticsController {
     return this.analyticsService.getTopProducts(query);
   }
 
-  @Post('top-products')
-  @HttpCode(200)
-  @Message('Top products retrieved')
-  @ApiOperation({ summary: 'Top N products by revenue (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<TopProductDto[]> })
-  async getTopProductsFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<TopProductDto[] | undefined> {
-    return this.analyticsService.getTopProducts(body);
-  }
-
   @Get('top-vendors')
   @Message('Top vendors retrieved')
   @ApiOperation({
@@ -102,17 +91,6 @@ export class AdminAnalyticsController {
     return this.analyticsService.getTopVendors(query);
   }
 
-  @Post('top-vendors')
-  @HttpCode(200)
-  @Message('Top vendors retrieved')
-  @ApiOperation({ summary: 'Top N vendors by revenue (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<TopVendorDto[]> })
-  async getTopVendorsFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<TopVendorDto[] | undefined> {
-    return this.analyticsService.getTopVendors(body);
-  }
-
   @Get('top-categories')
   @Message('Top categories retrieved')
   @ApiOperation({
@@ -130,17 +108,6 @@ export class AdminAnalyticsController {
     @Query() query: AdminAnalyticsQueryDto,
   ): Promise<TopCategoryDto[] | undefined> {
     return this.analyticsService.getTopCategories(query);
-  }
-
-  @Post('top-categories')
-  @HttpCode(200)
-  @Message('Top categories retrieved')
-  @ApiOperation({ summary: 'Top N categories by revenue (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<TopCategoryDto[]> })
-  async getTopCategoriesFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<TopCategoryDto[] | undefined> {
-    return this.analyticsService.getTopCategories(body);
   }
 
   @Get('payments')
@@ -219,17 +186,6 @@ export class AdminAnalyticsController {
     return this.analyticsService.getUserAnalytics(query);
   }
 
-  @Post('users')
-  @HttpCode(200)
-  @Message('User analytics retrieved')
-  @ApiOperation({ summary: 'User analytics (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<UserAnalyticsDto> })
-  async getUserAnalyticsFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<UserAnalyticsDto | undefined> {
-    return this.analyticsService.getUserAnalytics(body);
-  }
-
   @Get('funnel')
   @Message('Funnel analytics retrieved')
   @ApiOperation({
@@ -248,17 +204,6 @@ export class AdminAnalyticsController {
     @Query() query: AdminAnalyticsQueryDto,
   ): Promise<FunnelAnalyticsDto | undefined> {
     return this.analyticsService.getFunnelAnalytics(query);
-  }
-
-  @Post('funnel')
-  @HttpCode(200)
-  @Message('Funnel analytics retrieved')
-  @ApiOperation({ summary: 'Conversion funnel (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<FunnelAnalyticsDto> })
-  async getFunnelAnalyticsFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<FunnelAnalyticsDto | undefined> {
-    return this.analyticsService.getFunnelAnalytics(body);
   }
 
   @Get('activity')
@@ -280,17 +225,6 @@ export class AdminAnalyticsController {
     return this.analyticsService.getActivityAnalytics(query);
   }
 
-  @Post('activity')
-  @HttpCode(200)
-  @Message('Activity analytics retrieved')
-  @ApiOperation({ summary: 'Admin activity analytics (filters in body)' })
-  @ApiResponse({ status: 200, type: ApiResponseDto<ActivityAnalyticsDto> })
-  async getActivityAnalyticsFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<ActivityAnalyticsDto | undefined> {
-    return this.analyticsService.getActivityAnalytics(body);
-  }
-
   @Get('shopper-engagement')
   @Message('Shopper engagement retrieved')
   @ApiOperation({
@@ -305,24 +239,5 @@ export class AdminAnalyticsController {
     @Query() query: AdminAnalyticsQueryDto,
   ): Promise<ShopperEngagementSummaryDto> {
     return this.analyticsService.getShopperEngagement(query);
-  }
-
-  /**
-   * Body-based variant of the summary endpoint — filters travel in the
-   * request body instead of the query string so they don't appear in URLs.
-   */
-  @Post('summary')
-  @HttpCode(200)
-  @Message('Analytics summary retrieved')
-  @ApiOperation({
-    summary: 'Get admin analytics summary (filters in body)',
-    description:
-      'Same payload as GET /admin/analytics/summary but with the filters in the JSON body.',
-  })
-  @ApiResponse({ status: 200, type: ApiResponseDto<AdminAnalyticsSummaryDto> })
-  async getSummaryFromBody(
-    @Body() body: AdminAnalyticsQueryDto,
-  ): Promise<AdminAnalyticsSummaryDto> {
-    return this.analyticsService.getSummary(body);
   }
 }

@@ -5,7 +5,7 @@ import { ReferralsModule } from '@api/modules/referrals/referrals.module';
 import { UsersModule } from '@api/modules/users/users.module';
 import { WalletsModule } from '@api/modules/wallets/wallets.module';
 import {
-  OrderPaymentCanonicalController,
+  OrderPaymentController,
   PaymentsController,
 } from './controllers/payments.controller';
 import { OrderConfirmationEmailConsumer } from './consumers/order-confirmation-email.consumer';
@@ -24,7 +24,7 @@ import { WebhookInboxService } from './services/webhook-inbox.service';
     forwardRef(() => ReferralsModule),
     MailModule,
   ],
-  controllers: [PaymentsController, OrderPaymentCanonicalController],
+  controllers: [PaymentsController, OrderPaymentController],
   providers: [
     PaymentsService,
     PaymentRefundsService,

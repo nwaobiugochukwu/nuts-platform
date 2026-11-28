@@ -2,12 +2,9 @@
   Body,
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
   Query,
 } from '@nestjs/common';
 import {
@@ -56,18 +53,6 @@ export class AdminOrdersController {
   })
   findAll(@Query() query: QueryOrderDto) {
     return this.ordersService.findAllAdmin(query);
-  }
-
-  @Post('query')
-  @HttpCode(HttpStatus.OK)
-  @Message('Orders retrieved successfully')
-  @ApiOperation({
-    summary: 'List orders (filters in body)',
-    description: 'Same as GET /admin/orders but with filters in the JSON body.',
-  })
-  @ApiResponse({ status: 200, type: ApiResponseDto<AdminOrderResponseDto[]> })
-  query(@Body() body: QueryOrderDto) {
-    return this.ordersService.findAllAdmin(body);
   }
 
   @Get(':id')

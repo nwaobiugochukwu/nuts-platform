@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -43,30 +43,6 @@ export class VendorAnalyticsController {
     @Query() query: VendorAnalyticsQueryDto,
   ): Promise<VendorAnalyticsSummaryDto> {
     return this.analyticsService.getAnalytics(vendorId, query);
-  }
-
-  /**
-   * Body-based variant — filters (range/startDate/endDate/top) travel in the
-   * request body instead of the query string so they don't appear in URLs.
-   */
-  @Post()
-  @HttpCode(200)
-  @ApiBearerAuth('JWT-auth')
-  @Message('Vendor analytics retrieved')
-  @ApiOperation({
-    summary: 'Get vendor store analytics (filters in body)',
-    description:
-      'Same payload as GET /vendors/analytics but with the filters in the JSON body.',
-  })
-  @ApiResponse({
-    status: 200,
-    type: ApiResponseDto<VendorAnalyticsSummaryDto>,
-  })
-  async getAnalyticsFromBody(
-    @GetVendor('id') vendorId: string,
-    @Body() body: VendorAnalyticsQueryDto,
-  ): Promise<VendorAnalyticsSummaryDto> {
-    return this.analyticsService.getAnalytics(vendorId, body);
   }
 
   @Get('products')

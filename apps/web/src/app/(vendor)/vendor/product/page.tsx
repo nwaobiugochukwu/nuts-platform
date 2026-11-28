@@ -283,7 +283,7 @@ export default function DashboardProductPage() {
 
     if (product.hasVariants) {
       try {
-        const res = await vendorApi.get<{ variants: VendorVariantResponseDto[] }>(`/vendors/products/variants?productId=${product.id}`);
+        const res = await vendorApi.get<{ variants: VendorVariantResponseDto[] }>(`/vendors/products/${product.id}/variants`);
         const list = res.data.variants;
         setVariantsList(
           list.map((v) => ({

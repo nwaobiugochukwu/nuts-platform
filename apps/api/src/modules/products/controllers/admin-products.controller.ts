@@ -82,19 +82,6 @@ export class AdminProductsController {
     return this.productsService.findAllForAdmin(query);
   }
 
-  /** Cursor-based query â€” filters travel in the request body. Alias for GET. */
-  @Post('query')
-  @HttpCode(HttpStatus.OK)
-  @Message('Products retrieved successfully')
-  @ApiOperation({
-    summary: 'List products (cursor pagination, filters in body)',
-    description:
-      'Fetches products using cursor pagination. Filters (search, isActive, isDeleted) travel in the request body.',
-  })
-  async query(@Body() body: QueryProductDto) {
-    return this.productsService.findAllForAdmin(body);
-  }
-
   // GET BY ID (ADMIN ONLY)
   @Get(':id')
   @Message('Product retrieved successfully')
