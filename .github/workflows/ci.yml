@@ -220,6 +220,40 @@ jobs:
       - name: Run end-to-end tests
         run: npm run test:e2e
 
+  # -- Builds every Docker image stage we run or deploy ---------------------------
+  # Nothing else builds the images before a deploy, so a missing Dockerfile or a missing
+  # stage ("target stage dev could not be found") only showed up on a developer's machine
+  # or at deploy time. Each stage is built here and thrown away (nothing is pushed).
+  docker-images:
+    name: Docker Image Build (${{ matrix.image }} ${{ matrix.target }})
+    runs-on: ubuntu-latest
+    needs: lockfile-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: api, file: apps/api/Dockerfile, target: dev }
+          - { image: api, file: apps/api/Dockerfile, target: runner }
+          - { image: api, file: apps/api/Dockerfile, target: runner-workflow }
+          - { image: web, file: apps/web/Dockerfile, target: dev }
+          - { image: web, file: apps/web/Dockerfile, target: runner }
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image }} (${{ matrix.target }}), no push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./${{ matrix.file }}
+          target: ${{ matrix.target }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.target }}
+
   # ── 4. Production Build Verification ───────────────────────────
   build-apps:
     name: Build Verification (API & Web)
