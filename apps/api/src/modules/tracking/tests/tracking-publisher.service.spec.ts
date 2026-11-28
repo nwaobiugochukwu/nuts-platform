@@ -1,15 +1,15 @@
-import { ShopperActivityPublisherService } from '../services/shopper-activity-publisher.service';
+import { TrackingPublisherService } from '../services/tracking-publisher.service';
 
-describe('ShopperActivityPublisherService', () => {
+describe('TrackingPublisherService', () => {
   let rabbit: { isAvailable: jest.Mock; publish: jest.Mock };
-  let publisher: ShopperActivityPublisherService;
+  let publisher: TrackingPublisherService;
 
   beforeEach(() => {
     rabbit = {
       isAvailable: jest.fn().mockReturnValue(true),
       publish: jest.fn().mockResolvedValue(true),
     };
-    publisher = new ShopperActivityPublisherService(rabbit as never);
+    publisher = new TrackingPublisherService(rabbit as never);
   });
 
   it('publishes the activity as shopper.<action> in the standard envelope, about the shopper', async () => {
@@ -59,7 +59,7 @@ describe('ShopperActivityPublisherService', () => {
     expect(rabbit.publish).not.toHaveBeenCalled();
 
     await expect(
-      new ShopperActivityPublisherService().record({
+      new TrackingPublisherService().record({
         action: 'store_viewed',
         id: 'x',
         vendorId: 'v',

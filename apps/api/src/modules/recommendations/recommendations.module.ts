@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
-import { ShopperActivityModule } from '@api/modules/shopper-activity/shopper-activity.module';
+import { TrackingModule } from '@api/modules/tracking/tracking.module';
 import { ProductsModule } from '@api/modules/products/products.module';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { RecommendationsController } from './controllers/recommendations.controller';
@@ -13,7 +13,7 @@ import { SearchDiscoveryService } from './services/search-discovery.service';
 import { StoreDiscoveryService } from './services/store-discovery.service';
 
 @Module({
-  imports: [PrismaModule, ProductsModule, CacheModule, ShopperActivityModule],
+  imports: [PrismaModule, ProductsModule, CacheModule, TrackingModule],
   controllers: [RecommendationsController],
   providers: [
     PopularProductsService,

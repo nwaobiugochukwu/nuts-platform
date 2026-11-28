@@ -1,8 +1,5 @@
 import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
-import {
-  SHOPPER_ACTIONS,
-  type ShopperActivity,
-} from '../types/shopper-activity.types';
+import { SHOPPER_ACTIONS, type ShopperActivity } from '../types/tracking.types';
 import {
   SHOPPER_ACTIVITY_EVENTS,
   actionForActivityType,
@@ -18,7 +15,7 @@ import {
   toProductViewRow,
   toSearchRow,
   toShelfRow,
-} from '../utils/shopper-activity.mapper';
+} from '../utils/tracking.mapper';
 
 const at = new Date('2026-11-28T10:00:00.000Z');
 const act = (over: Partial<ShopperActivity>): ShopperActivity => ({

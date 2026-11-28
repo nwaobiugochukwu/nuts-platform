@@ -7,7 +7,7 @@ import {
   type ShopperActivity,
   type ShopperActivityBody,
   type ShopperIdentity,
-} from '../types/shopper-activity.types';
+} from '../types/tracking.types';
 
 /**
  * The rules that apply to shopper activity as a whole: its event names, what each action needs, who
@@ -45,7 +45,7 @@ export function actionForEvent(name: string): ShopperAction | undefined {
 }
 
 /**
- * Every shopper-activity event is about the shopper: a signed-in shopper by their user id, a guest
+ * Every tracking event is about the shopper: a signed-in shopper by their user id, a guest
  * by their visitor, then session. The activity's own id is the last resort so it is never empty.
  */
 export function shopperAggregate(

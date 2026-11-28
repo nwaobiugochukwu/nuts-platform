@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { CacheModule } from '@api/infrastructure/cache/cache.module';
 import { RedisModule } from '@api/infrastructure/cache/redis.module';
 import { PrismaModule } from '@api/infrastructure/database/prisma.module';
-import { ShopperActivityConsumer } from './consumers/shopper-activity.consumer';
+import { TrackingConsumer } from './consumers/tracking.consumer';
 import { ActivityEventsController } from './controllers/activity-events.controller';
 import { StoreViewController } from './controllers/store-view.controller';
 import { ActivityRetentionJob } from './jobs/activity-retention.job';
@@ -10,10 +10,10 @@ import { ProductViewsService } from './services/product-views.service';
 import { RecommendationEventsService } from './services/recommendation-events.service';
 import { RecommendationRefreshService } from './services/recommendation-refresh.service';
 import { SearchTrackingService } from './services/search-tracking.service';
-import { ShopperActivityPublisherService } from './services/shopper-activity-publisher.service';
-import { ShopperActivityRecorderService } from './services/shopper-activity-recorder.service';
-import { ShopperActivityStoreService } from './services/shopper-activity-store.service';
-import { ShopperActivityService } from './services/shopper-activity.service';
+import { TrackingPublisherService } from './services/tracking-publisher.service';
+import { TrackingRecorderService } from './services/tracking-recorder.service';
+import { TrackingStoreService } from './services/tracking-store.service';
+import { TrackingService } from './services/tracking.service';
 
 /**
  * Everything a shopper does that the platform learns from: a product viewed, a search, a store
@@ -28,14 +28,14 @@ import { ShopperActivityService } from './services/shopper-activity.service';
     ProductViewsService,
     SearchTrackingService,
     RecommendationEventsService,
-    ShopperActivityService,
-    ShopperActivityPublisherService,
-    ShopperActivityRecorderService,
-    ShopperActivityStoreService,
+    TrackingService,
+    TrackingPublisherService,
+    TrackingRecorderService,
+    TrackingStoreService,
     RecommendationRefreshService,
-    ShopperActivityConsumer,
+    TrackingConsumer,
     ActivityRetentionJob,
   ],
-  exports: [ShopperActivityService, RecommendationRefreshService],
+  exports: [TrackingService, RecommendationRefreshService],
 })
-export class ShopperActivityModule {}
+export class TrackingModule {}

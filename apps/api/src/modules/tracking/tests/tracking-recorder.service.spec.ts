@@ -1,10 +1,10 @@
-import type { ShopperActivity } from '../types/shopper-activity.types';
-import { ShopperActivityRecorderService } from '../services/shopper-activity-recorder.service';
+import type { ShopperActivity } from '../types/tracking.types';
+import { TrackingRecorderService } from '../services/tracking-recorder.service';
 
-describe('ShopperActivityRecorderService', () => {
+describe('TrackingRecorderService', () => {
   let publisher: { record: jest.Mock };
   let store: { saveMany: jest.Mock };
-  let service: ShopperActivityRecorderService;
+  let service: TrackingRecorderService;
   const act = (id: string): ShopperActivity => ({
     id,
     action: 'store_viewed',
@@ -14,7 +14,7 @@ describe('ShopperActivityRecorderService', () => {
   beforeEach(() => {
     publisher = { record: jest.fn().mockResolvedValue(true) };
     store = { saveMany: jest.fn().mockResolvedValue(undefined) };
-    service = new ShopperActivityRecorderService(publisher, store as never);
+    service = new TrackingRecorderService(publisher, store as never);
   });
 
   it('puts an activity on the queue and stores nothing itself when the broker takes it', async () => {

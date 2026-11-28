@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
-import type { ShopperActivity } from '../types/shopper-activity.types';
-import { ShopperActivityStoreService } from '../services/shopper-activity-store.service';
+import type { ShopperActivity } from '../types/tracking.types';
+import { TrackingStoreService } from '../services/tracking-store.service';
 
 const missingRow = () =>
   new Prisma.PrismaClientKnownRequestError('fk', {
@@ -8,10 +8,10 @@ const missingRow = () =>
     clientVersion: 'test',
   });
 
-describe('ShopperActivityStoreService', () => {
+describe('TrackingStoreService', () => {
   let prisma: any;
   let refresh: { schedule: jest.Mock };
-  let service: ShopperActivityStoreService;
+  let service: TrackingStoreService;
   const at = new Date('2026-11-28T10:00:00.000Z');
 
   const table = () => ({
@@ -34,7 +34,7 @@ describe('ShopperActivityStoreService', () => {
       shopperActivity: table(),
     };
     refresh = { schedule: jest.fn() };
-    service = new ShopperActivityStoreService(prisma, refresh as never);
+    service = new TrackingStoreService(prisma, refresh as never);
     jest
       .spyOn((service as any).logger, 'warn')
       .mockImplementation(() => undefined);

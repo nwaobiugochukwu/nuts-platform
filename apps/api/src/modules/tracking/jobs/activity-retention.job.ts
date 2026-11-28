@@ -14,7 +14,7 @@ export const RETENTION_BATCH_SIZE = 2_000;
 /** At most this many batches per table per run; a bigger backlog is finished by the next run. */
 export const RETENTION_MAX_BATCHES = 100;
 
-/** How long one kind of shopper-activity data is kept, and how to delete a batch of what has expired. */
+/** How long one kind of tracking data is kept, and how to delete a batch of what has expired. */
 export interface RetentionPolicy {
   /** What it is, for the log. */
   name: string;

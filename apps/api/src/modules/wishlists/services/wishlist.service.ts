@@ -6,7 +6,7 @@ import { Optional } from '@nestjs/common';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
-import { ShopperActivityService } from '@api/modules/shopper-activity/services/shopper-activity.service';
+import { TrackingService } from '@api/modules/tracking/services/tracking.service';
 
 import { WishlistResponseDto } from '../dto/wishlist.dto';
 
@@ -58,7 +58,7 @@ export class WishlistService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
-    @Optional() private readonly shopperActivity?: ShopperActivityService,
+    @Optional() private readonly tracking?: TrackingService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ export class WishlistService {
 
       await this.invalidateCache(userId);
 
-      await this.shopperActivity?.wishlistItemAdded({
+      await this.tracking?.wishlistItemAdded({
         vendorId: product.vendorId,
         productId,
         variantId: normalizedVariantId,
@@ -338,7 +338,7 @@ export class WishlistService {
     if (result.count > 0) {
       await this.invalidateCache(userId);
       if (itemForEvent) {
-        await this.shopperActivity?.wishlistItemRemoved({
+        await this.tracking?.wishlistItemRemoved({
           vendorId: itemForEvent.product.vendorId,
           productId,
           variantId: normalizedVariantId,

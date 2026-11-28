@@ -17,7 +17,7 @@ import { VendorAnalyticsService } from './services/vendor-analytics.service';
 /**
  * Reporting for administrators and vendors: revenue, products, users, promotions, the audit trail
  * and how shoppers engage (stores opened, carts, wishlists). It only reads. The shopper activity it
- * reports on is captured and stored by the `shopper-activity` module.
+ * reports on is captured and stored by the `tracking` module.
  */
 @Module({
   imports: [PrismaModule, RedisModule, CacheModule],
