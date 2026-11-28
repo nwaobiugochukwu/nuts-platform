@@ -1,4 +1,4 @@
-﻿// vendor-discount-codes.controller.ts
+// vendor-discount-codes.controller.ts
 
 import {
   Body,
@@ -28,7 +28,7 @@ import {
 import { ROLE } from '@prisma/client';
 import { Roles } from '@api/common/decorators/role.decorator';
 
-import { DiscountCodeService } from '@api/modules/discounts/services/discount-code.service';
+import { DiscountCodeManagementService } from '../services/discount-code-management.service';
 import {
   CreateVendorDiscountCodeDto,
   DiscountCodeResponseDto,
@@ -44,7 +44,7 @@ import { ApiResponseDto } from '@api/common/dto/api-response.dto';
 @Roles(ROLE.VENDOR)
 @ApiBearerAuth('JWT-auth')
 export class VendorDiscountCodesController {
-  constructor(private readonly discountCodeService: DiscountCodeService) {}
+  constructor(private readonly discountCodes: DiscountCodeManagementService) {}
 
   @Post()
   @Message('Discount code created successfully')
@@ -70,7 +70,7 @@ export class VendorDiscountCodesController {
     @GetVendor('id') vendorId: string,
     @Body() dto: CreateVendorDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
-    return this.discountCodeService.createForVendor(vendorId, dto);
+    return this.discountCodes.createForVendor(vendorId, dto);
   }
 
   @Get()
@@ -90,7 +90,7 @@ export class VendorDiscountCodesController {
     @GetVendor('id') vendorId: string,
     @Query() query: ListDiscountCodesQueryDto,
   ): Promise<DiscountCodeResponseDto[]> {
-    return this.discountCodeService.findAllForVendor(
+    return this.discountCodes.findAllForVendor(
       vendorId,
       query.limit,
       query.offset,
@@ -127,7 +127,7 @@ export class VendorDiscountCodesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateVendorDiscountCodeDto,
   ): Promise<DiscountCodeResponseDto> {
-    return this.discountCodeService.updateForVendor(id, vendorId, dto);
+    return this.discountCodes.updateForVendor(id, vendorId, dto);
   }
 
   @Patch(':id/deactivate')
@@ -153,7 +153,7 @@ export class VendorDiscountCodesController {
     @GetVendor('id') vendorId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<null> {
-    await this.discountCodeService.deactivate(id, vendorId, false);
+    await this.discountCodes.deactivate(id, vendorId, false);
 
     return null;
   }
@@ -181,7 +181,7 @@ export class VendorDiscountCodesController {
     @GetVendor('id') vendorId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<null> {
-    await this.discountCodeService.reactivate(id, vendorId, false);
+    await this.discountCodes.reactivate(id, vendorId, false);
 
     return null;
   }
@@ -213,7 +213,7 @@ export class VendorDiscountCodesController {
     @GetVendor('id') vendorId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<null> {
-    await this.discountCodeService.remove(id, vendorId, false);
+    await this.discountCodes.remove(id, vendorId, false);
 
     return null;
   }

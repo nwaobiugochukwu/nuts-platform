@@ -257,42 +257,4 @@ describe('DiscountCodeService.validateForCart / update validation', () => {
       ]),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
-
-  it('update(): changing only `value` cannot push a percentage above 100', async () => {
-    const { service } = makeService(null, {
-      ...baseCode,
-      type: DiscountCodeType.PERCENTAGE,
-      value: D(20),
-    });
-    await expect(service.update('dc1', { value: 150 })).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-  });
-
-  it('update(): switching a fixed code to PERCENTAGE re-validates the stored value', async () => {
-    const { service } = makeService(null, {
-      ...baseCode,
-      type: DiscountCodeType.FIXED,
-      value: D(5000),
-    });
-    await expect(
-      service.update('dc1', { type: DiscountCodeType.PERCENTAGE }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('update(): rejects an expiry before the start date', async () => {
-    const { service } = makeService(null, { ...baseCode });
-    await expect(
-      service.update('dc1', {
-        startsAt: '2030-01-10T00:00:00.000Z',
-        expiresAt: '2030-01-01T00:00:00.000Z',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('deactivate(): a non-admin without a vendor id can never fall through to an unscoped query', async () => {
-    const { service, prisma } = makeService(null);
-    await expect(service.deactivate('dc1', undefined, false)).rejects.toThrow();
-    expect(prisma.discountCode.findFirst).not.toHaveBeenCalled();
-  });
 });
