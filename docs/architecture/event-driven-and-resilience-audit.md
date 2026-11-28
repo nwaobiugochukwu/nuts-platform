@@ -62,7 +62,7 @@ Already event-driven and fine: product views (Redis buffer, then the analytics q
 | L5 | Plural and singular folder names mix: `cart`, `upload`, `search`, `health` against `wishlists`, `reviews`, `referrals`, `wallets` | One convention | Small |
 | L6 | Type folders overlap: `src/types`, `common/types`, `common/interfaces` | One place for shared types | Small |
 | L7 | Very large files: `products.service.ts` 3,721 lines, `orders.service.ts` 2,978, `discount-code.service.ts` 2,377, `payments.service.ts` 2,350, `search.service.ts` 1,883 | Split by use case so each file has one reason to change | Large; best done together with the money-code work |
-| L8 | Entry points (`main.ts`, `worker.ts`, `temporal-worker.ts`, `instrument.ts`, `load-env.ts`) sit beside `app.module.ts` | A `bootstrap/` folder, or a documented convention | Small |
+| L8 | Entry points (`main.ts`, `worker.ts`, `temporal-worker.ts`, `instrument.ts`, `load-env.ts`) sat beside `app.module.ts` (done: only `main.ts` and the app module are at the root now; the others are in `bootstrap/`) | A `bootstrap/` folder, or a documented convention | Small |
 | L9 | `modules/admin` is three unrelated domains grouped by audience (announcements, platform configuration, staff accounts), while other modules group by domain; `modules/security` holds token and account-lock services that belong to authentication | Group by domain, then by audience inside the domain | Medium |
 | L10 | Duplicate modules: `auth/auth-cookies.module.ts` and `auth/cookies/auth-cookie.module.ts`; `google-auth.service.ts`, `auth.selects.ts` and `admin-auth.service.ts` sit at the module root while other auth code is in folders | One module per concern, one folder per kind of file | Small |
 | L11 | File-kind suffixes are inconsistent: `type` (5) and `types` (2); `response` (5) next to `dto` (133); 32 files carry no kind suffix at all; `selects`, `util`, `config`, `storage` appear once or twice each | A fixed set of kinds (see the naming rules below) | Small |
@@ -95,7 +95,7 @@ What passed: type-checks (api and web), lint (one warning, below), 80 API test s
 | H16 | The abandoned-cart job ignores a failed publish: it flags the cart as reminded and remembers it for 72 hours, so the reminder is lost for good | `abandoned-cart.cron.ts`, pinned by a test marked failing | Medium |
 | H17 | The weekly vendor summary reports revenue as unit price times quantity for every order that is not cancelled (pending and refunded included) and uses floating-point numbers for money | `vendor-summary.cron.ts` | Medium; confirm the intended definition against the analytics docs |
 | H18 | Wishlist price and restock alerts scan every saved item every 15 minutes (batches of 300), work that grows with the wishlist table instead of with price changes | `wishlist-alerts.cron.ts` | Medium; becomes `product.price_changed` and `product.restocked` consumers (catalog, section 5) |
-| H19 | The end-to-end suite that boots the whole application was never run in CI and had drifted (missing models in its simulated database, a renamed route, an assertion for an event the code does not publish). Regenerating the lockfile also moved `class-validator` where Nest cannot load it, so the API would not have started; only this suite catches that | `apps/api/test`, a crash-looping dev container | Fixed: suite repaired, class-validator placement fixed, a Backend End-to-End Tests job added to CI |
+| H19 | The end-to-end suite that boots the whole application was never run in CI and had drifted (missing models in its simulated database, a renamed route, an assertion for an event the code does not publish). Regenerating the lockfile also moved `class-validator` where Nest cannot load it, so the API would not have started; only this suite catches that | the end-to-end suite (now `apps/api/src/app.e2e-spec.ts`), a crash-looping dev container | Fixed: suite repaired, class-validator placement fixed, a Backend End-to-End Tests job added to CI |
 | H20 | Platform switches (maintenance mode, whether registrations are open) are stored only in the cache, with a 24-hour expiry (`platform.service.ts`). After 24 hours or a Redis flush they silently reset to the defaults (maintenance off, registrations on), and the value is also lost on a Redis outage | `PlatformService.getPlatformConfig` and `updatePlatformConfig` write only `cache.set(..., 86400)` | High; persist in the database (a settings row), keep the cache as a read-through copy |
 
 ### Test coverage baseline (2026-11-27, after phase 2)
@@ -205,9 +205,9 @@ This is the target. It follows the common NestJS and domain-module convention: *
 
 ```
 apps/api/src/
-  main.ts  worker.ts  temporal-worker.ts     entry points (their output names are used by PM2 and Docker, so they stay)
-  app.module.ts
-  bootstrap/                                 start-up concerns that compose the app and may use any layer: instrument.ts, load-env.ts, swagger setup, process-error handlers, cache warm-up
+  main.ts  app.module.ts                     the API's entry point and root module; app.e2e-spec.ts and jest-e2e.json (the end-to-end suite) sit beside them
+  e2e-env.setup.ts                           settings the end-to-end suite needs on a machine with no environment file
+  bootstrap/                                 start-up concerns that compose the app and may use any layer: the worker and temporal-worker entry points (built to `dist/bootstrap/`, which PM2 and Docker run), instrument.ts, load-env.ts, swagger setup, process-error handlers, cache warm-up
   config/                                    env validation, process roles, ports
   common/                                    generic, knows nothing about the business
     decorators/ filters/ guards/ interceptors/ middleware/ pipes/ errors/ utils/ constants/ types/ dto/

@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import './bootstrap/instrument';
+import './instrument';
 
 import { NestFactory } from '@nestjs/core';
 import { createServer } from 'node:http';
@@ -10,14 +10,14 @@ import {
   Worker,
   bundleWorkflowCode,
 } from '@temporalio/worker';
-import { portFor } from './config/process-role.config';
-import { buildActivities } from './infrastructure/workflows/activities';
-import { SampleActivities } from './infrastructure/workflows/activities/sample.activities';
+import { portFor } from '../config/process-role.config';
+import { buildActivities } from '../infrastructure/workflows/activities';
+import { SampleActivities } from '../infrastructure/workflows/activities/sample.activities';
 import {
   queuesToPoll,
   readTemporalConfig,
-} from './infrastructure/workflows/temporal.config';
-import { TemporalWorkerModule } from './infrastructure/workflows/temporal-worker.module';
+} from '../infrastructure/workflows/temporal.config';
+import { TemporalWorkerModule } from '../infrastructure/workflows/temporal-worker.module';
 
 /**
  * Entry point for the `temporal-worker` role: runs Temporal workflows and

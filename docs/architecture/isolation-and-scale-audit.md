@@ -9,9 +9,9 @@ The architecture stays a modular monolith. One image runs as separate roles, and
 | Role | Entry point | Starts | Health | Metrics | May have replicas? |
 |---|---|---|---|---|---|
 | api | `main.ts` | HTTP, SSE | `:3001/api/v1/health` (liveness), `/health/ready` (database and Redis) | 9464 | Yes |
-| worker | `worker.ts` | RabbitMQ consumers, outbox relay | `:3002/health` (heartbeat plus broker state) | 9465 | Yes, with the caveats in section 3 |
-| jobs | `worker.ts` | every scheduled job | `:3003/health` | 9466 | **No**, exactly one |
-| temporal-worker | `temporal-worker.ts` | Temporal workflows and activities | `:3004/health` | 9467 | Yes (Temporal supports it), dev only today |
+| worker | `bootstrap/worker.ts` | RabbitMQ consumers, outbox relay | `:3002/health` (heartbeat plus broker state) | 9465 | Yes, with the caveats in section 3 |
+| jobs | `bootstrap/worker.ts` | every scheduled job | `:3003/health` | 9466 | **No**, exactly one |
+| temporal-worker | `bootstrap/temporal-worker.ts` | Temporal workflows and activities | `:3004/health` | 9467 | Yes (Temporal supports it), dev only today |
 | all | `main.ts` | everything in one process | api health | 9464 | No (it includes crons) |
 
 - Supervision: PM2 inside each container (`ecosystem.config.cjs`) with crash-loop protection (`min_uptime 20s`, `max_restarts 10`, exponential backoff), a graceful memory restart (`PM2_MAX_MEMORY` 600M) and `wait_ready`. Docker then restarts the container if PM2 gives up.

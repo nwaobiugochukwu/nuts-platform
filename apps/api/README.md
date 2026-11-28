@@ -7,7 +7,7 @@ The API is a NestJS modular monolith exposed under `/api/v1`. Its domain modules
 - [`src/modules`](src/modules) — domain controllers, services, DTOs, and jobs. The [backend module map](../../docs/reference/backend-module-map.md) provides code navigation; domain behavior is documented in the [domain guides](../../docs/domains/README.md).
 - [`src/common`](src/common) — shared DTOs, decorators, guards, filters, pipes, pagination, and utilities.
 - [`src/infrastructure`](src/infrastructure) — Prisma, Redis/cache, RabbitMQ, outbox, configuration, logging, mail, media, and resilience.
-- [`test`](test) — HTTP/E2E-style API tests; the current suites mock database and infrastructure dependencies.
+- [`src/app.e2e-spec.ts`](src/app.e2e-spec.ts) and [`src/modules/payments/tests/payment-flow.e2e-spec.ts`](src/modules/payments/tests/payment-flow.e2e-spec.ts) — HTTP end-to-end suites (`npm run test:e2e`, configured by [`src/jest-e2e.json`](src/jest-e2e.json)); they boot the whole application with the database and infrastructure replaced by stand-ins. Unit tests live in each module's `tests/` folder, mirroring the folders of what they test.
 - [`packages/database`](../../packages/database) — Prisma schema and ordered migrations.
 
 Layers depend one way: `modules → common → infrastructure`, and a module never imports another module's `controllers/` or `jobs/`. `npm run check:architecture` enforces this in CI; see [Code organization and dependency rules](../../docs/architecture/code-organization.md).

@@ -109,7 +109,7 @@ COPY --from=builder-glibc --chown=node:node /app/apps/api/tsconfig.runtime.json 
 COPY --from=builder-glibc --chown=node:node /app/apps/api/dist ./apps/api/dist
 COPY --from=builder-glibc --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 COPY --chown=node:node apps/api/ecosystem.config.cjs ./apps/api/ecosystem.config.cjs
-RUN test -s /app/apps/api/dist/temporal-worker.js \
+RUN test -s /app/apps/api/dist/bootstrap/temporal-worker.js \
   && test -s /app/apps/api/ecosystem.config.cjs
 
 USER node
@@ -150,7 +150,7 @@ COPY --from=builder --chown=node:node /app/apps/api/package.json ./apps/api/pack
 COPY --chown=node:node apps/api/ecosystem.config.cjs ./apps/api/ecosystem.config.cjs
 # Fail the image build if the entrypoint or an API runtime dependency is missing.
 RUN test -s /app/apps/api/dist/main.js \
-  && test -s /app/apps/api/dist/worker.js \
+  && test -s /app/apps/api/dist/bootstrap/worker.js \
   && test -s /app/apps/api/dist/app.module.js \
   && test -s /app/apps/api/ecosystem.config.cjs \
   && cd /app/apps/api \

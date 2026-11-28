@@ -7,15 +7,15 @@ import { App } from 'supertest/types';
 import { createHmac } from 'crypto';
 import jwt from 'jsonwebtoken';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
-import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/infrastructure/database/prisma.service';
-import { REDIS_CLIENT } from '../src/infrastructure/cache/redis.constants';
-import { RedlockService } from '../src/infrastructure/cache/redlock.service';
-import { OtpService } from '../src/modules/auth/services/otp.service';
-import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
-import { PaymentsService } from '../src/modules/payments/services/payments.service';
-import { PaystackClientService } from '../src/modules/payments/services/paystack-client.service';
-import { RabbitMQService } from '../src/infrastructure/messaging/rabbitmq/rabbitmq.service';
+import { AppModule } from '@api/app.module';
+import { PrismaService } from '@api/infrastructure/database/prisma.service';
+import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
+import { RedlockService } from '@api/infrastructure/cache/redlock.service';
+import { OtpService } from '@api/modules/auth/services/otp.service';
+import { ResponseInterceptor } from '@api/common/interceptors/response.interceptor';
+import { PaymentsService } from '@api/modules/payments/services/payments.service';
+import { PaystackClientService } from '@api/modules/payments/services/paystack-client.service';
+import { RabbitMQService } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.service';
 
 describe('Payment Flow End-to-End (e2e)', () => {
   let app: INestApplication<App>;
