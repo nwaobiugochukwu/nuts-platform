@@ -74,7 +74,6 @@ const API_RAW_TRANSACTION_LEGACY = new Set([
   "apps/api/src/modules/discounts/services/voucher-claims.service.ts",
   "apps/api/src/modules/notifications/services/order-event-notifications.service.ts",
   "apps/api/src/modules/orders/services/orders.service.ts",
-  "apps/api/src/modules/payments/services/payments.service.ts",
   "apps/api/src/modules/products/services/product-variants.service.ts",
   "apps/api/src/modules/products/services/products.service.ts",
   "apps/api/src/modules/recommendations/services/personalized-feed.service.ts",

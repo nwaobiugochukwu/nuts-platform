@@ -10,24 +10,18 @@ import {
 
 import { ConfigService } from '@nestjs/config';
 
-import {
-  NotificationPriority,
-  NotificationType,
-  OrderStatus,
-  PaymentStatus,
-  Prisma,
-  ROLE,
-} from '@prisma/client';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 
 import { randomUUID } from 'crypto';
 
-import { CART_CACHE_PREFIX } from '@api/modules/cart/services/cart.service';
+import {} from '@api/modules/cart/services/cart.service';
 import { CacheService } from '@api/infrastructure/cache/cache.service';
 import { EmailService } from '@api/infrastructure/mail/email.service';
 import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import type Redis from 'ioredis';
 import { REDIS_CLIENT } from '@api/infrastructure/cache/redis.constants';
 import { PaystackClientService } from './paystack-client.service';
+import { PaymentConfirmationService } from './payment-confirmation.service';
 import { PaymentRefundsService } from './payment-refunds.service';
 import { WebhookInboxService } from './webhook-inbox.service';
 import { toPaystackAmount } from '../utils/payment-money.util';
@@ -35,23 +29,16 @@ import { toPaymentResponse } from '../utils/payment-response.util';
 import { OutboxService } from '@api/infrastructure/messaging/outbox/outbox.service';
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
-import { RABBITMQ_ROUTING_KEYS } from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
+import {} from '@api/infrastructure/messaging/rabbitmq/rabbitmq.constants';
 
-import { generateStatusNote } from '@api/modules/orders/constants/order-status.constants';
+import {} from '@api/modules/orders/constants/order-status.constants';
 
-import { DomainEvents } from '@api/infrastructure/messaging/events/domain-events.constants';
+import {} from '@api/infrastructure/messaging/events/domain-events.constants';
 
-import type {
-  OrderProcessingPayload,
-  PaymentConfirmedPayload,
-  PaymentFailedPayload,
-} from '@api/infrastructure/messaging/events/event-payloads.types';
+import type {} from '@api/infrastructure/messaging/events/event-payloads.types';
 
-import { VENDOR_COMMISSION_RATE } from '@api/common/constants/commission.constants';
-import {
-  computeVendorEarnings,
-  loadVendorFundedDiscounts,
-} from '@api/modules/discounts/utils/discount-funding.util';
+import {} from '@api/common/constants/commission.constants';
+import {} from '@api/modules/discounts/utils/discount-funding.util';
 
 import {
   PAYSTACK_SUCCESS_STATUS,
@@ -84,21 +71,10 @@ export class PaymentsService {
     private readonly outbox: OutboxService,
     private readonly webhookInbox: WebhookInboxService,
     private readonly refunds: PaymentRefundsService,
+    private readonly confirmation: PaymentConfirmationService,
     @Optional() private readonly cacheService?: CacheService,
     @Optional() @Inject(REDIS_CLIENT) private readonly redis?: Redis,
   ) {}
-
-  private async invalidateCartCache(userId: string): Promise<void> {
-    if (this.cacheService) {
-      try {
-        await this.cacheService.del(`${CART_CACHE_PREFIX}${userId}`);
-      } catch (error) {
-        this.logger.warn(
-          `Failed to invalidate cart cache for user ${userId}: ${(error as Error).message}`,
-        );
-      }
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // INITIALIZE PAYMENT
@@ -374,7 +350,12 @@ export class PaymentsService {
     });
     const finalReference = stored?.transactionReference ?? reference;
 
-    await this.confirmPayment(finalReference, undefined, payment.orderId, true);
+    await this.confirmation.confirm(
+      finalReference,
+      undefined,
+      payment.orderId,
+      true,
+    );
 
     const callback = this.resolveCallbackUrl();
     const separator = callback?.includes('?') ? '&' : '?';
@@ -400,7 +381,7 @@ export class PaymentsService {
       throw new BadRequestException('Payment reference is required.');
     }
 
-    const payment = await this.confirmPayment(normalized);
+    const payment = await this.confirmation.confirm(normalized);
 
     if (!payment) {
       throw new NotFoundException('Payment not found or verification failed.');
@@ -489,13 +470,17 @@ export class PaymentsService {
       event.event === 'charge.success' ||
       event.data?.status === PAYSTACK_SUCCESS_STATUS
     ) {
-      await this.confirmPayment(reference, event.data, orderIdFromMetadata);
+      await this.confirmation.confirm(
+        reference,
+        event.data,
+        orderIdFromMetadata,
+      );
 
       return;
     }
 
     if (event.event === 'charge.failed') {
-      await this.markPaymentFailed(reference);
+      await this.confirmation.markFailed(reference);
     }
   }
 
@@ -541,530 +526,6 @@ export class PaymentsService {
   // PAYMENT CONFIRMATION
   // ---------------------------------------------------------------------------
 
-  private async confirmPayment(
-    reference: string,
-    webhookData?: PaystackWebhookEvent['data'],
-    orderIdFallback?: string,
-    zeroTotal = false,
-  ): Promise<PaymentResponseDto | null> {
-    /**
-     * transactionReference is @unique in Prisma.
-     * If not found by reference directly, fallback to orderId if available.
-     */
-    let payment = await this.prisma.payment.findUnique({
-      where: {
-        transactionReference: reference,
-      },
-    });
-
-    if (!payment && orderIdFallback) {
-      payment = await this.prisma.payment.findFirst({
-        where: {
-          orderId: orderIdFallback,
-        },
-      });
-    }
-
-    if (!payment) {
-      return null;
-    }
-
-    if (payment.status === PaymentStatus.SUCCESS) {
-      return toPaymentResponse(payment);
-    }
-
-    if (payment.status === PaymentStatus.REFUNDED) {
-      return toPaymentResponse(payment);
-    }
-
-    if (payment.status === PaymentStatus.REFUND_PENDING) {
-      return toPaymentResponse(payment);
-    }
-
-    /**
-     * Never trust unverified payload amounts directly.
-     * Ask Paystack to verify the transaction.
-     * If the verification API times out or is unreachable, but we have a cryptographically
-     * verified webhook payload proving charge.success, use that authoritative webhook proof.
-     */
-    // A zero-total order has no provider transaction to verify. This branch
-    // is gated on the stored amount being zero, never on caller input alone.
-    let verified =
-      zeroTotal && new Prisma.Decimal(payment.amount).isZero()
-        ? ({
-            status: true,
-            message: 'No charge required (zero-total order)',
-            data: {
-              status: PAYSTACK_SUCCESS_STATUS,
-              reference,
-              amount: 0,
-              currency: payment.currency,
-              paid_at: new Date().toISOString(),
-            },
-          } as Awaited<ReturnType<PaystackClientService['verifyTransaction']>>)
-        : await this.paystack.verifyTransaction(reference);
-
-    if (
-      (!verified?.status ||
-        !verified.data ||
-        verified.data.status !== PAYSTACK_SUCCESS_STATUS) &&
-      webhookData &&
-      (webhookData.status === PAYSTACK_SUCCESS_STATUS ||
-        webhookData.status === 'success')
-    ) {
-      this.logger.log(
-        `Paystack verification API returned non-success or timed out; utilizing cryptographically signed webhook data for reference ${reference}.`,
-      );
-      verified = {
-        status: true,
-        message: 'Verified via cryptographically signed webhook payload',
-        data: {
-          id: typeof webhookData.id === 'number' ? webhookData.id : undefined,
-          status: PAYSTACK_SUCCESS_STATUS,
-          reference: webhookData.reference ?? reference,
-          amount: Number(webhookData.amount),
-          currency: webhookData.currency ?? payment.currency,
-          paid_at: webhookData.paid_at ?? new Date().toISOString(),
-        },
-      };
-    }
-
-    if (
-      !verified?.status ||
-      !verified.data ||
-      verified.data.status !== PAYSTACK_SUCCESS_STATUS
-    ) {
-      if (verified?.data?.status === 'failed') {
-        await this.prisma.payment.updateMany({
-          where: {
-            id: payment.id,
-            status: PaymentStatus.PENDING,
-          },
-          data: {
-            status: PaymentStatus.FAILED,
-          },
-        });
-      }
-
-      return null;
-    }
-
-    const expectedAmount = toPaystackAmount(payment.amount);
-
-    const receivedCurrency = verified.data.currency?.toUpperCase();
-
-    const expectedCurrency = payment.currency.toUpperCase();
-
-    if (
-      verified.data.amount !== expectedAmount ||
-      (receivedCurrency && receivedCurrency !== expectedCurrency)
-    ) {
-      this.logger.error(
-        `Paystack verification mismatch for ${reference}. Expected ${expectedAmount} ${expectedCurrency}; received ${verified.data.amount} ${receivedCurrency}`,
-      );
-
-      await this.prisma.payment.updateMany({
-        where: {
-          id: payment.id,
-          status: PaymentStatus.PENDING,
-        },
-        data: {
-          status: PaymentStatus.FAILED,
-        },
-      });
-
-      return null;
-    }
-
-    let orderMovedToProcessing = false;
-
-    /**
-     * The payment state transition is the concurrency gate.
-     *
-     * If two webhooks arrive at the same time:
-     *
-     * Request A: PENDING -> SUCCESS = count 1
-     * Request B: PENDING -> SUCCESS = count 0
-     *
-     * Only Request A is allowed to credit wallets / consume the cart.
-     */
-    const updated = await this.prisma.$transaction(
-      async (tx) => {
-        const claimed = await tx.payment.updateMany({
-          where: {
-            id: payment.id,
-            status: PaymentStatus.PENDING,
-          },
-          data: {
-            status: PaymentStatus.SUCCESS,
-
-            transactionId: String(verified.data.id ?? reference),
-
-            paymentMethod: 'paystack',
-          },
-        });
-
-        if (claimed.count === 0) {
-          /**
-           * Another webhook/callback already processed this payment.
-           */
-          const currentPayment = await tx.payment.findUniqueOrThrow({
-            where: {
-              id: payment.id,
-            },
-          });
-
-          if (
-            currentPayment.status !== PaymentStatus.SUCCESS &&
-            currentPayment.status !== PaymentStatus.REFUNDED
-          ) {
-            const currentOrder = await tx.order.findUnique({
-              where: { id: payment.orderId },
-              select: { status: true },
-            });
-            await tx.auditLog.create({
-              data: {
-                action: 'PAYMENT_CAPTURED_AFTER_PAYMENT_TERMINAL',
-                entity: 'PAYMENT',
-                entityId: payment.id,
-                userId: payment.userId,
-                payload: {
-                  orderId: payment.orderId,
-                  paymentStatus: currentPayment.status,
-                  orderStatus: currentOrder?.status ?? null,
-                  amount: Number(payment.amount),
-                  currency: payment.currency,
-                  reference,
-                  settlementRequiresReview: true,
-                },
-              },
-            });
-          }
-
-          return currentPayment;
-        }
-
-        /**
-         * Payment succeeded.
-         *
-         * Move order from PENDING -> PROCESSING atomically.
-         */
-        const orderUpdated = await tx.order.updateMany({
-          where: {
-            id: payment.orderId,
-            status: OrderStatus.PENDING,
-          },
-          data: {
-            status: OrderStatus.PROCESSING,
-          },
-        });
-
-        if (orderUpdated.count === 1) {
-          orderMovedToProcessing = true;
-
-          await tx.orderStatusHistory.create({
-            data: {
-              orderId: payment.orderId,
-
-              fromStatus: OrderStatus.PENDING,
-
-              toStatus: OrderStatus.PROCESSING,
-
-              note: generateStatusNote({
-                fromStatus: OrderStatus.PENDING,
-
-                toStatus: OrderStatus.PROCESSING,
-              }),
-            },
-          });
-
-          /**
-           * The cart was already marked checkedOut during order creation.
-           *
-           * We therefore do NOT delete cart items here.
-           *
-           * This keeps payment confirmation idempotent and avoids destroying
-           * data unnecessarily.
-           */
-        }
-
-        /**
-         * Vendor earnings are credited exactly once because only the
-         * transaction that successfully changed payment PENDING -> SUCCESS
-         * reaches this point.
-         */
-        const order = await tx.order.findUnique({
-          where: {
-            id: payment.orderId,
-          },
-          select: {
-            orderNumber: true,
-            status: true,
-            orderItems: {
-              select: {
-                productId: true,
-                vendorId: true,
-                quantity: true,
-                unitPrice: true,
-                recommendationContext: true,
-              },
-            },
-          },
-        });
-
-        if (order && orderMovedToProcessing) {
-          const attributedPurchases = order.orderItems.flatMap((item) => {
-            const value = item.recommendationContext;
-            if (!value || typeof value !== 'object' || Array.isArray(value)) {
-              return [];
-            }
-            const context = value as Record<string, unknown>;
-            if (
-              typeof context.requestId !== 'string' ||
-              typeof context.surface !== 'string' ||
-              typeof context.rankerVersion !== 'string' ||
-              typeof context.position !== 'number' ||
-              typeof context.sessionId !== 'string'
-            ) {
-              return [];
-            }
-            return [
-              {
-                eventType: 'PURCHASE',
-                surface: context.surface,
-                requestId: context.requestId,
-                rankerVersion: context.rankerVersion,
-                position: context.position,
-                productId: item.productId,
-                vendorId: item.vendorId,
-                userId: payment.userId,
-                sessionId: context.sessionId,
-              },
-            ];
-          });
-          if (attributedPurchases.length > 0) {
-            await tx.recommendationEvent.createMany({
-              data: attributedPurchases,
-            });
-          }
-
-          const earnings = this.calculateVendorEarnings(
-            order.orderItems,
-            await loadVendorFundedDiscounts(tx, payment.orderId),
-          );
-
-          for (const [vendorId, earning] of earnings) {
-            // A vendor-funded discount can reduce earnings to zero.
-            if (earning.lessThanOrEqualTo(0)) continue;
-            await this.walletService.creditVendorPending(
-              vendorId,
-              earning,
-              payment.orderId,
-              tx,
-            );
-          }
-        }
-
-        if (orderMovedToProcessing) {
-          // Facts for the notification and email consumers, committed or rolled back with this change.
-          await this.publishOrderProcessingEvent(tx, payment.orderId);
-          await this.publishPaymentConfirmedEvent(tx, payment.id);
-
-          const amount = Number(payment.amount);
-          const orderNumber = order?.orderNumber ?? payment.orderId;
-          const customerNotification = {
-            userId: payment.userId,
-            role: ROLE.USER,
-            type: NotificationType.PAYMENT_RECEIVED,
-            title: 'Payment Successful',
-            message: `Payment of ${payment.currency.toUpperCase()} ${amount} confirmed for order #${orderNumber}.`,
-            priority: NotificationPriority.HIGH,
-            link: `/order/${payment.orderId}`,
-            metadata: { paymentId: payment.id, orderId: payment.orderId },
-            dedupeKey: `PAYMENT_RECEIVED:${payment.id}:USER:${payment.userId}`,
-          };
-          await this.outbox.appendEvent(
-            tx,
-            'payment',
-            payment.id,
-            RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-            customerNotification,
-          );
-          await this.outbox.appendEvent(
-            tx,
-            'order',
-            payment.orderId,
-            RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-            {
-              userId: payment.userId,
-              role: ROLE.USER,
-              type: NotificationType.ORDER_CONFIRMED,
-              title: 'Order Confirmed',
-              message: `Your order #${orderNumber} is now processing.`,
-              priority: NotificationPriority.HIGH,
-              link: `/order/${payment.orderId}`,
-              metadata: { orderId: payment.orderId },
-              dedupeKey: `ORDER_CONFIRMED:${payment.orderId}:USER:${payment.userId}`,
-            },
-          );
-
-          for (const vendorId of new Set(
-            order?.orderItems.map((item) => item.vendorId) ?? [],
-          )) {
-            await this.outbox.appendEvent(
-              tx,
-              'order',
-              payment.orderId,
-              RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-              {
-                userId: vendorId,
-                role: ROLE.VENDOR,
-                type: NotificationType.ORDER_CONFIRMED,
-                title: 'New Order Received',
-                message: `You have received a new sale for order #${orderNumber}.`,
-                priority: NotificationPriority.HIGH,
-                link: `/vendor/order/${payment.orderId}`,
-                metadata: { orderId: payment.orderId, orderNumber },
-                dedupeKey: `ORDER_CONFIRMED:${payment.orderId}:VENDOR:${vendorId}`,
-              },
-            );
-          }
-
-          const admins = await tx.admin.findMany({
-            where: { isActive: true },
-            select: { id: true },
-          });
-          for (const admin of admins) {
-            await this.outbox.appendEvent(
-              tx,
-              'payment',
-              payment.id,
-              RABBITMQ_ROUTING_KEYS.NOTIFICATION_DISPATCH,
-              {
-                userId: admin.id,
-                role: ROLE.ADMIN,
-                type: NotificationType.PAYMENT_RECEIVED,
-                title: 'Payment Confirmed',
-                message: `Payment of ${payment.currency.toUpperCase()} ${amount} confirmed for order #${orderNumber}.`,
-                priority: NotificationPriority.MEDIUM,
-                link: `/admin/order/${payment.orderId}`,
-                metadata: {
-                  paymentId: payment.id,
-                  orderId: payment.orderId,
-                  orderNumber,
-                },
-                dedupeKey: `PAYMENT_RECEIVED:${payment.id}:ADMIN:${admin.id}`,
-              },
-            );
-          }
-        }
-
-        await tx.auditLog.create({
-          data: {
-            action: orderMovedToProcessing
-              ? 'PAYMENT_CONFIRMED'
-              : 'PAYMENT_CAPTURED_ORDER_NOT_PENDING',
-            entity: 'PAYMENT',
-            entityId: payment.id,
-            userId: payment.userId,
-            payload: {
-              orderId: payment.orderId,
-              orderStatus: order?.status ?? null,
-              settlementRequiresReview: !orderMovedToProcessing,
-              amount: Number(payment.amount),
-              currency: payment.currency,
-              reference,
-            },
-          },
-        });
-        return tx.payment.findUniqueOrThrow({
-          where: {
-            id: payment.id,
-          },
-        });
-      },
-      {
-        timeout: 15_000,
-      },
-    );
-
-    /**
-     * Email and events are outside the transaction.
-     * When payment succeeds and the order moves to PROCESSING,
-     * send the official Order Confirmation email with invoice attached.
-     */
-    if (orderMovedToProcessing) {
-      void this.invalidateCartCache(payment.userId);
-
-      // The order.processing and payment.confirmed events were written to the outbox in the
-      // transaction above; wake the relay now that it has committed.
-      this.outbox.wakeRelay();
-    } else {
-      this.logger.error(
-        `Payment ${updated.id} was captured but order ${payment.orderId} did not move from PENDING to PROCESSING. Vendor earnings were not credited; reconciliation is required.`,
-      );
-    }
-
-    return toPaymentResponse(updated);
-  }
-
-  // ---------------------------------------------------------------------------
-  // PAYMENT FAILED
-  // ---------------------------------------------------------------------------
-
-  private async markPaymentFailed(
-    reference: string,
-    reason?: string,
-  ): Promise<void> {
-    const payment = await this.prisma.payment.findFirst({
-      where: {
-        transactionReference: reference,
-        status: PaymentStatus.PENDING,
-      },
-      include: {
-        user: { select: { email: true, firstName: true } },
-        order: { select: { orderNumber: true } },
-      },
-    });
-
-    if (!payment) return;
-
-    // The status change and the payment.failed event commit together: only the delivery that
-    // actually moved the payment from PENDING to FAILED publishes the event.
-    await this.prisma.$transaction(async (tx) => {
-      const moved = await tx.payment.updateMany({
-        where: {
-          id: payment.id,
-          status: PaymentStatus.PENDING,
-        },
-        data: {
-          status: PaymentStatus.FAILED,
-        },
-      });
-      if (moved.count !== 1 || !payment.user || !payment.order) return;
-
-      const payload: PaymentFailedPayload = {
-        paymentId: payment.id,
-        orderId: payment.orderId,
-        orderNumber: payment.order.orderNumber,
-        userId: payment.userId,
-        userEmail: payment.user.email,
-        userFirstName: payment.user.firstName,
-        reason,
-      };
-      await this.outbox.appendEnvelope(
-        tx,
-        {
-          type: DomainEvents.PAYMENT_FAILED,
-          aggregate: { type: 'payment', id: payment.id },
-          payload,
-        },
-        { wakeRelay: false },
-      );
-    });
-    this.outbox.wakeRelay();
-  }
-
   // ---------------------------------------------------------------------------
   // PAYSTACK HTTP
   // ---------------------------------------------------------------------------
@@ -1093,21 +554,6 @@ export class PaymentsService {
   // VENDOR EARNINGS
   // ---------------------------------------------------------------------------
 
-  private calculateVendorEarnings(
-    items: Array<{
-      vendorId: string;
-      quantity: number;
-      unitPrice: Prisma.Decimal;
-    }>,
-    vendorFundedDiscounts: Map<string, Prisma.Decimal> = new Map(),
-  ): Map<string, Prisma.Decimal> {
-    return computeVendorEarnings(
-      items,
-      VENDOR_COMMISSION_RATE,
-      vendorFundedDiscounts,
-    );
-  }
-
   // ---------------------------------------------------------------------------
   // RESPONSE
   // ---------------------------------------------------------------------------
@@ -1115,148 +561,6 @@ export class PaymentsService {
   // ---------------------------------------------------------------------------
   // EVENTS
   // ---------------------------------------------------------------------------
-
-  private async publishOrderProcessingEvent(
-    tx: Prisma.TransactionClient,
-    orderId: string,
-  ): Promise<void> {
-    const order = await tx.order.findUnique({
-      where: {
-        id: orderId,
-      },
-
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-          },
-        },
-
-        payment: {
-          select: {
-            currency: true,
-          },
-        },
-
-        orderItems: {
-          include: {
-            product: {
-              select: {
-                name: true,
-              },
-            },
-
-            variant: {
-              select: {
-                options: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!order || !order.user || !order.payment) {
-      return;
-    }
-
-    const payload: OrderProcessingPayload = {
-      orderId: order.id,
-
-      orderNumber: order.orderNumber,
-
-      userId: order.userId,
-
-      userEmail: order.user.email,
-
-      userFirstName: order.user.firstName,
-
-      totalAmount: Number(order.totalAmount),
-
-      finalAmount: Number(order.finalAmount),
-
-      currency: order.payment.currency,
-
-      vendorIds: [...new Set(order.orderItems.map((item) => item.vendorId))],
-
-      items: order.orderItems.map((item) => ({
-        productName: item.product.name,
-
-        quantity: item.quantity,
-
-        unitPrice: Number(item.unitPrice),
-
-        totalPrice: Number(item.totalPrice),
-
-        variantOptions: item.variant
-          ? (item.variant.options as {
-              name: string;
-              value: string;
-            }[])
-          : undefined,
-      })),
-
-      shippingAddress: order.shippingAddress ?? '',
-    };
-
-    await this.outbox.appendEnvelope(
-      tx,
-      {
-        type: DomainEvents.ORDER_PROCESSING,
-        aggregate: { type: 'order', id: orderId },
-        payload,
-      },
-      { wakeRelay: false },
-    );
-  }
-
-  private async publishPaymentConfirmedEvent(
-    tx: Prisma.TransactionClient,
-    paymentId: string,
-  ): Promise<void> {
-    const payment = await tx.payment.findUnique({
-      where: { id: paymentId },
-      include: {
-        user: {
-          select: {
-            email: true,
-            firstName: true,
-          },
-        },
-        order: {
-          select: {
-            orderNumber: true,
-          },
-        },
-      },
-    });
-
-    if (!payment || !payment.user || !payment.order) return;
-
-    const payload: PaymentConfirmedPayload = {
-      paymentId: payment.id,
-      orderId: payment.orderId,
-      orderNumber: payment.order.orderNumber,
-      userId: payment.userId,
-      userEmail: payment.user.email,
-      userFirstName: payment.user.firstName,
-      amount: Number(payment.amount),
-      currency: payment.currency,
-      paymentReference: payment.transactionReference ?? '',
-    };
-
-    await this.outbox.appendEnvelope(
-      tx,
-      {
-        type: DomainEvents.PAYMENT_CONFIRMED,
-        aggregate: { type: 'payment', id: paymentId },
-        payload,
-      },
-      { wakeRelay: false },
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // ORDER CONFIRMATION EMAIL (SENT ON SUCCESSFUL PAYMENT)

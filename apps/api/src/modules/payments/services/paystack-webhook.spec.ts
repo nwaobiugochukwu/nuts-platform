@@ -8,6 +8,8 @@ import { CircuitBreakerService } from '@api/infrastructure/resilience/circuit-br
 import { UsersService } from '@api/modules/users/services/users.service';
 import { WalletService } from '@api/modules/wallets/services/wallet.service';
 import { PaystackClientService } from './paystack-client.service';
+import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
+import { PaymentConfirmationService } from './payment-confirmation.service';
 import { PaymentsService } from './payments.service';
 
 describe('Paystack Webhook & Payment Verification Security', () => {
@@ -18,6 +20,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
   let paystack: PaystackClientService;
   let mockInbox: any;
   let mockWalletService: any;
+  let confirmation: PaymentConfirmationService;
   const secretKey = 'sk_test_secret_key_12345';
 
   beforeEach(() => {
@@ -88,6 +91,14 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       executePaystackRepeatable: jest.fn((fn: () => unknown) => fn()),
     } as unknown as CircuitBreakerService);
 
+    const runner = new TransactionRunnerService(mockPrisma, mockOutbox);
+    confirmation = new PaymentConfirmationService(
+      mockPrisma,
+      runner,
+      paystack,
+      mockWalletService,
+    );
+
     service = new PaymentsService(
       mockPrisma,
       { assertActiveAccount: jest.fn() } as unknown as UsersService,
@@ -98,6 +109,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       mockOutbox,
       mockInbox,
       {} as never,
+      confirmation,
     );
   });
 
@@ -322,7 +334,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       it('publishes payment.failed in the transaction that marked it failed, then wakes the relay', async () => {
         failing(1);
 
-        await (service as any).markPaymentFailed('TX-FAIL-1', 'declined');
+        await confirmation.markFailed('TX-FAIL-1', 'declined');
 
         expect(mockOutbox.appendEnvelope).toHaveBeenCalledWith(
           mockPrisma,
@@ -342,7 +354,7 @@ describe('Paystack Webhook & Payment Verification Security', () => {
       it('publishes nothing when another delivery already moved the payment', async () => {
         failing(0);
 
-        await (service as any).markPaymentFailed('TX-FAIL-1', 'declined');
+        await confirmation.markFailed('TX-FAIL-1', 'declined');
 
         expect(mockOutbox.appendEnvelope).not.toHaveBeenCalled();
       });
