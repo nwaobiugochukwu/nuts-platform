@@ -23,10 +23,10 @@ export const queryKey = {
     recentlyViewed: recommendationKey("recently-viewed"),
     following: recommendationKey("following"),
     stores: recommendationKey("stores"),
-    marketplaceMix: recommendationKey("marketplace-mix"),
+    goodPlaceToStart: recommendationKey("good-place-to-start"),
     searchDiscover: recommendationKey("search-discover"),
     /** Shelf-level prefixes (match every user/session). */
-    marketplaceMixAll: ["recommendations", "marketplace-mix"] as const,
+    goodPlaceToStartAll: ["recommendations", "good-place-to-start"] as const,
     storesAll: ["recommendations", "stores"] as const,
   },
   session: ["session"] as const,

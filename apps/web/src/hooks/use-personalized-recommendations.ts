@@ -8,49 +8,7 @@ import {
   useRecommendationSessionId,
   useRecommendationVisitorId,
 } from "@/hooks/use-recommendation-session";
-import type { ProductCardDto } from "@/api/dto/product";
-import type { MarketplaceMixVendorDto } from "@/api/dto/recommendations";
 import { useMemo } from "react";
-
-const STARTER_PICK_LIMIT = 12;
-
-function selectStarterPicks(
-  personalized: ProductCardDto[],
-  rotatingVendors: MarketplaceMixVendorDto[],
-): ProductCardDto[] {
-  const selected: ProductCardDto[] = [];
-  const selectedProductIds = new Set<string>();
-  const selectedVendorIds = new Set<string>();
-
-  const add = (product: ProductCardDto) => {
-    const vendorId = product.vendor?.id;
-    if (
-      !vendorId ||
-      !product.thumbnail ||
-      selectedProductIds.has(product.id) ||
-      selectedVendorIds.has(vendorId) ||
-      selected.length >= STARTER_PICK_LIMIT
-    ) return;
-    selected.push(product);
-    selectedProductIds.add(product.id);
-    selectedVendorIds.add(vendorId);
-  };
-
-  // 1. Prioritize rotating marketplace mix (one in-stock product per unique vendor)
-  for (const vendor of rotatingVendors) {
-    if (selected.length >= STARTER_PICK_LIMIT) break;
-    const product = vendor.products.find((candidate) => !selectedProductIds.has(candidate.id));
-    if (product) add(product);
-  }
-
-  // 2. If slots remain, supplement with relevant activity-based picks
-  for (const product of personalized) {
-    if (selected.length >= STARTER_PICK_LIMIT) break;
-    add(product);
-  }
-
-  return selected;
-}
 
 /**
  * How long a personalised shelf counts as fresh. Every shelf here refetches when the browser window
@@ -168,32 +126,34 @@ export function usePersonalizedRecommendations(enabled = true) {
     refetchOnReconnect: true,
   });
 
-  const marketplaceMixQuery = useQuery({
-    queryKey: queryKey.recommendations.marketplaceMix(userId, sessionId, visitorId),
+  // The first shelf is built on the server in one request: a daily spread across stores, topped
+  // up with picks for this shopper. (It used to be assembled here from two requests.)
+  const goodPlaceToStartQuery = useQuery({
+    queryKey: queryKey.recommendations.goodPlaceToStart(userId, sessionId, visitorId),
     queryFn: async ({ signal }) =>
-      (await recommendationService.marketplaceMix(sessionId, isCustomer, visitorId, signal)).data,
+      (await recommendationService.goodPlaceToStart(sessionId, isCustomer, visitorId, signal)).data,
     // Keep the previous result on screen while a refresh is in flight so the
     // shelf never blanks out and pops back in (same user only).
     // queryKey[2] is the user id: never show a previous identity's picks.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === (userId ?? null) ? previous : undefined,
     enabled: publicDiscoveryEnabled,
-    staleTime: 120_000,
+    staleTime: SHELF_STALE_MS,
     refetchOnMount: true,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
-  const starterPicks = useMemo(
-    () => selectStarterPicks(forYouQuery.products, marketplaceMixQuery.data?.vendors ?? []),
-    [forYouQuery.products, marketplaceMixQuery.data?.vendors],
+  const goodPlaceToStart = useMemo(
+    () => (goodPlaceToStartQuery.data?.items ?? []).map((item) => item.product),
+    [goodPlaceToStartQuery.data],
   );
 
   return {
     ...forYouQuery,
-    starterPicks,
-    isLoadingStarterPicks: marketplaceMixQuery.isLoading || (isShopper && forYouQuery.isLoading),
-    isErrorStarterPicks: marketplaceMixQuery.isError && !forYouQuery.isLoading && starterPicks.length === 0,
-    refetchStarterPicks: marketplaceMixQuery.refetch,
+    goodPlaceToStart,
+    isLoadingGoodPlaceToStart: goodPlaceToStartQuery.isLoading,
+    isErrorGoodPlaceToStart: goodPlaceToStartQuery.isError && goodPlaceToStart.length === 0,
+    refetchGoodPlaceToStart: goodPlaceToStartQuery.refetch,
     storesToDiscover: storesQuery.data ?? [],
     isLoadingStores: storesQuery.isLoading,
     isFetchingStores: storesQuery.isFetching,

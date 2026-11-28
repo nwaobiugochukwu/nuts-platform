@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ProductCardDto } from '@api/modules/products/dto/product-card.dto';
 
-export class MarketplaceMixVendorSummaryDto {
+export class StarterSamplerVendorSummaryDto {
   @ApiProperty({ description: 'Unique vendor identifier' })
   id!: string;
 
@@ -21,9 +21,9 @@ export class MarketplaceMixVendorSummaryDto {
   isVerified!: boolean;
 }
 
-export class MarketplaceMixVendorResponseDto {
-  @ApiProperty({ type: MarketplaceMixVendorSummaryDto })
-  vendor!: MarketplaceMixVendorSummaryDto;
+export class StarterSamplerVendorResponseDto {
+  @ApiProperty({ type: StarterSamplerVendorSummaryDto })
+  vendor!: StarterSamplerVendorSummaryDto;
 
   @ApiProperty({
     type: ProductCardDto,
@@ -34,12 +34,12 @@ export class MarketplaceMixVendorResponseDto {
   products!: ProductCardDto[];
 }
 
-export class MarketplaceMixResponseDto {
+export class StarterSamplerResponseDto {
   @ApiProperty({
-    type: MarketplaceMixVendorResponseDto,
+    type: StarterSamplerVendorResponseDto,
     isArray: true,
     maxItems: 12,
     description: 'Up to twelve distinct active vendors.',
   })
-  vendors!: MarketplaceMixVendorResponseDto[];
+  vendors!: StarterSamplerVendorResponseDto[];
 }

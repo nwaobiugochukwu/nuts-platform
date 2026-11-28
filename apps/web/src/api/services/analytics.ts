@@ -3,7 +3,7 @@ import { createRecommendationRequestId } from "@/lib/recommendation-session";
 import { getQueryClient } from "@/lib/query-client";
 import type {
 ActivityAnalyticsDto,
-AdminMarketplaceAnalyticsSummaryDto,
+AdminShopperEngagementSummaryDto,
 AdminAnalyticsSummaryDto,
 AdminQueryAnalyticsDto,
 DiscountAnalyticsDto,
@@ -45,8 +45,8 @@ export const adminAnalyticsService = {
   activity(params?: AdminQueryAnalyticsDto) {
     return adminApi.get<ActivityAnalyticsDto>("/admin/analytics/activity", { params });
   },
-  marketplacePerformance(params?: AdminQueryAnalyticsDto) {
-    return adminApi.get<AdminMarketplaceAnalyticsSummaryDto>("/admin/analytics/marketplace-performance", { params });
+  shopperEngagement(params?: AdminQueryAnalyticsDto) {
+    return adminApi.get<AdminShopperEngagementSummaryDto>("/admin/analytics/shopper-engagement", { params });
   },
   userAcquisition(params?: AdminQueryAnalyticsDto) {
     return adminApi.get<UserAnalyticsDto>("/admin/analytics/user-acquisition", { params });
@@ -64,7 +64,7 @@ export const vendorAnalyticsService = {
 
 export type RecommendationSurface =
   | "HOME_FOR_YOU"
-  | "HOME_MARKETPLACE_MIX"
+  | "HOME_GOOD_PLACE_TO_START"
   | "HOME_RECENTLY_VIEWED"
   | "HOME_MEET_VENDORS"
   | "HOME_FOLLOWING"
@@ -181,7 +181,7 @@ async function flushRecommendationImpressions() {
  * a few seconds after their signals (one rebuild per burst, in the worker), so
  * an immediate refetch only receives the old feed again, and every signal
  * would send a duplicate batch of shelf requests.
- * The daily-stable marketplace mix and product-related lists are left alone.
+ * Product-related lists are left alone.
  */
 export function refreshPersonalizedRecommendations(): void {
   if (typeof window === "undefined") return;
@@ -189,7 +189,6 @@ export function refreshPersonalizedRecommendations(): void {
     {
       predicate: ({ queryKey }) =>
         queryKey[0] === "recommendations" &&
-        queryKey[1] !== "marketplace-mix" &&
         queryKey[1] !== "related",
       refetchType: "none",
     },

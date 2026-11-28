@@ -79,7 +79,7 @@ export interface FunnelAnalyticsDto {
   checkoutConversionRate: number;
 }
 
-export interface AdminMarketplaceAnalyticsSummaryDto {
+export interface AdminShopperEngagementSummaryDto {
   storeViews: number;
   uniqueStoreVisitors: number;
   productViews: number;

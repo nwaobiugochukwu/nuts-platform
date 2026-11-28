@@ -126,8 +126,8 @@ export default function AdminAnalyticsPage() {
     },
   });
 
-  const { data: marketplace, isLoading: isMarketplaceLoading, isError: isMarketplaceError } = useQuery({
-    queryKey: ["admin", "analytics", "marketplace-performance", periodKey],
+  const { data: engagement, isLoading: isEngagementLoading, isError: isEngagementError } = useQuery({
+    queryKey: ["admin", "analytics", "shopper-engagement", periodKey],
     staleTime: 25_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
@@ -135,7 +135,7 @@ export default function AdminAnalyticsPage() {
     gcTime: 1000 * 60 * 15,
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
-      const res = await adminAnalyticsService.marketplacePerformance(queryParams);
+      const res = await adminAnalyticsService.shopperEngagement(queryParams);
       return res.data;
     },
   });
@@ -143,8 +143,8 @@ export default function AdminAnalyticsPage() {
   const s = summary;
   const summaryMetric = (value: number | string | undefined) =>
     isError ? "Unavailable" : isSummaryLoading ? "..." : value ?? 0;
-  const marketplaceMetric = (value: number | string | undefined) =>
-    isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : value ?? 0;
+  const engagementMetric = (value: number | string | undefined) =>
+    isEngagementError ? "Unavailable" : isEngagementLoading ? "..." : value ?? 0;
   const showYearForData = calendar.mode === "day"
     ? () => calendar.setMode("year")
     : undefined;
@@ -238,9 +238,9 @@ export default function AdminAnalyticsPage() {
         </div>
       </div>
 
-      <section aria-labelledby="marketplace-funnel-heading" className="space-y-4">
+      <section aria-labelledby="engagement-funnel-heading" className="space-y-4">
         <div>
-          <h2 id="marketplace-funnel-heading" className="text-lg font-semibold text-neutral-900 dark:text-white">Marketplace engagement & conversion</h2>
+          <h2 id="engagement-funnel-heading" className="text-lg font-semibold text-neutral-900 dark:text-white">Shopper engagement & conversion</h2>
           <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
             Views count recorded product-page visits. Unique viewers count distinct account or anonymous browser/session IDs in this period; those identities are not merged. View-to-purchase follows identified product/account pairs to a paid order within 7 days. Cart-to-purchase follows cart lines to a paid order within 7 days. Recent conversion cohorts are still maturing, and paid revenue is before refunds.
           </p>
@@ -248,56 +248,56 @@ export default function AdminAnalyticsPage() {
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard
             title="Store Views"
-            value={marketplaceMetric(marketplace?.storeViews)}
-            subtitle={`${marketplaceMetric(marketplace?.uniqueStoreVisitors)} unique visitors`}
+            value={engagementMetric(engagement?.storeViews)}
+            subtitle={`${engagementMetric(engagement?.uniqueStoreVisitors)} unique visitors`}
           />
           <StatCard
             title="Product Views"
-            value={marketplaceMetric(marketplace?.productViews)}
-            subtitle={`${marketplaceMetric(marketplace?.uniqueProductViewers)} distinct viewers`}
+            value={engagementMetric(engagement?.productViews)}
+            subtitle={`${engagementMetric(engagement?.uniqueProductViewers)} distinct viewers`}
           />
           <StatCard
             title="View → Cart"
-            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.productViewToCartRate ?? 0}%`}
-            subtitle={`${marketplaceMetric(marketplace?.viewersToCart)} of ${marketplaceMetric(marketplace?.identifiedProductViewers)} identified viewer-product pairs`}
+            value={isEngagementError ? "Unavailable" : isEngagementLoading ? "..." : `${engagement?.productViewToCartRate ?? 0}%`}
+            subtitle={`${engagementMetric(engagement?.viewersToCart)} of ${engagementMetric(engagement?.identifiedProductViewers)} identified viewer-product pairs`}
           />
           <StatCard
             title="View → Paid Purchase"
-            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.productViewToPurchaseRate ?? 0}%`}
-            subtitle={`${marketplaceMetric(marketplace?.viewersToPurchase)} of ${marketplaceMetric(marketplace?.identifiedProductViewers)} identified viewer-product pairs`}
+            value={isEngagementError ? "Unavailable" : isEngagementLoading ? "..." : `${engagement?.productViewToPurchaseRate ?? 0}%`}
+            subtitle={`${engagementMetric(engagement?.viewersToPurchase)} of ${engagementMetric(engagement?.identifiedProductViewers)} identified viewer-product pairs`}
           />
           <StatCard
             title="Cart → Paid Purchase"
-            value={isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : `${marketplace?.cartToPurchaseRate ?? 0}%`}
-            subtitle={`${marketplaceMetric(marketplace?.cartLinesPurchased)} of ${marketplaceMetric(marketplace?.cartLinesAdded)} cart lines matched within 7 days`}
+            value={isEngagementError ? "Unavailable" : isEngagementLoading ? "..." : `${engagement?.cartToPurchaseRate ?? 0}%`}
+            subtitle={`${engagementMetric(engagement?.cartLinesPurchased)} of ${engagementMetric(engagement?.cartLinesAdded)} cart lines matched within 7 days`}
           />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             title="Current Follows"
-            value={marketplaceMetric(marketplace?.currentFollowers)}
-            subtitle={`${marketplaceMetric(marketplace?.uniqueFollowers)} unique people following stores`}
+            value={engagementMetric(engagement?.currentFollowers)}
+            subtitle={`${engagementMetric(engagement?.uniqueFollowers)} unique people following stores`}
           />
           <StatCard
             title="New Follows"
-            value={marketplaceMetric(marketplace?.newFollowers)}
+            value={engagementMetric(engagement?.newFollowers)}
             subtitle="During this period"
           />
           <StatCard
             title="Unfollows"
-            value={marketplaceMetric(marketplace?.unfollows)}
+            value={engagementMetric(engagement?.unfollows)}
             subtitle="During this period"
           />
           <StatCard
             title="Net Follower Growth"
-            value={marketplaceMetric(marketplace?.netFollowerGrowth)}
+            value={engagementMetric(engagement?.netFollowerGrowth)}
             subtitle="Follows minus unfollows"
           />
         </div>
         <div className="rounded-3xl border border-neutral-200/80 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-[#121214] sm:p-6">
           <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Stores with the most followers</h3>
           <ol className="mt-3 divide-y divide-neutral-100 dark:divide-neutral-800">
-            {(marketplace?.topFollowerStores ?? []).map((store, index) => (
+            {(engagement?.topFollowerStores ?? []).map((store, index) => (
               <li key={store.vendorId} className="flex items-center justify-between gap-3 py-3">
                 <span className="flex min-w-0 items-center gap-3">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-xs font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
@@ -310,9 +310,9 @@ export default function AdminAnalyticsPage() {
                 </span>
               </li>
             ))}
-            {(marketplace?.topFollowerStores.length ?? 0) === 0 && (
+            {(engagement?.topFollowerStores.length ?? 0) === 0 && (
               <li className="py-6 text-center text-sm text-neutral-500">
-                {isMarketplaceError ? "Follower analytics are unavailable." : isMarketplaceLoading ? "Loading follower analytics…" : "No active stores have followers yet."}
+                {isEngagementError ? "Follower analytics are unavailable." : isEngagementLoading ? "Loading follower analytics…" : "No active stores have followers yet."}
               </li>
             )}
           </ol>
@@ -320,22 +320,22 @@ export default function AdminAnalyticsPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
             <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Wishlist additions</span>
-            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.wishlistAdds)}</p>
-            <span className="text-xs text-neutral-500">{marketplaceMetric(marketplace?.uniqueWishlistSavers)} unique savers</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{engagementMetric(engagement?.wishlistAdds)}</p>
+            <span className="text-xs text-neutral-500">{engagementMetric(engagement?.uniqueWishlistSavers)} unique savers</span>
           </div>
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
             <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Cart removals</span>
-            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.cartRemovals)}</p>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{engagementMetric(engagement?.cartRemovals)}</p>
             <span className="text-xs text-neutral-500">Removed cart lines</span>
           </div>
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
             <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Paid units</span>
-            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{marketplaceMetric(marketplace?.paidUnits)}</p>
-            <span className="text-xs text-neutral-500">{marketplaceMetric(marketplace?.paidOrders)} paid orders</span>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{engagementMetric(engagement?.paidUnits)}</p>
+            <span className="text-xs text-neutral-500">{engagementMetric(engagement?.paidOrders)} paid orders</span>
           </div>
           <div className="rounded-2xl border border-neutral-200/80 bg-white p-4 dark:border-neutral-800 dark:bg-[#121214]">
             <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Paid product revenue</span>
-            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{isMarketplaceError ? "Unavailable" : isMarketplaceLoading ? "..." : formatPrice(Number(marketplace?.paidRevenue ?? 0))}</p>
+            <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{isEngagementError ? "Unavailable" : isEngagementLoading ? "..." : formatPrice(Number(engagement?.paidRevenue ?? 0))}</p>
             <span className="text-xs text-neutral-500">Before refunds</span>
           </div>
         </div>

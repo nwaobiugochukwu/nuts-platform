@@ -260,7 +260,7 @@ Successful responses use the application's JSON envelope: \`{ success, message, 
     )
     .addTag(
       'RECOMMENDATIONS',
-      'Marketplace recommendations — personalized for-you picks, daily marketplace mix, recently viewed, and store discovery',
+      'Marketplace recommendations — personalized for-you picks, the good-place-to-start shelf, recently viewed, and store discovery',
     )
     .addTag(
       'REVIEWS',
