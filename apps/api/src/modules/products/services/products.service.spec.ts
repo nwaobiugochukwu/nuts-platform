@@ -5,6 +5,7 @@ import { PrismaService } from '@api/infrastructure/database/prisma.service';
 import { AuditLogService } from '@api/modules/audit/services/audit-log.service';
 import { SearchService } from '@api/modules/search/services/search.service';
 import { CategoriesService } from '../../categories/services/categories.service';
+import { ProductCategoryResolverService } from './product-category-resolver.service';
 import { ProductsService } from './products.service';
 import { TransactionRunnerService } from '@api/infrastructure/database/transaction-runner.service';
 
@@ -63,6 +64,7 @@ describe('ProductsService â€“ Products CRUD', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProductsService,
+        ProductCategoryResolverService,
         { provide: PrismaService, useValue: mockPrisma },
         {
           provide: TransactionRunnerService,
