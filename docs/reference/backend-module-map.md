@@ -84,5 +84,4 @@ This is a navigation reference. It maps every API module folder to its domain gu
 | `apps/api/src/infrastructure` | Prisma, Redis/cache, RabbitMQ, outbox, configuration, logging, mail, media, and resilience. | [`infrastructure`](../../apps/api/src/infrastructure) |
 | `apps/web/src/app` and `apps/web/src/api` | App Router pages, portal layouts, typed clients, and server-side API adapters. | [Web contributor guide](../../apps/web/README.md) |
 | `packages/database` | Prisma schema and ordered migrations. | [`database`](../../packages/database) |
-| `packages/config` and `packages/types` | Shared tooling configuration and cross-workspace contracts. | [`packages`](../../packages) |
 | `nginx` and Compose | Reverse proxy, TLS mounts, service topology, and environment-specific runtime configuration. | [`nginx`](../../nginx) · [`Compose`](../../docker-compose.yml) |

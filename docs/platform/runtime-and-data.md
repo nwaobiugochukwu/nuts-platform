@@ -19,8 +19,6 @@ This is not a microservice-per-domain system. API modules share one process and 
 | apps/web/src/components | Shared UI and customer, vendor, and admin surfaces |
 | apps/web/src/api | Typed browser clients and server-side API adapters |
 | packages/database | Prisma schema and ordered PostgreSQL migrations |
-| packages/config | Shared lint/build configuration |
-| packages/types | Types shared between workspaces |
 | nginx | Reverse proxy configuration and production TLS mounts |
 
 API domains currently include admin, analytics, auth, cart, categories, discounts, health, notifications, orders, payments, products, recommendations, referrals, reviews, search, security, upload, users, vendors, wallets, and wishlists.

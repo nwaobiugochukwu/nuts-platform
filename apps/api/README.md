@@ -117,4 +117,4 @@ Use [`apps/api/.env.example`](.env.example) as the API variable inventory. For p
 
 Generate a fresh VAPID key pair with: `npx web-push generate-vapid-keys`.
 
-The production and staging Compose profiles run a migration job before the API. GitHub Actions publishes API images to GHCR; host rollout, readiness verification, and rollback remain outside that workflow. See the [architecture diagrams](../../docs/architecture/README.md), [codebase audit](../../docs/audits/CODEBASE_AUDIT.md), and [Scaling Strategy](../../docs/scaling/README.md).
+The production and staging Compose profiles run a migration job before the API. GitHub Actions publishes API images to GHCR; host rollout, readiness verification, and rollback remain outside that workflow. See the [architecture diagrams](../../docs/architecture/README.md), and [Scaling Strategy](../../docs/scaling/README.md).

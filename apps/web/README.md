@@ -163,4 +163,4 @@ From the repository root, install with **npm ci** and create `apps/web/.env.deve
 
 The production Docker image uses Next standalone output and runs as a non-root user. The app liveness endpoint is **/health**. Production/staging Compose selects apps/web/.env.production or apps/web/.env.staging based on the root APP_ENV setting.
 
-See the [architecture diagrams](../../docs/architecture/README.md) for cross-app flows, [Codebase audit](../../docs/audits/CODEBASE_AUDIT.md) for review findings, [Performance and Capacity](../../docs/performance/README.md) for benchmark methodology/results, and [Scaling Strategy](../../docs/scaling/README.md) for future directions.
+See the [architecture diagrams](../../docs/architecture/README.md) for cross-app flows, [Performance and Capacity](../../docs/performance/README.md) for benchmark methodology/results, and [Scaling Strategy](../../docs/scaling/README.md) for future directions.
